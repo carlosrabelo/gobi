@@ -2,7 +2,7 @@ MAKEFLAGS += --no-print-directory
 
 .DEFAULT_GOAL := help
 
-.PHONY: build clean fmt help lint quality test
+.PHONY: build clean fmt help lint quality test test-cover
 
 help: ## Show available targets
 	@echo "gobi - Available targets"
@@ -28,3 +28,6 @@ quality: ## Format, lint, and test
 
 test: ## Run tests
 	@./.make/test.sh
+
+test-cover: ## Write coverage.out and coverage.html at the git root
+	@./.make/test-cover.sh

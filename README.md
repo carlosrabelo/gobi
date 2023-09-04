@@ -34,12 +34,13 @@ There is no host program in this spec. Contributors work from the Makefile targe
 ## Development
 
 ```bash
-make build     # go build ./... (does not write bin/gobi)
-make test      # go test ./...
-make fmt       # gofmt -w on sources under gobi/
-make lint      # go vet ./...
-make quality   # fmt, lint, and test
-make clean     # remove bin/* (keep .gitkeep), coverage.out, coverage.html
+make build       # go build ./... (does not write bin/gobi)
+make test        # go test ./...
+make test-cover  # coverage.out and coverage.html at the git root
+make fmt         # gofmt -w on sources under gobi/
+make lint        # go vet ./...
+make quality     # fmt, lint, and test
+make clean       # remove bin/* (keep .gitkeep), coverage.out, coverage.html
 ```
 
 ## License
