@@ -39,7 +39,7 @@ make test        # go test ./...
 make test-cover  # coverage.out e coverage.html na raiz do git
 make fmt         # gofmt -w nos fontes em gobi/
 make lint        # go vet ./...
-make quality     # fmt, lint e test
+make quality     # checagem gofmt -l, lint e test
 make clean       # remove bin/* (mantém .gitkeep), coverage.out e coverage.html
 ```
 

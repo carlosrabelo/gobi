@@ -23,7 +23,7 @@ fmt: ## Format Go sources under gobi/
 lint: ## Run go vet
 	@./.make/lint.sh
 
-quality: ## Format, lint, and test
+quality: ## Format check, lint, and test
 	@./.make/quality.sh
 
 test: ## Run tests
