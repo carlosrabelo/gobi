@@ -8,7 +8,7 @@ Interactive `gobi` REPL and program executor runs, parsing DBF files, executing 
 
 - [x] Project layout setup (cmd, internal, pkg structure)
 - [x] Root Makefile with test, lint, format and build targets
-- [ ] Configuration struct for global environment variables
+- [x] Configuration struct for global environment variables
 - [ ] Central execution context manager
 
 ## Expression Engine
