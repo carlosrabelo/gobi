@@ -2,6 +2,78 @@ package expr
 
 import "testing"
 
+func TestOperatorsAndDotLogic(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want []Token
+	}{
+		{
+			name: "arithmetic and parens",
+			in:   "+ - * / ( ) ,",
+			want: []Token{
+				{Type: PLUS, Literal: "+"},
+				{Type: MINUS, Literal: "-"},
+				{Type: ASTERISK, Literal: "*"},
+				{Type: SLASH, Literal: "/"},
+				{Type: LPAREN, Literal: "("},
+				{Type: RPAREN, Literal: ")"},
+				{Type: COMMA, Literal: ","},
+				{Type: EOF},
+			},
+		},
+		{
+			name: "comparisons and contain",
+			in:   `= <> # < > <= >= $`,
+			want: []Token{
+				{Type: EQ, Literal: "="},
+				{Type: NEQ, Literal: "<>"},
+				{Type: NEQ, Literal: "#"},
+				{Type: LT, Literal: "<"},
+				{Type: GT, Literal: ">"},
+				{Type: LTE, Literal: "<="},
+				{Type: GTE, Literal: ">="},
+				{Type: CONTAIN, Literal: "$"},
+				{Type: EOF},
+			},
+		},
+		{
+			name: "NOT AND OR chain",
+			in:   ".NOT. .T. .AND. .F. .OR. .Y.",
+			want: []Token{
+				{Type: NOT, Literal: ".NOT."},
+				{Type: LOGICAL, Literal: ".T."},
+				{Type: AND, Literal: ".AND."},
+				{Type: LOGICAL, Literal: ".F."},
+				{Type: OR, Literal: ".OR."},
+				{Type: LOGICAL, Literal: ".Y."},
+				{Type: EOF},
+			},
+		},
+		{
+			name: "bang is not not-equal",
+			in:   "!=",
+			want: []Token{
+				{Type: ILLEGAL, Literal: "!"},
+				{Type: EQ, Literal: "="},
+				{Type: EOF},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := NewLexer(tt.in)
+			for i, want := range tt.want {
+				got := l.NextToken()
+				if got.Type != want.Type || got.Literal != want.Literal {
+					t.Fatalf("token %d: got {%s %q}, want {%s %q}", i, got.Type, got.Literal, want.Type, want.Literal)
+				}
+			}
+		})
+	}
+}
+
 func TestNumberStringLogical(t *testing.T) {
 	tests := []struct {
 		name string

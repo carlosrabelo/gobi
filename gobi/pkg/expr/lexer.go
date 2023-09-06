@@ -67,6 +67,73 @@ func (l *Lexer) NextToken() Token {
 		tok.Type = ILLEGAL
 		tok.Literal = "."
 		l.readChar()
+	case '+':
+		tok.Type = PLUS
+		tok.Literal = "+"
+		l.readChar()
+	case '-':
+		tok.Type = MINUS
+		tok.Literal = "-"
+		l.readChar()
+	case '*':
+		tok.Type = ASTERISK
+		tok.Literal = "*"
+		l.readChar()
+	case '/':
+		tok.Type = SLASH
+		tok.Literal = "/"
+		l.readChar()
+	case '(':
+		tok.Type = LPAREN
+		tok.Literal = "("
+		l.readChar()
+	case ')':
+		tok.Type = RPAREN
+		tok.Literal = ")"
+		l.readChar()
+	case ',':
+		tok.Type = COMMA
+		tok.Literal = ","
+		l.readChar()
+	case '=':
+		tok.Type = EQ
+		tok.Literal = "="
+		l.readChar()
+	case '#':
+		tok.Type = NEQ
+		tok.Literal = "#"
+		l.readChar()
+	case '$':
+		tok.Type = CONTAIN
+		tok.Literal = "$"
+		l.readChar()
+	case '<':
+		if l.peekChar() == '=' {
+			tok.Type = LTE
+			tok.Literal = "<="
+			l.readChar()
+			l.readChar()
+		} else if l.peekChar() == '>' {
+			tok.Type = NEQ
+			tok.Literal = "<>"
+			l.readChar()
+			l.readChar()
+		} else {
+			tok.Type = LT
+			tok.Literal = "<"
+			l.readChar()
+		}
+	case '>':
+		if l.peekChar() == '=' {
+			tok.Type = GTE
+			tok.Literal = ">="
+			l.readChar()
+			l.readChar()
+		} else {
+			tok.Type = GT
+			tok.Literal = ">"
+			l.readChar()
+		}
 	default:
 		if isDigit(l.ch) {
 			tok.Type = NUMBER
