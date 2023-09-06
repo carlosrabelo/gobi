@@ -2,6 +2,77 @@ package expr
 
 import "testing"
 
+func TestIdentifiers(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want []Token
+	}{
+		{
+			name: "simple and underscore",
+			in:   "NAME field_1",
+			want: []Token{
+				{Type: IDENT, Literal: "NAME"},
+				{Type: IDENT, Literal: "field_1"},
+				{Type: EOF},
+			},
+		},
+		{
+			name: "alias arrow field",
+			in:   "CUSTOMER->NAME",
+			want: []Token{
+				{Type: IDENT, Literal: "CUSTOMER->NAME"},
+				{Type: EOF},
+			},
+		},
+		{
+			name: "P.NAME is not qualified",
+			in:   "P.NAME",
+			want: []Token{
+				{Type: IDENT, Literal: "P"},
+				{Type: ILLEGAL, Literal: "."},
+				{Type: IDENT, Literal: "NAME"},
+				{Type: EOF},
+			},
+		},
+		{
+			name: "minus between names",
+			in:   "A-B",
+			want: []Token{
+				{Type: IDENT, Literal: "A"},
+				{Type: MINUS, Literal: "-"},
+				{Type: IDENT, Literal: "B"},
+				{Type: EOF},
+			},
+		},
+		{
+			name: "NOT AND OR with idents",
+			in:   ".NOT. x .AND. y .OR. z",
+			want: []Token{
+				{Type: NOT, Literal: ".NOT."},
+				{Type: IDENT, Literal: "x"},
+				{Type: AND, Literal: ".AND."},
+				{Type: IDENT, Literal: "y"},
+				{Type: OR, Literal: ".OR."},
+				{Type: IDENT, Literal: "z"},
+				{Type: EOF},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := NewLexer(tt.in)
+			for i, want := range tt.want {
+				got := l.NextToken()
+				if got.Type != want.Type || got.Literal != want.Literal {
+					t.Fatalf("token %d: got {%s %q}, want {%s %q}", i, got.Type, got.Literal, want.Type, want.Literal)
+				}
+			}
+		})
+	}
+}
+
 func TestOperatorsAndDotLogic(t *testing.T) {
 	tests := []struct {
 		name string

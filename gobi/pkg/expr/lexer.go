@@ -140,6 +140,11 @@ func (l *Lexer) NextToken() Token {
 			tok.Literal = l.readNumber()
 			return tok
 		}
+		if isLetter(l.ch) {
+			tok.Type = IDENT
+			tok.Literal = l.readIdentifier()
+			return tok
+		}
 		tok.Type = ILLEGAL
 		tok.Literal = string(l.ch)
 		l.readChar()
@@ -230,9 +235,42 @@ func (l *Lexer) readDotWord() string {
 	return l.input[start:l.position]
 }
 
+// readIdentifier reads a name, optionally with alias->field.
+func (l *Lexer) readIdentifier() string {
+	start := l.position
+	for isIdentContinue(l.ch) {
+		l.readChar()
+	}
+	lit := l.input[start:l.position]
+	if l.ch == '-' && l.peekChar() == '>' {
+		l.readChar()
+		l.readChar()
+		fieldStart := l.position
+		if isLetter(l.ch) {
+			for isIdentContinue(l.ch) {
+				l.readChar()
+			}
+		}
+		lit += "->" + l.input[fieldStart:l.position]
+	}
+	return lit
+}
+
 func isDotWordStart(l *Lexer) bool {
-	next := l.peekChar()
-	return isLetter(next)
+	if !isLetter(l.peekChar()) {
+		return false
+	}
+	// Require a closing '.' so ".NAME" is not a dot-word (P.NAME stays separate tokens).
+	i := l.readPosition
+	for i < len(l.input) {
+		c := l.input[i]
+		if isLetter(c) {
+			i++
+			continue
+		}
+		return c == '.'
+	}
+	return false
 }
 
 func isLetter(ch byte) bool {
@@ -241,4 +279,8 @@ func isLetter(ch byte) bool {
 
 func isDigit(ch byte) bool {
 	return ch >= '0' && ch <= '9'
+}
+
+func isIdentContinue(ch byte) bool {
+	return isLetter(ch) || isDigit(ch) || ch == '_'
 }
