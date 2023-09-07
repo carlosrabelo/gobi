@@ -58,3 +58,33 @@ func TestParseRejectsTrailingToken(t *testing.T) {
 		t.Fatal("expected error for second expression")
 	}
 }
+
+func TestParsePrecedence(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "left assoc subtract", in: "1-2-3", want: "((1 - 2) - 3)"},
+		{name: "NOT binds over AND", in: ".NOT. .T. .AND. .F.", want: "((.NOT. .T.) .AND. .F.)"},
+		{name: "compare over AND", in: "1 = 2 .AND. 3 = 4", want: "((1 = 2) .AND. (3 = 4))"},
+		{name: "product over sum", in: "1+2*3", want: "(1 + (2 * 3))"},
+		{name: "parens", in: "(1+2)*3", want: "((1 + 2) * 3)"},
+		{name: "contain same as compare", in: `"A" $ "AB" .AND. .T.`, want: `((A $ AB) .AND. .T.)`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, errs := Parse(tt.in)
+			if len(errs) != 0 {
+				t.Fatalf("errors: %v", errs)
+			}
+			if got == nil {
+				t.Fatal("nil expression")
+			}
+			if got.String() != tt.want {
+				t.Fatalf("got %q, want %q", got.String(), tt.want)
+			}
+		})
+	}
+}

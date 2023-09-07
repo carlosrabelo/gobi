@@ -6,6 +6,40 @@ import (
 	"strings"
 )
 
+const (
+	_ int = iota
+	precLowest
+	precOr
+	precAnd
+	precCompare
+	precSum
+	precProduct
+	precPrefix
+	precCall
+)
+
+var precedences = map[TokenType]int{
+	OR:       precOr,
+	AND:      precAnd,
+	EQ:       precCompare,
+	NEQ:      precCompare,
+	LT:       precCompare,
+	GT:       precCompare,
+	LTE:      precCompare,
+	GTE:      precCompare,
+	CONTAIN:  precCompare,
+	PLUS:     precSum,
+	MINUS:    precSum,
+	ASTERISK: precProduct,
+	SLASH:    precProduct,
+	LPAREN:   precCall,
+}
+
+type (
+	prefixParseFn func() Expression
+	infixParseFn  func(Expression) Expression
+)
+
 // Parser builds an expression tree from tokens.
 type Parser struct {
 	l      *Lexer
@@ -13,18 +47,54 @@ type Parser struct {
 
 	curToken  Token
 	peekToken Token
+
+	prefixFns map[TokenType]prefixParseFn
+	infixFns  map[TokenType]infixParseFn
 }
 
 // Parse reads one expression from input and stops at EOF.
 func Parse(input string) (Expression, []string) {
-	p := &Parser{l: NewLexer(input)}
-	p.nextToken()
-	p.nextToken()
-	expr := p.parsePrimary()
-	if p.curToken.Type != EOF {
-		p.errors = append(p.errors, fmt.Sprintf("unexpected token %s", p.curToken.Type))
+	p := newParser(input)
+	expr := p.parseExpression(precLowest)
+	if p.peekToken.Type != EOF {
+		p.errors = append(p.errors, fmt.Sprintf("unexpected token %s", p.peekToken.Type))
 	}
 	return expr, p.errors
+}
+
+func newParser(input string) *Parser {
+	p := &Parser{
+		l:         NewLexer(input),
+		prefixFns: map[TokenType]prefixParseFn{},
+		infixFns:  map[TokenType]infixParseFn{},
+	}
+	p.registerPrefix(NUMBER, p.parseNumber)
+	p.registerPrefix(STRING, p.parseString)
+	p.registerPrefix(LOGICAL, p.parseLogical)
+	p.registerPrefix(IDENT, p.parseIdent)
+	p.registerPrefix(LPAREN, p.parseGrouped)
+	p.registerPrefix(MINUS, p.parsePrefix)
+	p.registerPrefix(NOT, p.parsePrefix)
+
+	for _, t := range []TokenType{
+		PLUS, MINUS, ASTERISK, SLASH,
+		EQ, NEQ, LT, GT, LTE, GTE, CONTAIN,
+		AND, OR,
+	} {
+		p.registerInfix(t, p.parseInfix)
+	}
+
+	p.nextToken()
+	p.nextToken()
+	return p
+}
+
+func (p *Parser) registerPrefix(t TokenType, fn prefixParseFn) {
+	p.prefixFns[t] = fn
+}
+
+func (p *Parser) registerInfix(t TokenType, fn infixParseFn) {
+	p.infixFns[t] = fn
 }
 
 func (p *Parser) nextToken() {
@@ -32,23 +102,37 @@ func (p *Parser) nextToken() {
 	p.peekToken = p.l.NextToken()
 }
 
-func (p *Parser) parsePrimary() Expression {
-	switch p.curToken.Type {
-	case NUMBER:
-		return p.parseNumber()
-	case STRING:
-		return p.parseString()
-	case LOGICAL:
-		return p.parseLogical()
-	case IDENT:
-		return p.parseIdent()
-	case EOF:
-		p.errors = append(p.errors, "expected expression")
-		return nil
-	default:
+func (p *Parser) peekPrecedence() int {
+	if pr, ok := precedences[p.peekToken.Type]; ok {
+		return pr
+	}
+	return precLowest
+}
+
+func (p *Parser) curPrecedence() int {
+	if pr, ok := precedences[p.curToken.Type]; ok {
+		return pr
+	}
+	return precLowest
+}
+
+func (p *Parser) parseExpression(precedence int) Expression {
+	prefix := p.prefixFns[p.curToken.Type]
+	if prefix == nil {
 		p.errors = append(p.errors, fmt.Sprintf("unexpected token %s", p.curToken.Type))
 		return nil
 	}
+	left := prefix()
+
+	for p.peekToken.Type != EOF && precedence < p.peekPrecedence() {
+		infix := p.infixFns[p.peekToken.Type]
+		if infix == nil {
+			return left
+		}
+		p.nextToken()
+		left = infix(left)
+	}
+	return left
 }
 
 func (p *Parser) parseNumber() Expression {
@@ -57,27 +141,43 @@ func (p *Parser) parseNumber() Expression {
 		p.errors = append(p.errors, fmt.Sprintf("bad number %q", p.curToken.Literal))
 		return nil
 	}
-	n := &NumberNode{Value: v}
-	p.nextToken()
-	return n
+	return &NumberNode{Value: v}
 }
 
 func (p *Parser) parseString() Expression {
-	n := &StringNode{Value: p.curToken.Literal}
-	p.nextToken()
-	return n
+	return &StringNode{Value: p.curToken.Literal}
 }
 
 func (p *Parser) parseLogical() Expression {
 	upper := strings.ToUpper(p.curToken.Literal)
-	v := upper == ".T." || upper == ".Y."
-	n := &LogicalNode{Value: v}
-	p.nextToken()
-	return n
+	return &LogicalNode{Value: upper == ".T." || upper == ".Y."}
 }
 
 func (p *Parser) parseIdent() Expression {
-	n := &IdentNode{Name: p.curToken.Literal}
+	return &IdentNode{Name: p.curToken.Literal}
+}
+
+func (p *Parser) parsePrefix() Expression {
+	op := p.curToken.Literal
 	p.nextToken()
-	return n
+	return &UnaryNode{Op: op, Operand: p.parseExpression(precPrefix)}
+}
+
+func (p *Parser) parseInfix(left Expression) Expression {
+	op := p.curToken.Literal
+	prec := p.curPrecedence()
+	p.nextToken()
+	right := p.parseExpression(prec)
+	return &BinaryNode{Left: left, Op: op, Right: right}
+}
+
+func (p *Parser) parseGrouped() Expression {
+	p.nextToken()
+	expr := p.parseExpression(precLowest)
+	if p.peekToken.Type != RPAREN {
+		p.errors = append(p.errors, "expected )")
+		return expr
+	}
+	p.nextToken()
+	return expr
 }
