@@ -57,7 +57,7 @@ type UnaryNode struct {
 }
 
 func (n *UnaryNode) String() string {
-	return fmt.Sprintf("(%s%s)", n.Op, n.Operand.String())
+	return fmt.Sprintf("(%s %s)", n.Op, n.Operand.String())
 }
 
 // BinaryNode is an infix operator with two operands.
