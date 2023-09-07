@@ -13,7 +13,7 @@ Interactive `gobi` REPL and program executor runs, parsing DBF files, executing 
 
 ## Expression Engine
 
-- [ ] Token definitions (literals, fields, variables, operators)
+- [x] Token definitions (literals, fields, variables, operators)
 - [ ] Lexer scanning strings and numbers
 - [ ] Lexer scanning logical constants (.T., .F.)
 - [ ] Lexer scanning operators and parenthesis
