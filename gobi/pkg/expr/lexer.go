@@ -19,6 +19,7 @@ func NewLexer(input string) *Lexer {
 	return l
 }
 
+// readChar advances the cursor to the next character in the input string.
 func (l *Lexer) readChar() {
 	if l.readPosition >= len(l.input) {
 		l.ch = 0
@@ -30,6 +31,7 @@ func (l *Lexer) readChar() {
 	l.col++
 }
 
+// peekChar returns the next character without advancing the cursor.
 func (l *Lexer) peekChar() byte {
 	if l.readPosition >= len(l.input) {
 		return 0
@@ -37,6 +39,7 @@ func (l *Lexer) peekChar() byte {
 	return l.input[l.readPosition]
 }
 
+// skipWhitespace discards whitespace characters.
 func (l *Lexer) skipWhitespace() {
 	for l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r' {
 		if l.ch == '\n' {
@@ -66,6 +69,65 @@ func (l *Lexer) NextToken() Token {
 	case '[':
 		tok.Type = STRING
 		tok.Literal = l.readBracketString()
+	case '+':
+		tok.Type = PLUS
+		tok.Literal = "+"
+		l.readChar()
+	case '-':
+		tok.Type = MINUS
+		tok.Literal = "-"
+		l.readChar()
+	case '*':
+		tok.Type = ASTERISK
+		tok.Literal = "*"
+		l.readChar()
+	case '/':
+		tok.Type = SLASH
+		tok.Literal = "/"
+		l.readChar()
+	case '(':
+		tok.Type = LPAREN
+		tok.Literal = "("
+		l.readChar()
+	case ')':
+		tok.Type = RPAREN
+		tok.Literal = ")"
+		l.readChar()
+	case ',':
+		tok.Type = COMMA
+		tok.Literal = ","
+		l.readChar()
+	case '=':
+		tok.Type = EQ
+		tok.Literal = "="
+		l.readChar()
+	case '<':
+		if l.peekChar() == '=' {
+			tok.Type = LTE
+			tok.Literal = "<="
+			l.readChar()
+			l.readChar()
+		} else if l.peekChar() == '>' {
+			tok.Type = NEQ
+			tok.Literal = "<>"
+			l.readChar()
+			l.readChar()
+		} else {
+			tok.Type = LT
+			tok.Literal = "<"
+			l.readChar()
+		}
+	case '>':
+		if l.peekChar() == '=' {
+			tok.Type = GTE
+			tok.Literal = ">="
+			l.readChar()
+			l.readChar()
+		} else {
+			tok.Type = GT
+			tok.Literal = ">"
+			l.readChar()
+		}
 	case '.':
 		if isDotDelimitedStart(l) {
 			lit := l.readDotDelimited()
@@ -73,6 +135,12 @@ func (l *Lexer) NextToken() Token {
 			switch strings.ToUpper(lit) {
 			case ".T.", ".F.", ".Y.", ".N.":
 				tok.Type = LOGICAL
+			case ".AND.":
+				tok.Type = AND
+			case ".OR.":
+				tok.Type = OR
+			case ".NOT.":
+				tok.Type = NOT
 			default:
 				tok.Type = ILLEGAL
 			}
@@ -89,9 +157,10 @@ func (l *Lexer) NextToken() Token {
 		}
 		if isLetter(l.ch) {
 			tok.Type = IDENT
-			tok.Literal = l.readIdentifier()
+			tok.Literal = l.readExtendedIdentifier()
 			return tok
 		}
+		// Characters not supported yet are marked as ILLEGAL in this step.
 		tok.Type = ILLEGAL
 		tok.Literal = string(l.ch)
 		l.readChar()
@@ -100,9 +169,10 @@ func (l *Lexer) NextToken() Token {
 	return tok
 }
 
+// readString reads a string literal enclosed in single or double quotes.
 func (l *Lexer) readString(quote byte) string {
 	startCol := l.col
-	l.readChar()
+	l.readChar() // Skip the opening quote
 	startPos := l.position
 
 	for l.ch != quote && l.ch != 0 {
@@ -111,16 +181,17 @@ func (l *Lexer) readString(quote byte) string {
 
 	literal := l.input[startPos:l.position]
 	if l.ch == quote {
-		l.readChar()
+		l.readChar() // Skip the closing quote
 	} else {
-		l.col = startCol
+		l.col = startCol // Track error at opening quote
 	}
 	return literal
 }
 
+// readBracketString reads a string literal enclosed in square brackets [like this].
 func (l *Lexer) readBracketString() string {
 	startCol := l.col
-	l.readChar()
+	l.readChar() // Skip the opening bracket '['
 	startPos := l.position
 
 	for l.ch != ']' && l.ch != 0 {
@@ -129,27 +200,33 @@ func (l *Lexer) readBracketString() string {
 
 	literal := l.input[startPos:l.position]
 	if l.ch == ']' {
-		l.readChar()
+		l.readChar() // Skip the closing bracket ']'
 	} else {
-		l.col = startCol
+		l.col = startCol // Track error at opening bracket
 	}
 	return literal
 }
 
+// readNumber scans a numeric literal, supporting integers and floats.
+// It avoids greedily consuming dots if they are part of logical operators (e.g. 5.AND.).
 func (l *Lexer) readNumber() string {
 	startPos := l.position
 	for isDigit(l.ch) {
 		l.readChar()
 	}
+
+	// Consume dot only if it is a decimal separator followed by a digit.
 	if l.ch == '.' && isDigit(l.peekChar()) {
-		l.readChar()
+		l.readChar() // Consume the dot
 		for isDigit(l.ch) {
 			l.readChar()
 		}
 	}
+
 	return l.input[startPos:l.position]
 }
 
+// readDotDelimited reads a dot-delimited sequence (.XXX.) from the input.
 func (l *Lexer) readDotDelimited() string {
 	startPos := l.position
 	l.readChar() // consume '.'
@@ -162,6 +239,7 @@ func (l *Lexer) readDotDelimited() string {
 	return l.input[startPos:l.position]
 }
 
+// isDotDelimitedStart checks if the current position begins a dot-delimited sequence.
 func isDotDelimitedStart(l *Lexer) bool {
 	if l.ch != '.' {
 		return false
@@ -170,6 +248,7 @@ func isDotDelimitedStart(l *Lexer) bool {
 	return (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')
 }
 
+// readIdentifier reads a sequence of letters and digits starting at the current position.
 func (l *Lexer) readIdentifier() string {
 	startPos := l.position
 	for isLetter(l.ch) || isDigit(l.ch) {
@@ -178,10 +257,38 @@ func (l *Lexer) readIdentifier() string {
 	return l.input[startPos:l.position]
 }
 
+// readExtendedIdentifier reads dBase field names, including JOB:CODE suffixes and P./S. prefixes.
+func (l *Lexer) readExtendedIdentifier() string {
+	lit := l.readIdentifier()
+	if l.ch == ':' {
+		l.readChar()
+		start := l.position
+		for isLetter(l.ch) || isDigit(l.ch) {
+			l.readChar()
+		}
+		lit += ":" + l.input[start:l.position]
+	}
+	if (lit == "P" || lit == "S" || lit == "p" || lit == "s") && l.ch == '.' && l.peekChar() != '.' {
+		l.readChar()
+		lit += "." + l.readFieldNameContinued()
+	}
+	return lit
+}
+
+func (l *Lexer) readFieldNameContinued() string {
+	startPos := l.position
+	for isLetter(l.ch) || isDigit(l.ch) || l.ch == ':' {
+		l.readChar()
+	}
+	return l.input[startPos:l.position]
+}
+
+// isLetter returns true if the byte represents an ASCII letter.
 func isLetter(ch byte) bool {
 	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
 }
 
+// isDigit returns true if the byte represents an ASCII digit.
 func isDigit(ch byte) bool {
 	return '0' <= ch && ch <= '9'
 }
