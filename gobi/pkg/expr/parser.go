@@ -83,6 +83,7 @@ func newParser(input string) *Parser {
 	} {
 		p.registerInfix(t, p.parseInfix)
 	}
+	p.registerInfix(LPAREN, p.parseCall)
 
 	p.nextToken()
 	p.nextToken()
@@ -180,4 +181,40 @@ func (p *Parser) parseGrouped() Expression {
 	}
 	p.nextToken()
 	return expr
+}
+
+func (p *Parser) parseCall(left Expression) Expression {
+	ident, ok := left.(*IdentNode)
+	if !ok {
+		p.errors = append(p.errors, "call requires identifier")
+		return left
+	}
+	args := []Expression{}
+	if p.peekToken.Type == RPAREN {
+		p.nextToken()
+		return &CallNode{Callee: ident.Name, Args: args}
+	}
+	p.nextToken()
+	for {
+		if p.curToken.Type == COMMA || p.curToken.Type == RPAREN {
+			p.errors = append(p.errors, "expected expression")
+			if p.curToken.Type == RPAREN {
+				return &CallNode{Callee: ident.Name, Args: args}
+			}
+			p.nextToken()
+			continue
+		}
+		args = append(args, p.parseExpression(precLowest))
+		if p.peekToken.Type != COMMA {
+			break
+		}
+		p.nextToken()
+		p.nextToken()
+	}
+	if p.peekToken.Type != RPAREN {
+		p.errors = append(p.errors, "expected )")
+		return &CallNode{Callee: ident.Name, Args: args}
+	}
+	p.nextToken()
+	return &CallNode{Callee: ident.Name, Args: args}
 }
