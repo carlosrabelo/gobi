@@ -33,3 +33,36 @@ func TestLexerStringsAndNumbers(t *testing.T) {
 		}
 	}
 }
+
+func TestLexerLogicalConstants(t *testing.T) {
+	input := `.T.  .F.  .Y.  .N.  .t.  .f.  .y.  .n.`
+
+	tests := []struct {
+		expectedType    TokenType
+		expectedLiteral string
+	}{
+		{LOGICAL, ".T."},
+		{LOGICAL, ".F."},
+		{LOGICAL, ".Y."},
+		{LOGICAL, ".N."},
+		{LOGICAL, ".t."},
+		{LOGICAL, ".f."},
+		{LOGICAL, ".y."},
+		{LOGICAL, ".n."},
+		{EOF, ""},
+	}
+
+	l := NewLexer(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q", i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q", i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}

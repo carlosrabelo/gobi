@@ -15,7 +15,7 @@ Interactive `gobi` REPL and program executor runs, parsing DBF files, executing 
 
 - [x] Token definitions (literals, fields, variables, operators)
 - [x] Lexer scanning strings and numbers
-- [ ] Lexer scanning logical constants (.T., .F.)
+- [x] Lexer scanning logical constants (.T., .F.)
 - [ ] Lexer scanning operators and parenthesis
 - [ ] AST structures for binary, unary, and function nodes
 - [ ] Pratt parser or recursive descent expression parser

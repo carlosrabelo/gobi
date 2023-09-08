@@ -1,5 +1,7 @@
 package expr
 
+import "strings"
+
 // Lexer scans a dBase II expression input string and produces tokens.
 type Lexer struct {
 	input        string
@@ -65,9 +67,20 @@ func (l *Lexer) NextToken() Token {
 		tok.Type = STRING
 		tok.Literal = l.readBracketString()
 	case '.':
-		tok.Type = ILLEGAL
-		tok.Literal = "."
-		l.readChar()
+		if isDotDelimitedStart(l) {
+			lit := l.readDotDelimited()
+			tok.Literal = lit
+			switch strings.ToUpper(lit) {
+			case ".T.", ".F.", ".Y.", ".N.":
+				tok.Type = LOGICAL
+			default:
+				tok.Type = ILLEGAL
+			}
+		} else {
+			tok.Type = ILLEGAL
+			tok.Literal = "."
+			l.readChar()
+		}
 	default:
 		if isDigit(l.ch) {
 			tok.Type = NUMBER
@@ -135,6 +148,26 @@ func (l *Lexer) readNumber() string {
 		}
 	}
 	return l.input[startPos:l.position]
+}
+
+func (l *Lexer) readDotDelimited() string {
+	startPos := l.position
+	l.readChar() // consume '.'
+	for (l.ch >= 'a' && l.ch <= 'z') || (l.ch >= 'A' && l.ch <= 'Z') {
+		l.readChar()
+	}
+	if l.ch == '.' {
+		l.readChar() // consume closing '.'
+	}
+	return l.input[startPos:l.position]
+}
+
+func isDotDelimitedStart(l *Lexer) bool {
+	if l.ch != '.' {
+		return false
+	}
+	next := l.peekChar()
+	return (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z')
 }
 
 func (l *Lexer) readIdentifier() string {
