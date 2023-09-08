@@ -88,3 +88,50 @@ func TestParsePrecedence(t *testing.T) {
 		})
 	}
 }
+
+func TestParseCallsAndPrefix(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "SUBSTR call", in: "SUBSTR(s, 1, 3)", want: "SUBSTR(s, 1, 3)"},
+		{name: "empty args", in: "DATE()", want: "DATE()"},
+		{name: "unary minus", in: "-2*3", want: "((- 2) * 3)"},
+		{name: "NOT alone", in: ".NOT. .T.", want: "(.NOT. .T.)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, errs := Parse(tt.in)
+			if len(errs) != 0 {
+				t.Fatalf("errors: %v", errs)
+			}
+			if got == nil {
+				t.Fatal("nil expression")
+			}
+			if got.String() != tt.want {
+				t.Fatalf("got %q, want %q", got.String(), tt.want)
+			}
+			if tt.name == "SUBSTR call" {
+				if _, ok := got.(*CallNode); !ok {
+					t.Fatalf("got %T", got)
+				}
+			}
+		})
+	}
+}
+
+func TestParseLeadingAndOr(t *testing.T) {
+	_, errs := Parse(".AND. .T.")
+	if len(errs) == 0 {
+		t.Fatal("expected error for leading .AND.")
+	}
+}
+
+func TestParseCommaWithoutArg(t *testing.T) {
+	_, errs := Parse("FOO(1,)")
+	if len(errs) == 0 {
+		t.Fatal("expected error for trailing comma")
+	}
+}
