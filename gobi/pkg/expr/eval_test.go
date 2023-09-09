@@ -132,6 +132,55 @@ func TestEvalMemoryThenField(t *testing.T) {
 	})
 }
 
+func TestEvalArithmetic(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want float64
+	}{
+		{name: "add", in: "1+2", want: 3},
+		{name: "sub", in: "5-3", want: 2},
+		{name: "mul", in: "2*3", want: 6},
+		{name: "div", in: "8/2", want: 4},
+		{name: "product over sum", in: "1+2*3", want: 7},
+		{name: "unary minus", in: "-5", want: -5},
+		{name: "unary then product", in: "-2*3", want: -6},
+		{name: "string coerce", in: `"3"+2`, want: 5},
+		{name: "empty string is zero", in: `""+1`, want: 1},
+		{name: "trim coerce", in: `" 4 "+1`, want: 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mustEval(t, tt.in, nil)
+			if got.Kind != KindNumber || got.Num != tt.want {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEvalDivByZero(t *testing.T) {
+	tree, errs := Parse("1/0")
+	if len(errs) != 0 {
+		t.Fatalf("parse: %v", errs)
+	}
+	_, err := Eval(tree, nil)
+	if err == nil {
+		t.Fatal("expected division by zero")
+	}
+}
+
+func TestEvalBadNumberString(t *testing.T) {
+	tree, errs := Parse(`"abc"+1`)
+	if len(errs) != 0 {
+		t.Fatalf("parse: %v", errs)
+	}
+	_, err := Eval(tree, nil)
+	if err == nil {
+		t.Fatal("expected coerce error")
+	}
+}
+
 func mustEval(t *testing.T, in string, env Env) Value {
 	t.Helper()
 	tree, errs := Parse(in)
