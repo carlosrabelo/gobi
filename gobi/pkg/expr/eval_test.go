@@ -181,6 +181,56 @@ func TestEvalBadNumberString(t *testing.T) {
 	}
 }
 
+func TestEvalCompareNumeric(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "lt", in: "1 < 2", want: true},
+		{name: "gt", in: "3 > 1", want: true},
+		{name: "eq", in: "2 = 2", want: true},
+		{name: "neq hash", in: "1 # 2", want: true},
+		{name: "neq angles", in: "1 <> 2", want: true},
+		{name: "lte", in: "2 <= 2", want: true},
+		{name: "gte", in: "2 >= 1", want: true},
+		{name: "eq false", in: "1 = 2", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mustEval(t, tt.in, nil)
+			if got.Kind != KindLogical || got.Log != tt.want {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEvalCompareExact(t *testing.T) {
+	off := false
+	on := true
+	expr := `"Smith" = "Sm"`
+
+	t.Run("exact off Smith equals Sm", func(t *testing.T) {
+		got := mustEval(t, expr, &testEnv{exact: &off})
+		if !got.Log {
+			t.Fatalf("got %v, want .T.", got)
+		}
+	})
+	t.Run("exact on full match", func(t *testing.T) {
+		got := mustEval(t, expr, &testEnv{exact: &on})
+		if got.Log {
+			t.Fatalf("got %v, want .F.", got)
+		}
+	})
+	t.Run("unreported mode is exact", func(t *testing.T) {
+		got := mustEval(t, expr, &testEnv{})
+		if got.Log {
+			t.Fatalf("got %v, want .F.", got)
+		}
+	})
+}
+
 func mustEval(t *testing.T, in string, env Env) Value {
 	t.Helper()
 	tree, errs := Parse(in)

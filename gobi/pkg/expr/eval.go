@@ -48,9 +48,65 @@ func evalBinary(n *BinaryNode, env Env) (Value, error) {
 	switch n.Op {
 	case "+", "-", "*", "/":
 		return evalArithmetic(n, env)
+	case "=", "<>", "#", "<", ">", "<=", ">=":
+		return evalCompare(n, env)
 	default:
 		return Value{}, fmt.Errorf("unsupported operator %s", n.Op)
 	}
+}
+
+func evalCompare(n *BinaryNode, env Env) (Value, error) {
+	left, err := Eval(n.Left, env)
+	if err != nil {
+		return Value{}, err
+	}
+	right, err := Eval(n.Right, env)
+	if err != nil {
+		return Value{}, err
+	}
+	var cmp int
+	if left.Kind == KindNumber && right.Kind == KindNumber {
+		switch {
+		case left.Num < right.Num:
+			cmp = -1
+		case left.Num > right.Num:
+			cmp = 1
+		}
+	} else {
+		ls := strings.ToUpper(strings.TrimSpace(left.String()))
+		rs := strings.ToUpper(strings.TrimSpace(right.String()))
+		if !exactMode(env) && len(ls) > len(rs) {
+			ls = ls[:len(rs)]
+		}
+		cmp = strings.Compare(ls, rs)
+	}
+	var ok bool
+	switch n.Op {
+	case "=":
+		ok = cmp == 0
+	case "<>", "#":
+		ok = cmp != 0
+	case "<":
+		ok = cmp < 0
+	case ">":
+		ok = cmp > 0
+	case "<=":
+		ok = cmp <= 0
+	case ">=":
+		ok = cmp >= 0
+	}
+	return LogicalVal(ok), nil
+}
+
+func exactMode(env Env) bool {
+	if env == nil {
+		return true
+	}
+	on, ok := env.Exact()
+	if !ok {
+		return true
+	}
+	return on
 }
 
 func evalArithmetic(n *BinaryNode, env Env) (Value, error) {
