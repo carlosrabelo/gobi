@@ -2,6 +2,27 @@ package expr
 
 import "testing"
 
+func TestBuiltinDELETED(t *testing.T) {
+	t.Run("no table", func(t *testing.T) {
+		got := mustEval(t, "DELETED()", &testEnv{})
+		if got.Log {
+			t.Fatalf("got %v, want .F.", got)
+		}
+	})
+	t.Run("marked", func(t *testing.T) {
+		got := mustEval(t, "DELETED", &testEnv{area: Area{HasTable: true, RecNo: 1, RecCount: 2, Deleted: true}})
+		if !got.Log {
+			t.Fatalf("got %v, want .T.", got)
+		}
+	})
+	t.Run("past last", func(t *testing.T) {
+		got := mustEval(t, "DELETED()", &testEnv{area: Area{HasTable: true, RecNo: 3, RecCount: 2, Deleted: true}})
+		if got.Log {
+			t.Fatalf("got %v, want .F.", got)
+		}
+	})
+}
+
 func TestBuiltinRECNO(t *testing.T) {
 	t.Run("no table is zero", func(t *testing.T) {
 		got := mustEval(t, "RECNO()", &testEnv{})

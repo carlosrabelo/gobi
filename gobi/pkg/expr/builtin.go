@@ -18,6 +18,8 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinBOF(args, a)
 	case "RECNO":
 		return builtinRECNO(args, a)
+	case "DELETED":
+		return builtinDELETED(args, a)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -58,4 +60,18 @@ func builtinRECNO(args []Value, a Area) (Value, error) {
 		return NumberVal(0), nil
 	}
 	return NumberVal(float64(a.RecNo)), nil
+}
+
+func hasCurrentRecord(a Area) bool {
+	return a.HasTable && a.RecNo >= 1 && a.RecNo <= a.RecCount
+}
+
+func builtinDELETED(args []Value, a Area) (Value, error) {
+	if err := requireArity("DELETED", args, 0); err != nil {
+		return Value{}, err
+	}
+	if !hasCurrentRecord(a) {
+		return LogicalVal(false), nil
+	}
+	return LogicalVal(a.Deleted), nil
 }
