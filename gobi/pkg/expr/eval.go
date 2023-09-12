@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -245,5 +246,12 @@ func evalIdent(name string, env Env) (Value, error) {
 	if v, ok := env.Field("", name); ok {
 		return v, nil
 	}
-	return Value{}, fmt.Errorf("unknown name %s", name)
+	v, err := env.Call(name, nil)
+	if err == nil {
+		return v, nil
+	}
+	if errors.Is(err, ErrUnknownFunction) {
+		return Value{}, fmt.Errorf("unknown name %s", name)
+	}
+	return Value{}, err
 }
