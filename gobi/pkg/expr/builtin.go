@@ -16,6 +16,8 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinEOF(args, a)
 	case "BOF":
 		return builtinBOF(args, a)
+	case "RECNO":
+		return builtinRECNO(args, a)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -46,4 +48,14 @@ func builtinBOF(args []Value, a Area) (Value, error) {
 		return LogicalVal(false), nil
 	}
 	return LogicalVal(a.BOF), nil
+}
+
+func builtinRECNO(args []Value, a Area) (Value, error) {
+	if err := requireArity("RECNO", args, 0); err != nil {
+		return Value{}, err
+	}
+	if !a.HasTable {
+		return NumberVal(0), nil
+	}
+	return NumberVal(float64(a.RecNo)), nil
 }
