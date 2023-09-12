@@ -231,6 +231,67 @@ func TestEvalCompareExact(t *testing.T) {
 	})
 }
 
+func TestEvalLogic(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "NOT true", in: ".NOT. .T.", want: false},
+		{name: "NOT false", in: ".NOT. .F.", want: true},
+		{name: "AND both true", in: ".T. .AND. .T.", want: true},
+		{name: "AND false", in: ".T. .AND. .F.", want: false},
+		{name: "OR true", in: ".F. .OR. .T.", want: true},
+		{name: "OR both false", in: ".F. .OR. .F.", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mustEval(t, tt.in, nil)
+			if got.Kind != KindLogical || got.Log != tt.want {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEvalLogicShortCircuit(t *testing.T) {
+	env := &testEnv{mem: map[string]Value{}}
+
+	t.Run("AND skips missing right", func(t *testing.T) {
+		got := mustEval(t, ".F. .AND. MISSING", env)
+		if got.Log {
+			t.Fatalf("got %v, want .F.", got)
+		}
+	})
+	t.Run("OR skips missing right", func(t *testing.T) {
+		got := mustEval(t, ".T. .OR. MISSING", env)
+		if !got.Log {
+			t.Fatalf("got %v, want .T.", got)
+		}
+	})
+	t.Run("AND evaluates missing right", func(t *testing.T) {
+		tree, errs := Parse(".T. .AND. MISSING")
+		if len(errs) != 0 {
+			t.Fatalf("parse: %v", errs)
+		}
+		_, err := Eval(tree, env)
+		if err == nil {
+			t.Fatal("expected missing name error")
+		}
+	})
+}
+
+func TestEvalLogicNonLogical(t *testing.T) {
+	tree, errs := Parse("1 .AND. .T.")
+	if len(errs) != 0 {
+		t.Fatalf("parse: %v", errs)
+	}
+	_, err := Eval(tree, nil)
+	if err == nil {
+		t.Fatal("expected logical type error")
+	}
+}
+
 func mustEval(t *testing.T, in string, env Env) Value {
 	t.Helper()
 	tree, errs := Parse(in)
