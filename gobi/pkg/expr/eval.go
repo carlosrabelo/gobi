@@ -24,35 +24,100 @@ func Eval(expr Expression, env Env) (Value, error) {
 		return evalUnary(n, env)
 	case *BinaryNode:
 		return evalBinary(n, env)
+	case *CallNode:
+		return evalCall(n, env)
 	default:
 		return Value{}, fmt.Errorf("unsupported expression %T", expr)
 	}
 }
 
+func evalCall(n *CallNode, env Env) (Value, error) {
+	if env == nil {
+		return Value{}, fmt.Errorf("nil environment")
+	}
+	args := make([]Value, len(n.Args))
+	for i, a := range n.Args {
+		v, err := Eval(a, env)
+		if err != nil {
+			return Value{}, err
+		}
+		args[i] = v
+	}
+	return env.Call(n.Callee, args)
+}
+
 func evalUnary(n *UnaryNode, env Env) (Value, error) {
-	if n.Op != "-" {
+	switch strings.ToUpper(n.Op) {
+	case "-":
+		v, err := Eval(n.Operand, env)
+		if err != nil {
+			return Value{}, err
+		}
+		num, err := asNumber(v)
+		if err != nil {
+			return Value{}, err
+		}
+		return NumberVal(-num), nil
+	case ".NOT.":
+		v, err := Eval(n.Operand, env)
+		if err != nil {
+			return Value{}, err
+		}
+		b, err := asLogical(v)
+		if err != nil {
+			return Value{}, err
+		}
+		return LogicalVal(!b), nil
+	default:
 		return Value{}, fmt.Errorf("unsupported unary %s", n.Op)
 	}
-	v, err := Eval(n.Operand, env)
-	if err != nil {
-		return Value{}, err
-	}
-	num, err := asNumber(v)
-	if err != nil {
-		return Value{}, err
-	}
-	return NumberVal(-num), nil
 }
 
 func evalBinary(n *BinaryNode, env Env) (Value, error) {
-	switch n.Op {
+	op := strings.ToUpper(n.Op)
+	switch op {
 	case "+", "-", "*", "/":
 		return evalArithmetic(n, env)
 	case "=", "<>", "#", "<", ">", "<=", ">=":
 		return evalCompare(n, env)
+	case ".AND.", ".OR.":
+		return evalLogic(n, env, op)
 	default:
 		return Value{}, fmt.Errorf("unsupported operator %s", n.Op)
 	}
+}
+
+func evalLogic(n *BinaryNode, env Env, op string) (Value, error) {
+	left, err := Eval(n.Left, env)
+	if err != nil {
+		return Value{}, err
+	}
+	lb, err := asLogical(left)
+	if err != nil {
+		return Value{}, err
+	}
+	if op == ".AND." && !lb {
+		return LogicalVal(false), nil
+	}
+	if op == ".OR." && lb {
+		return LogicalVal(true), nil
+	}
+	right, err := Eval(n.Right, env)
+	if err != nil {
+		return Value{}, err
+	}
+	rb, err := asLogical(right)
+	if err != nil {
+		return Value{}, err
+	}
+	return LogicalVal(rb), nil
+}
+
+func asLogical(v Value) (bool, error) {
+	if v.Kind != KindLogical {
+		return false, fmt.Errorf("expected logical")
+	}
+	return v.Log, nil
 }
 
 func evalCompare(n *BinaryNode, env Env) (Value, error) {
