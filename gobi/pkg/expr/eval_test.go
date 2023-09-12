@@ -9,6 +9,7 @@ type testEnv struct {
 	mem    map[string]Value
 	fields map[string]Value // key "ALIAS.NAME" or ".NAME" for active area
 	exact  *bool
+	area   Area
 }
 
 func (e *testEnv) Memory(name string) (Value, bool) {
@@ -22,8 +23,8 @@ func (e *testEnv) Field(alias, name string) (Value, bool) {
 	return v, ok
 }
 
-func (e *testEnv) Call(string, []Value) (Value, error) {
-	return Value{}, nil
+func (e *testEnv) Call(name string, args []Value) (Value, error) {
+	return CallBuiltin(name, args, e.area)
 }
 
 func (e *testEnv) Exact() (bool, bool) {
