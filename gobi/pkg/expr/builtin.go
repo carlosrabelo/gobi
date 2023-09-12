@@ -20,6 +20,8 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinRECNO(args, a)
 	case "DELETED":
 		return builtinDELETED(args, a)
+	case "FOUND":
+		return builtinFOUND(args, a)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -74,4 +76,11 @@ func builtinDELETED(args []Value, a Area) (Value, error) {
 		return LogicalVal(false), nil
 	}
 	return LogicalVal(a.Deleted), nil
+}
+
+func builtinFOUND(args []Value, a Area) (Value, error) {
+	if err := requireArity("FOUND", args, 0); err != nil {
+		return Value{}, err
+	}
+	return LogicalVal(a.Found), nil
 }

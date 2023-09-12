@@ -2,6 +2,21 @@ package expr
 
 import "testing"
 
+func TestBuiltinFOUND(t *testing.T) {
+	t.Run("no table false", func(t *testing.T) {
+		got := mustEval(t, "FOUND()", &testEnv{})
+		if got.Log {
+			t.Fatalf("got %v, want .F.", got)
+		}
+	})
+	t.Run("flag set", func(t *testing.T) {
+		got := mustEval(t, "FOUND", &testEnv{area: Area{Found: true}})
+		if !got.Log {
+			t.Fatalf("got %v, want .T.", got)
+		}
+	})
+}
+
 func TestBuiltinDELETED(t *testing.T) {
 	t.Run("no table", func(t *testing.T) {
 		got := mustEval(t, "DELETED()", &testEnv{})
