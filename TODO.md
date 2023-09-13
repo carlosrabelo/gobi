@@ -18,7 +18,7 @@ Interactive `gobi` REPL and program executor runs, parsing DBF files, executing 
 - [x] Lexer scanning logical constants (.T., .F.)
 - [x] Lexer scanning operators and parenthesis
 - [x] AST structures for binary, unary, and function nodes
-- [ ] Pratt parser or recursive descent expression parser
+- [x] Pratt parser or recursive descent expression parser
 - [ ] Evaluator for literal types (string, float64, bool)
 - [ ] Evaluator field lookup in active DBF record
 - [ ] Evaluator memory variable lookup
