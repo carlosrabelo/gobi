@@ -2,6 +2,13 @@ package expr
 
 import "testing"
 
+func TestBuiltinUPPER(t *testing.T) {
+	got := mustEval(t, `UPPER("AbC")`, &testEnv{})
+	if got.Str != "ABC" {
+		t.Fatalf("got %q, want ABC", got.Str)
+	}
+}
+
 func TestBuiltinTRIM(t *testing.T) {
 	got := mustEval(t, `TRIM("abc  ")`, &testEnv{})
 	if got.Str != "abc" {
