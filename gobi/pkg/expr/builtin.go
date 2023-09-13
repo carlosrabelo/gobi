@@ -22,6 +22,8 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinDELETED(args, a)
 	case "FOUND":
 		return builtinFOUND(args, a)
+	case "TRIM":
+		return builtinTRIM(args)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -83,4 +85,11 @@ func builtinFOUND(args []Value, a Area) (Value, error) {
 		return Value{}, err
 	}
 	return LogicalVal(a.Found), nil
+}
+
+func builtinTRIM(args []Value) (Value, error) {
+	if err := requireArity("TRIM", args, 1); err != nil {
+		return Value{}, err
+	}
+	return StringVal(strings.TrimRight(args[0].String(), " ")), nil
 }
