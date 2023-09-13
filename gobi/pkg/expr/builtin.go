@@ -24,6 +24,8 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinFOUND(args, a)
 	case "TRIM":
 		return builtinTRIM(args)
+	case "UPPER":
+		return builtinUPPER(args)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -92,4 +94,11 @@ func builtinTRIM(args []Value) (Value, error) {
 		return Value{}, err
 	}
 	return StringVal(strings.TrimRight(args[0].String(), " ")), nil
+}
+
+func builtinUPPER(args []Value) (Value, error) {
+	if err := requireArity("UPPER", args, 1); err != nil {
+		return Value{}, err
+	}
+	return StringVal(strings.ToUpper(args[0].String())), nil
 }
