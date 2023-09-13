@@ -28,6 +28,8 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinUPPER(args)
 	case "LOWER":
 		return builtinLOWER(args)
+	case "LEN":
+		return builtinLEN(args)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -110,4 +112,11 @@ func builtinLOWER(args []Value) (Value, error) {
 		return Value{}, err
 	}
 	return StringVal(strings.ToLower(args[0].String())), nil
+}
+
+func builtinLEN(args []Value) (Value, error) {
+	if err := requireArity("LEN", args, 1); err != nil {
+		return Value{}, err
+	}
+	return NumberVal(float64(len(args[0].String()))), nil
 }

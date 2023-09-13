@@ -2,6 +2,13 @@ package expr
 
 import "testing"
 
+func TestBuiltinLEN(t *testing.T) {
+	got := mustEval(t, `LEN("abcd")`, &testEnv{})
+	if got.Num != 4 {
+		t.Fatalf("got %v, want 4", got)
+	}
+}
+
 func TestBuiltinLOWER(t *testing.T) {
 	got := mustEval(t, `LOWER("AbC")`, &testEnv{})
 	if got.Str != "abc" {
