@@ -39,6 +39,10 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinSTR(args)
 	case "CHR":
 		return builtinCHR(args)
+	case "RECCOUNT":
+		return builtinRECCOUNT(args, a)
+	case "RECSIZE":
+		return builtinRECSIZE(args, a)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -229,4 +233,24 @@ func builtinCHR(args []Value) (Value, error) {
 		return Value{}, fmt.Errorf("CHR: out of range")
 	}
 	return StringVal(string(byte(i))), nil
+}
+
+func builtinRECCOUNT(args []Value, a Area) (Value, error) {
+	if err := requireArity("RECCOUNT", args, 0); err != nil {
+		return Value{}, err
+	}
+	if !a.HasTable {
+		return NumberVal(0), nil
+	}
+	return NumberVal(float64(a.RecCount)), nil
+}
+
+func builtinRECSIZE(args []Value, a Area) (Value, error) {
+	if err := requireArity("RECSIZE", args, 0); err != nil {
+		return Value{}, err
+	}
+	if !a.HasTable {
+		return NumberVal(0), nil
+	}
+	return NumberVal(float64(a.RecSize)), nil
 }

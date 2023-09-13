@@ -2,6 +2,30 @@ package expr
 
 import "testing"
 
+func TestBuiltinRECCOUNTRECSIZE(t *testing.T) {
+	t.Run("no table", func(t *testing.T) {
+		got := mustEval(t, "RECCOUNT()", &testEnv{})
+		if got.Num != 0 {
+			t.Fatalf("RECCOUNT got %v", got)
+		}
+		got = mustEval(t, "RECSIZE()", &testEnv{})
+		if got.Num != 0 {
+			t.Fatalf("RECSIZE got %v", got)
+		}
+	})
+	t.Run("open", func(t *testing.T) {
+		env := &testEnv{area: Area{HasTable: true, RecCount: 12, RecSize: 80}}
+		got := mustEval(t, "RECCOUNT", env)
+		if got.Num != 12 {
+			t.Fatalf("got %v", got)
+		}
+		got = mustEval(t, "RECSIZE()", env)
+		if got.Num != 80 {
+			t.Fatalf("got %v", got)
+		}
+	})
+}
+
 func TestBuiltinCHR(t *testing.T) {
 	got := mustEval(t, `CHR(65)`, &testEnv{})
 	if got.Str != "A" {
