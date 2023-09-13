@@ -37,6 +37,8 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinVAL(args)
 	case "STR":
 		return builtinSTR(args)
+	case "CHR":
+		return builtinCHR(args)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -212,4 +214,19 @@ func builtinSTR(args []Value) (Value, error) {
 		return StringVal(strings.Repeat("*", width)), nil
 	}
 	return StringVal(s), nil
+}
+
+func builtinCHR(args []Value) (Value, error) {
+	if err := requireArity("CHR", args, 1); err != nil {
+		return Value{}, err
+	}
+	n, err := requireNumber("CHR", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	i := int(n)
+	if float64(i) != n || i < 0 || i > 255 {
+		return Value{}, fmt.Errorf("CHR: out of range")
+	}
+	return StringVal(string(byte(i))), nil
 }

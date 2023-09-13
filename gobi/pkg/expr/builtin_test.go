@@ -2,6 +2,21 @@ package expr
 
 import "testing"
 
+func TestBuiltinCHR(t *testing.T) {
+	got := mustEval(t, `CHR(65)`, &testEnv{})
+	if got.Str != "A" {
+		t.Fatalf("got %q, want A", got.Str)
+	}
+	tree, errs := Parse("CHR(256)")
+	if len(errs) != 0 {
+		t.Fatalf("parse: %v", errs)
+	}
+	_, err := Eval(tree, &testEnv{})
+	if err == nil {
+		t.Fatal("expected range error")
+	}
+}
+
 func TestBuiltinSTR(t *testing.T) {
 	got := mustEval(t, `STR(1.5, 10, 2)`, &testEnv{})
 	if got.Str != "      1.50" {
