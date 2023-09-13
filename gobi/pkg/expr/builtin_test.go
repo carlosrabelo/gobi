@@ -2,6 +2,13 @@ package expr
 
 import "testing"
 
+func TestBuiltinTRIM(t *testing.T) {
+	got := mustEval(t, `TRIM("abc  ")`, &testEnv{})
+	if got.Str != "abc" {
+		t.Fatalf("got %q, want abc", got.Str)
+	}
+}
+
 func TestBuiltinFOUND(t *testing.T) {
 	t.Run("no table false", func(t *testing.T) {
 		got := mustEval(t, "FOUND()", &testEnv{})
