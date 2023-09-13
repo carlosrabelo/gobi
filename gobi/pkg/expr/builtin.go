@@ -30,6 +30,8 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinLOWER(args)
 	case "LEN":
 		return builtinLEN(args)
+	case "SUBSTR":
+		return builtinSUBSTR(args)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -119,4 +121,41 @@ func builtinLEN(args []Value) (Value, error) {
 		return Value{}, err
 	}
 	return NumberVal(float64(len(args[0].String()))), nil
+}
+
+func requireNumber(fn string, v Value) (float64, error) {
+	n, err := asNumber(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s: wrong type", fn)
+	}
+	return n, nil
+}
+
+func builtinSUBSTR(args []Value) (Value, error) {
+	if err := requireArity("SUBSTR", args, 3); err != nil {
+		return Value{}, err
+	}
+	s := args[0].String()
+	startF, err := requireNumber("SUBSTR", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	lenF, err := requireNumber("SUBSTR", args[2])
+	if err != nil {
+		return Value{}, err
+	}
+	start := int(startF)
+	length := int(lenF)
+	if start < 1 {
+		start = 1
+	}
+	if length < 1 || start > len(s) {
+		return StringVal(""), nil
+	}
+	i := start - 1
+	end := i + length
+	if end > len(s) {
+		end = len(s)
+	}
+	return StringVal(s[i:end]), nil
 }

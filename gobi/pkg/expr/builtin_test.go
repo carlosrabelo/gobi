@@ -2,6 +2,17 @@ package expr
 
 import "testing"
 
+func TestBuiltinSUBSTR(t *testing.T) {
+	got := mustEval(t, `SUBSTR("ABCD", 2, 2)`, &testEnv{})
+	if got.Str != "BC" {
+		t.Fatalf("got %q, want BC", got.Str)
+	}
+	got = mustEval(t, `SUBSTR("ABCD", 5, 1)`, &testEnv{})
+	if got.Str != "" {
+		t.Fatalf("got %q, want empty", got.Str)
+	}
+}
+
 func TestBuiltinLEN(t *testing.T) {
 	got := mustEval(t, `LEN("abcd")`, &testEnv{})
 	if got.Num != 4 {
