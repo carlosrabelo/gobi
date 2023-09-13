@@ -3,6 +3,7 @@ package expr
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -32,6 +33,8 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinLEN(args)
 	case "SUBSTR":
 		return builtinSUBSTR(args)
+	case "VAL":
+		return builtinVAL(args)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -158,4 +161,19 @@ func builtinSUBSTR(args []Value) (Value, error) {
 		end = len(s)
 	}
 	return StringVal(s[i:end]), nil
+}
+
+func builtinVAL(args []Value) (Value, error) {
+	if err := requireArity("VAL", args, 1); err != nil {
+		return Value{}, err
+	}
+	s := strings.TrimSpace(args[0].String())
+	if s == "" {
+		return NumberVal(0), nil
+	}
+	n, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return NumberVal(0), nil
+	}
+	return NumberVal(n), nil
 }
