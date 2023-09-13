@@ -35,6 +35,8 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinSUBSTR(args)
 	case "VAL":
 		return builtinVAL(args)
+	case "STR":
+		return builtinSTR(args)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -176,4 +178,38 @@ func builtinVAL(args []Value) (Value, error) {
 		return NumberVal(0), nil
 	}
 	return NumberVal(n), nil
+}
+
+func builtinSTR(args []Value) (Value, error) {
+	if len(args) < 1 || len(args) > 3 {
+		return Value{}, fmt.Errorf("STR: wrong number of arguments")
+	}
+	n, err := requireNumber("STR", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	width := 10
+	decimals := 0
+	if len(args) >= 2 {
+		w, err := requireNumber("STR", args[1])
+		if err != nil {
+			return Value{}, err
+		}
+		width = int(w)
+	}
+	if len(args) >= 3 {
+		d, err := requireNumber("STR", args[2])
+		if err != nil {
+			return Value{}, err
+		}
+		decimals = int(d)
+	}
+	if width < 1 {
+		return Value{}, fmt.Errorf("STR: wrong type")
+	}
+	s := fmt.Sprintf("%*.*f", width, decimals, n)
+	if len(s) > width {
+		return StringVal(strings.Repeat("*", width)), nil
+	}
+	return StringVal(s), nil
 }

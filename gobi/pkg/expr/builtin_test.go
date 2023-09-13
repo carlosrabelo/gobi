@@ -2,6 +2,21 @@ package expr
 
 import "testing"
 
+func TestBuiltinSTR(t *testing.T) {
+	got := mustEval(t, `STR(1.5, 10, 2)`, &testEnv{})
+	if got.Str != "      1.50" {
+		t.Fatalf("got %q", got.Str)
+	}
+	got = mustEval(t, `STR(1)`, &testEnv{})
+	if got.Str != "         1" {
+		t.Fatalf("got %q", got.Str)
+	}
+	got = mustEval(t, `STR(12345, 3, 0)`, &testEnv{})
+	if got.Str != "***" {
+		t.Fatalf("got %q, want ***", got.Str)
+	}
+}
+
 func TestBuiltinVAL(t *testing.T) {
 	got := mustEval(t, `VAL("")`, &testEnv{})
 	if got.Num != 0 {
