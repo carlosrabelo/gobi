@@ -2,6 +2,18 @@ package expr
 
 import "testing"
 
+func TestBuiltinFIELD(t *testing.T) {
+	env := &testEnv{area: Area{HasTable: true, Fields: []string{"Name", "AGE"}}}
+	got := mustEval(t, `FIELD(1)`, env)
+	if got.Str != "NAME" {
+		t.Fatalf("got %q, want NAME", got.Str)
+	}
+	got = mustEval(t, `FIELD(3)`, env)
+	if got.Str != "" {
+		t.Fatalf("got %q, want empty", got.Str)
+	}
+}
+
 func TestBuiltinRECCOUNTRECSIZE(t *testing.T) {
 	t.Run("no table", func(t *testing.T) {
 		got := mustEval(t, "RECCOUNT()", &testEnv{})

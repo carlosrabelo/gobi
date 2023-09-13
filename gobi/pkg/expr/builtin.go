@@ -43,6 +43,8 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinRECCOUNT(args, a)
 	case "RECSIZE":
 		return builtinRECSIZE(args, a)
+	case "FIELD":
+		return builtinFIELD(args, a)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -253,4 +255,19 @@ func builtinRECSIZE(args []Value, a Area) (Value, error) {
 		return NumberVal(0), nil
 	}
 	return NumberVal(float64(a.RecSize)), nil
+}
+
+func builtinFIELD(args []Value, a Area) (Value, error) {
+	if err := requireArity("FIELD", args, 1); err != nil {
+		return Value{}, err
+	}
+	n, err := requireNumber("FIELD", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	i := int(n)
+	if i < 1 || i > len(a.Fields) {
+		return StringVal(""), nil
+	}
+	return StringVal(strings.ToUpper(a.Fields[i-1])), nil
 }
