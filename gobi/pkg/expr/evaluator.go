@@ -24,6 +24,15 @@ func Eval(node Expression, env Environment) (Object, error) {
 		return &StringObject{Value: n.Value}, nil
 	case *BooleanLiteral:
 		return &BooleanObject{Value: n.Value}, nil
+	case *Identifier:
+		if env == nil {
+			return nil, fmt.Errorf("evaluator: cannot resolve identifier %q without environment", n.Name)
+		}
+		obj, ok := env.GetField(n.Name)
+		if !ok {
+			return nil, fmt.Errorf("evaluator: identifier %q not found", n.Name)
+		}
+		return obj, nil
 	default:
 		return nil, fmt.Errorf("evaluator: unsupported node type %T", n)
 	}

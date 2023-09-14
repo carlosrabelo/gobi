@@ -190,3 +190,72 @@ func testEvalWithEnv(t *testing.T, input string, env Environment) Object {
 	}
 	return result
 }
+func TestEvalFieldLookupString(t *testing.T) {
+	env := &testEnvironment{fields: map[string]Object{
+		"NOME": &StringObject{Value: "Joao"},
+	}}
+
+	result := testEvalWithEnv(t, "NOME", env)
+	strObj, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if strObj.Value != "Joao" {
+		t.Fatalf("expected Value=Joao, got %q", strObj.Value)
+	}
+}
+
+func TestEvalFieldLookupNumber(t *testing.T) {
+	env := &testEnvironment{fields: map[string]Object{
+		"SALARIO": &NumberObject{Value: 2500.50},
+	}}
+
+	result := testEvalWithEnv(t, "SALARIO", env)
+	numObj, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if numObj.Value != 2500.50 {
+		t.Fatalf("expected Value=2500.50, got %v", numObj.Value)
+	}
+}
+
+func TestEvalFieldLookupBoolean(t *testing.T) {
+	env := &testEnvironment{fields: map[string]Object{
+		"APROVADO": &BooleanObject{Value: true},
+	}}
+
+	result := testEvalWithEnv(t, "APROVADO", env)
+	boolObj, ok := result.(*BooleanObject)
+	if !ok {
+		t.Fatalf("expected *BooleanObject, got %T", result)
+	}
+	if boolObj.Value != true {
+		t.Fatalf("expected Value=true, got %v", boolObj.Value)
+	}
+}
+
+func TestEvalFieldNotFound(t *testing.T) {
+	env := &testEnvironment{fields: map[string]Object{}}
+
+	l := NewLexer("INEXISTENTE")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, env)
+	if err == nil {
+		t.Fatal("expected error for missing field, got nil")
+	}
+}
+
+func TestEvalFieldLookupNilEnv(t *testing.T) {
+	l := NewLexer("CAMPO")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, nil)
+	if err == nil {
+		t.Fatal("expected error for nil environment, got nil")
+	}
+}
+

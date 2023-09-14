@@ -20,7 +20,7 @@ Interactive `gobi` REPL and program executor runs, parsing DBF files, executing 
 - [x] AST structures for binary, unary, and function nodes
 - [x] Pratt parser or recursive descent expression parser
 - [x] Evaluator for literal types (string, float64, bool)
-- [ ] Evaluator field lookup in active DBF record
+- [x] Evaluator field lookup in active DBF record
 - [ ] Evaluator memory variable lookup
 - [ ] Short-circuit logic for .AND. and .OR. operators
 - [ ] Built-in function: EOF()
