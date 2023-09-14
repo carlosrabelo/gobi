@@ -2,6 +2,36 @@ package expr
 
 import "testing"
 
+func TestBuiltinDBFNDX(t *testing.T) {
+	t.Run("no table", func(t *testing.T) {
+		got := mustEval(t, "DBF()", &testEnv{})
+		if got.Str != "" {
+			t.Fatalf("got %q", got.Str)
+		}
+		got = mustEval(t, "NDX(1)", &testEnv{})
+		if got.Str != "" {
+			t.Fatalf("got %q", got.Str)
+		}
+	})
+	t.Run("paths", func(t *testing.T) {
+		var ndx [7]string
+		ndx[0] = "cust.ndx"
+		env := &testEnv{area: Area{HasTable: true, DBF: "cust.dbf", NDX: ndx}}
+		got := mustEval(t, "DBF", env)
+		if got.Str != "cust.dbf" {
+			t.Fatalf("got %q", got.Str)
+		}
+		got = mustEval(t, "NDX(1)", env)
+		if got.Str != "cust.ndx" {
+			t.Fatalf("got %q", got.Str)
+		}
+		got = mustEval(t, "NDX(2)", env)
+		if got.Str != "" {
+			t.Fatalf("got %q", got.Str)
+		}
+	})
+}
+
 func TestBuiltinFIELD(t *testing.T) {
 	env := &testEnv{area: Area{HasTable: true, Fields: []string{"Name", "AGE"}}}
 	got := mustEval(t, `FIELD(1)`, env)
