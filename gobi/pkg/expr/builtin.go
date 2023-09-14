@@ -45,6 +45,10 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinRECSIZE(args, a)
 	case "FIELD":
 		return builtinFIELD(args, a)
+	case "DBF":
+		return builtinDBF(args, a)
+	case "NDX":
+		return builtinNDX(args, a)
 	default:
 		return Value{}, fmt.Errorf("%w: %s", ErrUnknownFunction, name)
 	}
@@ -270,4 +274,29 @@ func builtinFIELD(args []Value, a Area) (Value, error) {
 		return StringVal(""), nil
 	}
 	return StringVal(strings.ToUpper(a.Fields[i-1])), nil
+}
+
+func builtinDBF(args []Value, a Area) (Value, error) {
+	if err := requireArity("DBF", args, 0); err != nil {
+		return Value{}, err
+	}
+	if !a.HasTable {
+		return StringVal(""), nil
+	}
+	return StringVal(a.DBF), nil
+}
+
+func builtinNDX(args []Value, a Area) (Value, error) {
+	if err := requireArity("NDX", args, 1); err != nil {
+		return Value{}, err
+	}
+	n, err := requireNumber("NDX", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	i := int(n)
+	if i < 1 || i > 7 {
+		return StringVal(""), nil
+	}
+	return StringVal(a.NDX[i-1]), nil
 }
