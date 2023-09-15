@@ -28,7 +28,11 @@ func Eval(node Expression, env Environment) (Object, error) {
 		if env == nil {
 			return nil, fmt.Errorf("evaluator: cannot resolve identifier %q without environment", n.Name)
 		}
-		obj, ok := env.GetField(n.Name)
+		obj, ok := env.GetVariable(n.Name)
+		if ok {
+			return obj, nil
+		}
+		obj, ok = env.GetField(n.Name)
 		if !ok {
 			return nil, fmt.Errorf("evaluator: identifier %q not found", n.Name)
 		}

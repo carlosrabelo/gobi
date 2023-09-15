@@ -259,3 +259,97 @@ func TestEvalFieldLookupNilEnv(t *testing.T) {
 	}
 }
 
+func TestEvalVariableLookupString(t *testing.T) {
+	env := &testEnvironment{variables: map[string]Object{
+		"NOME": &StringObject{Value: "Maria"},
+	}}
+
+	result := testEvalWithEnv(t, "NOME", env)
+	strObj, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if strObj.Value != "Maria" {
+		t.Fatalf("expected Value=Maria, got %q", strObj.Value)
+	}
+}
+
+func TestEvalVariableLookupNumber(t *testing.T) {
+	env := &testEnvironment{variables: map[string]Object{
+		"CONTADOR": &NumberObject{Value: 99},
+	}}
+
+	result := testEvalWithEnv(t, "CONTADOR", env)
+	numObj, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if numObj.Value != 99 {
+		t.Fatalf("expected Value=99, got %v", numObj.Value)
+	}
+}
+
+func TestEvalVariableLookupBoolean(t *testing.T) {
+	env := &testEnvironment{variables: map[string]Object{
+		"FLAG": &BooleanObject{Value: true},
+	}}
+
+	result := testEvalWithEnv(t, "FLAG", env)
+	boolObj, ok := result.(*BooleanObject)
+	if !ok {
+		t.Fatalf("expected *BooleanObject, got %T", result)
+	}
+	if boolObj.Value != true {
+		t.Fatalf("expected Value=true, got %v", boolObj.Value)
+	}
+}
+
+func TestEvalVariableShadowsField(t *testing.T) {
+	env := &testEnvironment{
+		fields: map[string]Object{
+			"NOME": &StringObject{Value: "Campo"},
+		},
+		variables: map[string]Object{
+			"NOME": &StringObject{Value: "Variavel"},
+		},
+	}
+
+	result := testEvalWithEnv(t, "NOME", env)
+	strObj, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if strObj.Value != "Variavel" {
+		t.Fatalf("expected variable to shadow field, got %q", strObj.Value)
+	}
+}
+
+func TestEvalVariableNotFoundFallsBackToField(t *testing.T) {
+	env := &testEnvironment{
+		fields: map[string]Object{
+			"CODIGO": &NumberObject{Value: 123},
+		},
+		variables: map[string]Object{},
+	}
+
+	result := testEvalWithEnv(t, "CODIGO", env)
+	numObj, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if numObj.Value != 123 {
+		t.Fatalf("expected Value=123, got %v", numObj.Value)
+	}
+}
+
+func TestEvalIdentifierNotFound(t *testing.T) {
+	l := NewLexer("NADA")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for missing identifier, got nil")
+	}
+}
+
