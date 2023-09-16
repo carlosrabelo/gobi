@@ -353,3 +353,216 @@ func TestEvalIdentifierNotFound(t *testing.T) {
 	}
 }
 
+func TestEvalAndTruthTable(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{".T. .AND. .T.", true},
+		{".T. .AND. .F.", false},
+		{".F. .AND. .T.", false},
+		{".F. .AND. .F.", false},
+	}
+
+	for _, tt := range tests {
+		result := testEval(t, tt.input)
+		b, ok := result.(*BooleanObject)
+		if !ok {
+			t.Fatalf("input %q: expected *BooleanObject, got %T", tt.input, result)
+		}
+		if b.Value != tt.expected {
+			t.Fatalf("input %q: expected %v, got %v", tt.input, tt.expected, b.Value)
+		}
+	}
+}
+
+func TestEvalOrTruthTable(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected bool
+	}{
+		{".T. .OR. .T.", true},
+		{".T. .OR. .F.", true},
+		{".F. .OR. .T.", true},
+		{".F. .OR. .F.", false},
+	}
+
+	for _, tt := range tests {
+		result := testEval(t, tt.input)
+		b, ok := result.(*BooleanObject)
+		if !ok {
+			t.Fatalf("input %q: expected *BooleanObject, got %T", tt.input, result)
+		}
+		if b.Value != tt.expected {
+			t.Fatalf("input %q: expected %v, got %v", tt.input, tt.expected, b.Value)
+		}
+	}
+}
+
+func TestEvalAndShortCircuit(t *testing.T) {
+	env := &testEnvironment{fields: map[string]Object{}}
+
+	l := NewLexer(".F. .AND. INEXISTENTE")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	result, err := Eval(exp, env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	b, ok := result.(*BooleanObject)
+	if !ok {
+		t.Fatalf("expected *BooleanObject, got %T", result)
+	}
+	if b.Value != false {
+		t.Fatalf("expected false, got %v", b.Value)
+	}
+}
+
+func TestEvalOrShortCircuit(t *testing.T) {
+	env := &testEnvironment{fields: map[string]Object{}}
+
+	l := NewLexer(".T. .OR. INEXISTENTE")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	result, err := Eval(exp, env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	b, ok := result.(*BooleanObject)
+	if !ok {
+		t.Fatalf("expected *BooleanObject, got %T", result)
+	}
+	if b.Value != true {
+		t.Fatalf("expected true, got %v", b.Value)
+	}
+}
+
+func TestEvalAndNoShortCircuitWhenLeftIsTrue(t *testing.T) {
+	env := &testEnvironment{fields: map[string]Object{}}
+
+	l := NewLexer(".T. .AND. INEXISTENTE")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, env)
+	if err == nil {
+		t.Fatal("expected error for missing field on right side, got nil")
+	}
+}
+
+func TestEvalOrNoShortCircuitWhenLeftIsFalse(t *testing.T) {
+	env := &testEnvironment{fields: map[string]Object{}}
+
+	l := NewLexer(".F. .OR. INEXISTENTE")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, env)
+	if err == nil {
+		t.Fatal("expected error for missing field on right side, got nil")
+	}
+}
+
+func TestEvalAndNonBooleanOperand(t *testing.T) {
+	_, err := Eval(&BinaryExpression{
+		Left:     &NumberLiteral{Value: 1},
+		Operator: ".AND.",
+		Right:    &BooleanLiteral{Value: true},
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error for non-boolean operand, got nil")
+	}
+}
+
+func TestEvalOrNonBooleanOperand(t *testing.T) {
+	_, err := Eval(&BinaryExpression{
+		Left:     &BooleanLiteral{Value: false},
+		Operator: ".OR.",
+		Right:    &StringLiteral{Value: "x"},
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error for non-boolean operand, got nil")
+	}
+}
+
+func TestEvalUnsupportedBinaryOperator(t *testing.T) {
+	_, err := Eval(&BinaryExpression{
+		Left:     &NumberLiteral{Value: 1},
+		Operator: "%",
+		Right:    &NumberLiteral{Value: 2},
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error for unsupported binary operator, got nil")
+	}
+}
+
+func TestEvalArithmeticOperators(t *testing.T) {
+	tests := []struct {
+		input string
+		want  float64
+	}{
+		{"1 + 2", 3},
+		{"5 - 2", 3},
+		{"3 * 4", 12},
+		{"8 / 2", 4},
+		{"2 + 3 * 4", 14},
+	}
+
+	for _, tt := range tests {
+		result := testEval(t, tt.input)
+		num, ok := result.(*NumberObject)
+		if !ok {
+			t.Fatalf("input %q: expected *NumberObject, got %T", tt.input, result)
+		}
+		if num.Value != tt.want {
+			t.Fatalf("input %q: expected %v, got %v", tt.input, tt.want, num.Value)
+		}
+	}
+}
+
+func TestEvalStringEquality(t *testing.T) {
+	env := &testEnvironment{
+		fields: map[string]Object{
+			"P.KEY": &StringObject{Value: "001"},
+			"S.KEY": &StringObject{Value: "001"},
+		},
+	}
+
+	result, err := Eval(&BinaryExpression{
+		Left:     &Identifier{Name: "P.KEY"},
+		Operator: "=",
+		Right:    &Identifier{Name: "S.KEY"},
+	}, env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	b, ok := result.(*BooleanObject)
+	if !ok || !b.Value {
+		t.Fatalf("expected true equality, got %#v", result)
+	}
+}
+
+func TestEvalStringNotEqual(t *testing.T) {
+	env := &testEnvironment{
+		fields: map[string]Object{
+			"P.KEY": &StringObject{Value: "001"},
+			"S.KEY": &StringObject{Value: "002"},
+		},
+	}
+
+	result, err := Eval(&BinaryExpression{
+		Left:     &Identifier{Name: "P.KEY"},
+		Operator: "<>",
+		Right:    &Identifier{Name: "S.KEY"},
+	}, env)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	b, ok := result.(*BooleanObject)
+	if !ok || !b.Value {
+		t.Fatalf("expected true inequality, got %#v", result)
+	}
+}
+
