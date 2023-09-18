@@ -38,6 +38,11 @@ func (e *testEnvironment) CallFunction(name string, args []Object) (Object, erro
 			return nil, fmt.Errorf("environment: function %q expects 0 arguments, got %d", name, len(args))
 		}
 		return &BooleanObject{Value: e.eof}, nil
+	case "RECNO":
+		if len(args) != 0 {
+			return nil, fmt.Errorf("environment: function %q expects 0 arguments, got %d", name, len(args))
+		}
+		return &NumberObject{Value: e.recno}, nil
 	default:
 		return nil, fmt.Errorf("environment: unknown function %q", name)
 	}
@@ -622,6 +627,56 @@ func TestEvalEOFArgCountError(t *testing.T) {
 	_, err := Eval(exp, &testEnvironment{eof: true})
 	if err == nil {
 		t.Fatal("expected error for EOF() with arguments, got nil")
+	}
+}
+
+func TestEvalRECNOReturnsValue(t *testing.T) {
+	env := &testEnvironment{recno: 5}
+
+	result := testEvalWithEnv(t, "RECNO()", env)
+	n, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if n.Value != 5 {
+		t.Fatalf("expected 5, got %v", n.Value)
+	}
+}
+
+func TestEvalRECNOReturnsZero(t *testing.T) {
+	env := &testEnvironment{recno: 0}
+
+	result := testEvalWithEnv(t, "RECNO()", env)
+	n, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if n.Value != 0 {
+		t.Fatalf("expected 0, got %v", n.Value)
+	}
+}
+
+func TestEvalRECNOCaseInsensitive(t *testing.T) {
+	env := &testEnvironment{recno: 42}
+
+	result := testEvalWithEnv(t, "RecNo()", env)
+	n, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if n.Value != 42 {
+		t.Fatalf("expected 42, got %v", n.Value)
+	}
+}
+
+func TestEvalRECNOArgCountError(t *testing.T) {
+	l := NewLexer("RECNO(1)")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{recno: 1})
+	if err == nil {
+		t.Fatal("expected error for RECNO() with arguments, got nil")
 	}
 }
 
