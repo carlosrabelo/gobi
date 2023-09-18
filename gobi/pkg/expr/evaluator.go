@@ -43,6 +43,19 @@ func Eval(node Expression, env Environment) (Object, error) {
 		return obj, nil
 	case *BinaryExpression:
 		return evalBinaryExpression(n, env)
+	case *CallExpression:
+		if env == nil {
+			return nil, fmt.Errorf("evaluator: cannot call function %q without environment", n.Function.Name)
+		}
+		var args []Object
+		for _, arg := range n.Arguments {
+			obj, err := Eval(arg, env)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, obj)
+		}
+		return env.CallFunction(n.Function.Name, args)
 	default:
 		return nil, fmt.Errorf("evaluator: unsupported node type %T", n)
 	}

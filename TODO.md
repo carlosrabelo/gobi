@@ -23,7 +23,7 @@ Interactive `gobi` REPL and program executor runs, parsing DBF files, executing 
 - [x] Evaluator field lookup in active DBF record
 - [x] Evaluator memory variable lookup
 - [x] Short-circuit logic for .AND. and .OR. operators
-- [ ] Built-in function: EOF()
+- [x] Built-in function: EOF()
 - [ ] Built-in function: RECNO()
 - [ ] Built-in function: DELETED()
 - [ ] Built-in function: FOUND()

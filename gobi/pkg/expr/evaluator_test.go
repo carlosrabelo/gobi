@@ -2,6 +2,7 @@ package expr
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -31,7 +32,15 @@ func (e *testEnvironment) GetVariable(name string) (Object, bool) {
 }
 
 func (e *testEnvironment) CallFunction(name string, args []Object) (Object, error) {
-	return nil, fmt.Errorf("environment: unknown function %q", name)
+	switch strings.ToUpper(name) {
+	case "EOF":
+		if len(args) != 0 {
+			return nil, fmt.Errorf("environment: function %q expects 0 arguments, got %d", name, len(args))
+		}
+		return &BooleanObject{Value: e.eof}, nil
+	default:
+		return nil, fmt.Errorf("environment: unknown function %q", name)
+	}
 }
 func TestEvalNumberLiteral(t *testing.T) {
 	result := testEval(t, "42")
@@ -563,6 +572,56 @@ func TestEvalStringNotEqual(t *testing.T) {
 	b, ok := result.(*BooleanObject)
 	if !ok || !b.Value {
 		t.Fatalf("expected true inequality, got %#v", result)
+	}
+}
+
+func TestEvalEOFReturnsTrue(t *testing.T) {
+	env := &testEnvironment{eof: true}
+
+	result := testEvalWithEnv(t, "EOF()", env)
+	b, ok := result.(*BooleanObject)
+	if !ok {
+		t.Fatalf("expected *BooleanObject, got %T", result)
+	}
+	if b.Value != true {
+		t.Fatalf("expected true, got %v", b.Value)
+	}
+}
+
+func TestEvalEOFReturnsFalse(t *testing.T) {
+	env := &testEnvironment{eof: false}
+
+	result := testEvalWithEnv(t, "EOF()", env)
+	b, ok := result.(*BooleanObject)
+	if !ok {
+		t.Fatalf("expected *BooleanObject, got %T", result)
+	}
+	if b.Value != false {
+		t.Fatalf("expected false, got %v", b.Value)
+	}
+}
+
+func TestEvalEOFCaseInsensitive(t *testing.T) {
+	env := &testEnvironment{eof: true}
+
+	result := testEvalWithEnv(t, "eof()", env)
+	b, ok := result.(*BooleanObject)
+	if !ok {
+		t.Fatalf("expected *BooleanObject, got %T", result)
+	}
+	if b.Value != true {
+		t.Fatalf("expected true, got %v", b.Value)
+	}
+}
+
+func TestEvalEOFArgCountError(t *testing.T) {
+	l := NewLexer("EOF(1)")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{eof: true})
+	if err == nil {
+		t.Fatal("expected error for EOF() with arguments, got nil")
 	}
 }
 
