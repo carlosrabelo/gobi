@@ -62,6 +62,24 @@ func (e *testEnvironment) CallFunction(name string, args []Object) (Object, erro
 			return nil, fmt.Errorf("environment: function %q expects string argument", name)
 		}
 		return &StringObject{Value: strings.TrimRight(s.Value, " ")}, nil
+	case "UPPER":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("environment: function %q expects 1 argument, got %d", name, len(args))
+		}
+		s, ok := args[0].(*StringObject)
+		if !ok {
+			return nil, fmt.Errorf("environment: function %q expects string argument", name)
+		}
+		return &StringObject{Value: strings.ToUpper(s.Value)}, nil
+	case "LOWER":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("environment: function %q expects 1 argument, got %d", name, len(args))
+		}
+		s, ok := args[0].(*StringObject)
+		if !ok {
+			return nil, fmt.Errorf("environment: function %q expects string argument", name)
+		}
+		return &StringObject{Value: strings.ToLower(s.Value)}, nil
 	default:
 		return nil, fmt.Errorf("environment: unknown function %q", name)
 	}
@@ -873,6 +891,94 @@ func TestEvalTRIMNonStringArg(t *testing.T) {
 	_, err := Eval(exp, &testEnvironment{})
 	if err == nil {
 		t.Fatal("expected error for TRIM() with non-string argument, got nil")
+	}
+}
+
+func TestEvalUPPER(t *testing.T) {
+	result := testEval(t, `UPPER("hello")`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "HELLO" {
+		t.Fatalf("expected %q, got %q", "HELLO", s.Value)
+	}
+}
+
+func TestEvalUPPERMixedCase(t *testing.T) {
+	result := testEval(t, `UPPER("HeLLo WoRLd")`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "HELLO WORLD" {
+		t.Fatalf("expected %q, got %q", "HELLO WORLD", s.Value)
+	}
+}
+
+func TestEvalUPPERArgCountError(t *testing.T) {
+	l := NewLexer("UPPER()")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for UPPER() with no arguments, got nil")
+	}
+}
+
+func TestEvalUPPERNonStringArg(t *testing.T) {
+	l := NewLexer("UPPER(42)")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for UPPER() with non-string argument, got nil")
+	}
+}
+
+func TestEvalLOWER(t *testing.T) {
+	result := testEval(t, `LOWER("HELLO")`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "hello" {
+		t.Fatalf("expected %q, got %q", "hello", s.Value)
+	}
+}
+
+func TestEvalLOWERMixedCase(t *testing.T) {
+	result := testEval(t, `LOWER("HeLLo WoRLd")`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "hello world" {
+		t.Fatalf("expected %q, got %q", "hello world", s.Value)
+	}
+}
+
+func TestEvalLOWERArgCountError(t *testing.T) {
+	l := NewLexer("LOWER()")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for LOWER() with no arguments, got nil")
+	}
+}
+
+func TestEvalLOWERNonStringArg(t *testing.T) {
+	l := NewLexer("LOWER(42)")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for LOWER() with non-string argument, got nil")
 	}
 }
 

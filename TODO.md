@@ -28,7 +28,7 @@ Interactive `gobi` REPL and program executor runs, parsing DBF files, executing 
 - [x] Built-in function: DELETED()
 - [x] Built-in function: FOUND()
 - [x] Built-in function: TRIM()
-- [ ] Built-in function: UPPER() and LOWER()
+- [x] Built-in function: UPPER() and LOWER()
 - [ ] Built-in function: LEN() and SUBSTR()
 - [ ] Built-in function: VAL() and STR()
 
