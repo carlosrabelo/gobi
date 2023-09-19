@@ -43,6 +43,11 @@ func (e *testEnvironment) CallFunction(name string, args []Object) (Object, erro
 			return nil, fmt.Errorf("environment: function %q expects 0 arguments, got %d", name, len(args))
 		}
 		return &NumberObject{Value: e.recno}, nil
+	case "DELETED":
+		if len(args) != 0 {
+			return nil, fmt.Errorf("environment: function %q expects 0 arguments, got %d", name, len(args))
+		}
+		return &BooleanObject{Value: e.deleted}, nil
 	default:
 		return nil, fmt.Errorf("environment: unknown function %q", name)
 	}
@@ -677,6 +682,56 @@ func TestEvalRECNOArgCountError(t *testing.T) {
 	_, err := Eval(exp, &testEnvironment{recno: 1})
 	if err == nil {
 		t.Fatal("expected error for RECNO() with arguments, got nil")
+	}
+}
+
+func TestEvalDELETEDReturnsTrue(t *testing.T) {
+	env := &testEnvironment{deleted: true}
+
+	result := testEvalWithEnv(t, "DELETED()", env)
+	b, ok := result.(*BooleanObject)
+	if !ok {
+		t.Fatalf("expected *BooleanObject, got %T", result)
+	}
+	if b.Value != true {
+		t.Fatalf("expected true, got %v", b.Value)
+	}
+}
+
+func TestEvalDELETEDReturnsFalse(t *testing.T) {
+	env := &testEnvironment{deleted: false}
+
+	result := testEvalWithEnv(t, "DELETED()", env)
+	b, ok := result.(*BooleanObject)
+	if !ok {
+		t.Fatalf("expected *BooleanObject, got %T", result)
+	}
+	if b.Value != false {
+		t.Fatalf("expected false, got %v", b.Value)
+	}
+}
+
+func TestEvalDELETEDCaseInsensitive(t *testing.T) {
+	env := &testEnvironment{deleted: true}
+
+	result := testEvalWithEnv(t, "Deleted()", env)
+	b, ok := result.(*BooleanObject)
+	if !ok {
+		t.Fatalf("expected *BooleanObject, got %T", result)
+	}
+	if b.Value != true {
+		t.Fatalf("expected true, got %v", b.Value)
+	}
+}
+
+func TestEvalDELETEDArgCountError(t *testing.T) {
+	l := NewLexer("DELETED(1)")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{deleted: false})
+	if err == nil {
+		t.Fatal("expected error for DELETED() with arguments, got nil")
 	}
 }
 

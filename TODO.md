@@ -25,7 +25,7 @@ Interactive `gobi` REPL and program executor runs, parsing DBF files, executing 
 - [x] Short-circuit logic for .AND. and .OR. operators
 - [x] Built-in function: EOF()
 - [x] Built-in function: RECNO()
-- [ ] Built-in function: DELETED()
+- [x] Built-in function: DELETED()
 - [ ] Built-in function: FOUND()
 - [ ] Built-in function: TRIM()
 - [ ] Built-in function: UPPER() and LOWER()
