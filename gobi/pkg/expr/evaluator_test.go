@@ -53,6 +53,15 @@ func (e *testEnvironment) CallFunction(name string, args []Object) (Object, erro
 			return nil, fmt.Errorf("environment: function %q expects 0 arguments, got %d", name, len(args))
 		}
 		return &BooleanObject{Value: e.found}, nil
+	case "TRIM":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("environment: function %q expects 1 argument, got %d", name, len(args))
+		}
+		s, ok := args[0].(*StringObject)
+		if !ok {
+			return nil, fmt.Errorf("environment: function %q expects string argument", name)
+		}
+		return &StringObject{Value: strings.TrimRight(s.Value, " ")}, nil
 	default:
 		return nil, fmt.Errorf("environment: unknown function %q", name)
 	}
@@ -787,6 +796,83 @@ func TestEvalFOUNDArgCountError(t *testing.T) {
 	_, err := Eval(exp, &testEnvironment{found: false})
 	if err == nil {
 		t.Fatal("expected error for FOUND() with arguments, got nil")
+	}
+}
+
+func TestEvalTRIMTrailingSpaces(t *testing.T) {
+	result := testEval(t, `TRIM("hello  ")`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "hello" {
+		t.Fatalf("expected %q, got %q", "hello", s.Value)
+	}
+}
+
+func TestEvalTRIMNoTrailingSpaces(t *testing.T) {
+	result := testEval(t, `TRIM("hello")`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "hello" {
+		t.Fatalf("expected %q, got %q", "hello", s.Value)
+	}
+}
+
+func TestEvalTRIMLeadingSpaces(t *testing.T) {
+	result := testEval(t, `TRIM("  hello")`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "  hello" {
+		t.Fatalf("expected %q, got %q", "  hello", s.Value)
+	}
+}
+
+func TestEvalTRIMEmptyString(t *testing.T) {
+	result := testEval(t, `TRIM("")`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "" {
+		t.Fatalf("expected empty string, got %q", s.Value)
+	}
+}
+
+func TestEvalTRIMAllSpaces(t *testing.T) {
+	result := testEval(t, `TRIM("   ")`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "" {
+		t.Fatalf("expected empty string, got %q", s.Value)
+	}
+}
+
+func TestEvalTRIMArgCountError(t *testing.T) {
+	l := NewLexer("TRIM()")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for TRIM() with no arguments, got nil")
+	}
+}
+
+func TestEvalTRIMNonStringArg(t *testing.T) {
+	l := NewLexer("TRIM(42)")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for TRIM() with non-string argument, got nil")
 	}
 }
 
