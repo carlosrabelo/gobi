@@ -80,6 +80,47 @@ func (e *testEnvironment) CallFunction(name string, args []Object) (Object, erro
 			return nil, fmt.Errorf("environment: function %q expects string argument", name)
 		}
 		return &StringObject{Value: strings.ToLower(s.Value)}, nil
+	case "LEN":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("environment: function %q expects 1 argument, got %d", name, len(args))
+		}
+		s, ok := args[0].(*StringObject)
+		if !ok {
+			return nil, fmt.Errorf("environment: function %q expects string argument", name)
+		}
+		return &NumberObject{Value: float64(len(s.Value))}, nil
+	case "SUBSTR":
+		if len(args) != 3 {
+			return nil, fmt.Errorf("environment: function %q expects 3 arguments, got %d", name, len(args))
+		}
+		s, ok := args[0].(*StringObject)
+		if !ok {
+			return nil, fmt.Errorf("environment: function %q expects string as first argument", name)
+		}
+		start, ok := args[1].(*NumberObject)
+		if !ok {
+			return nil, fmt.Errorf("environment: function %q expects number as second argument", name)
+		}
+		length, ok := args[2].(*NumberObject)
+		if !ok {
+			return nil, fmt.Errorf("environment: function %q expects number as third argument", name)
+		}
+		idx := int(start.Value) - 1
+		if idx < 0 {
+			idx = 0
+		}
+		maxLen := int(length.Value)
+		if maxLen < 0 {
+			maxLen = 0
+		}
+		str := s.Value
+		if idx >= len(str) {
+			return &StringObject{Value: ""}, nil
+		}
+		if idx+maxLen > len(str) {
+			maxLen = len(str) - idx
+		}
+		return &StringObject{Value: str[idx : idx+maxLen]}, nil
 	default:
 		return nil, fmt.Errorf("environment: unknown function %q", name)
 	}
@@ -979,6 +1020,127 @@ func TestEvalLOWERNonStringArg(t *testing.T) {
 	_, err := Eval(exp, &testEnvironment{})
 	if err == nil {
 		t.Fatal("expected error for LOWER() with non-string argument, got nil")
+	}
+}
+
+func TestEvalLEN(t *testing.T) {
+	result := testEval(t, `LEN("hello")`)
+	n, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if n.Value != 5 {
+		t.Fatalf("expected 5, got %v", n.Value)
+	}
+}
+
+func TestEvalLENEmptyString(t *testing.T) {
+	result := testEval(t, `LEN("")`)
+	n, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if n.Value != 0 {
+		t.Fatalf("expected 0, got %v", n.Value)
+	}
+}
+
+func TestEvalLENArgCountError(t *testing.T) {
+	l := NewLexer("LEN()")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for LEN() with no arguments, got nil")
+	}
+}
+
+func TestEvalLENNonStringArg(t *testing.T) {
+	l := NewLexer("LEN(42)")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for LEN() with non-string argument, got nil")
+	}
+}
+
+func TestEvalSUBSTR(t *testing.T) {
+	result := testEval(t, `SUBSTR("hello", 2, 3)`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "ell" {
+		t.Fatalf("expected %q, got %q", "ell", s.Value)
+	}
+}
+
+func TestEvalSUBSTRStartOne(t *testing.T) {
+	result := testEval(t, `SUBSTR("hello", 1, 2)`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "he" {
+		t.Fatalf("expected %q, got %q", "he", s.Value)
+	}
+}
+
+func TestEvalSUBSTRFullLength(t *testing.T) {
+	result := testEval(t, `SUBSTR("hello", 1, 10)`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "hello" {
+		t.Fatalf("expected %q, got %q", "hello", s.Value)
+	}
+}
+
+func TestEvalSUBSTRStartBeyondEnd(t *testing.T) {
+	result := testEval(t, `SUBSTR("hello", 10, 3)`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "" {
+		t.Fatalf("expected empty string, got %q", s.Value)
+	}
+}
+
+func TestEvalSUBSTRZeroLength(t *testing.T) {
+	result := testEval(t, `SUBSTR("hello", 2, 0)`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "" {
+		t.Fatalf("expected empty string, got %q", s.Value)
+	}
+}
+
+func TestEvalSUBSTRArgCountError(t *testing.T) {
+	l := NewLexer("SUBSTR(\"hello\")")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for SUBSTR() with wrong arg count, got nil")
+	}
+}
+
+func TestEvalSUBSTRNonStringArg(t *testing.T) {
+	l := NewLexer("SUBSTR(42, 1, 2)")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for SUBSTR() with non-string arg, got nil")
 	}
 }
 
