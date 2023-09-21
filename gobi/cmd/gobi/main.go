@@ -3,9 +3,15 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/carlosrabelo/gobi/gobi/internal/context"
+	"github.com/carlosrabelo/gobi/gobi/internal/repl"
 )
 
 func main() {
-	fmt.Fprintln(os.Stderr, "gobi: interactive shell not yet implemented")
-	os.Exit(0)
+	ctx := context.New()
+	if err := repl.Run(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }

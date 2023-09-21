@@ -36,7 +36,7 @@ Interactive `gobi` REPL and program executor runs, parsing DBF files, executing 
 
 References: [gobi/pkg/docs/language_spec.md](gobi/pkg/docs/language_spec.md)
 
-- [ ] Basic console line reader with '.' prompt
+- [x] Basic console line reader with '.' prompt
 - [ ] Command history log file and keyboard scrolling
 - [ ] Command parser splitting verb and string arguments
 - [ ] Parser support for conditional FOR clause
