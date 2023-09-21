@@ -2,6 +2,7 @@ package expr
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -121,6 +122,38 @@ func (e *testEnvironment) CallFunction(name string, args []Object) (Object, erro
 			maxLen = len(str) - idx
 		}
 		return &StringObject{Value: str[idx : idx+maxLen]}, nil
+	case "VAL":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("environment: function %q expects 1 argument, got %d", name, len(args))
+		}
+		s, ok := args[0].(*StringObject)
+		if !ok {
+			return nil, fmt.Errorf("environment: function %q expects string argument", name)
+		}
+		parsed, _ := strconv.ParseFloat(parseNumericPrefix(s.Value), 64)
+		return &NumberObject{Value: parsed}, nil
+	case "STR":
+		if len(args) != 3 {
+			return nil, fmt.Errorf("environment: function %q expects 3 arguments, got %d", name, len(args))
+		}
+		n, ok := args[0].(*NumberObject)
+		if !ok {
+			return nil, fmt.Errorf("environment: function %q expects number as first argument", name)
+		}
+		width, ok := args[1].(*NumberObject)
+		if !ok {
+			return nil, fmt.Errorf("environment: function %q expects number as second argument", name)
+		}
+		decimals, ok := args[2].(*NumberObject)
+		if !ok {
+			return nil, fmt.Errorf("environment: function %q expects number as third argument", name)
+		}
+		formatted := strconv.FormatFloat(n.Value, 'f', int(decimals.Value), 64)
+		w := int(width.Value)
+		if len(formatted) > w {
+			return &StringObject{Value: strings.Repeat("*", w)}, nil
+		}
+		return &StringObject{Value: fmt.Sprintf("%*s", w, formatted)}, nil
 	default:
 		return nil, fmt.Errorf("environment: unknown function %q", name)
 	}
@@ -1142,5 +1175,135 @@ func TestEvalSUBSTRNonStringArg(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for SUBSTR() with non-string arg, got nil")
 	}
+}
+
+func TestEvalVALInteger(t *testing.T) {
+	result := testEval(t, `VAL("123")`)
+	n, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if n.Value != 123 {
+		t.Fatalf("expected 123, got %v", n.Value)
+	}
+}
+
+func TestEvalVALFloat(t *testing.T) {
+	result := testEval(t, `VAL("45.67")`)
+	n, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if n.Value != 45.67 {
+		t.Fatalf("expected 45.67, got %v", n.Value)
+	}
+}
+
+func TestEvalVALNonNumeric(t *testing.T) {
+	result := testEval(t, `VAL("abc")`)
+	n, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if n.Value != 0 {
+		t.Fatalf("expected 0, got %v", n.Value)
+	}
+}
+
+func TestEvalVALPartialNumeric(t *testing.T) {
+	result := testEval(t, `VAL("123abc")`)
+	n, ok := result.(*NumberObject)
+	if !ok {
+		t.Fatalf("expected *NumberObject, got %T", result)
+	}
+	if n.Value != 123 {
+		t.Fatalf("expected 123, got %v", n.Value)
+	}
+}
+
+func TestEvalVALArgCountError(t *testing.T) {
+	l := NewLexer("VAL()")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for VAL() with no arguments, got nil")
+	}
+}
+
+func TestEvalVALNonStringArg(t *testing.T) {
+	l := NewLexer("VAL(.T.)")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for VAL() with non-string arg, got nil")
+	}
+}
+
+func TestEvalSTR(t *testing.T) {
+	result := testEval(t, `STR(123.45, 6, 2)`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "123.45" {
+		t.Fatalf("expected %q, got %q", "123.45", s.Value)
+	}
+}
+
+func TestEvalSTRWidthTooSmall(t *testing.T) {
+	result := testEval(t, `STR(123.45, 3, 1)`)
+	s, ok := result.(*StringObject)
+	if !ok {
+		t.Fatalf("expected *StringObject, got %T", result)
+	}
+	if s.Value != "***" {
+		t.Fatalf("expected %q, got %q", "***", s.Value)
+	}
+}
+
+func TestEvalSTRArgCountError(t *testing.T) {
+	l := NewLexer("STR(123)")
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for STR() with wrong arg count, got nil")
+	}
+}
+
+func TestEvalSTRNonNumberArg(t *testing.T) {
+	l := NewLexer(`STR("x", 1, 0)`)
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	_, err := Eval(exp, &testEnvironment{})
+	if err == nil {
+		t.Fatal("expected error for STR() with non-number arg, got nil")
+	}
+}
+
+func parseNumericPrefix(s string) string {
+	i := 0
+	hasDot := false
+	if i < len(s) && s[i] == '-' {
+		i++
+	}
+	for ; i < len(s); i++ {
+		ch := s[i]
+		if ch >= '0' && ch <= '9' {
+			continue
+		}
+		if ch == '.' && !hasDot {
+			hasDot = true
+			continue
+		}
+		break
+	}
+	return s[:i]
 }
 

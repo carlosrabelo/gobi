@@ -30,7 +30,7 @@ Interactive `gobi` REPL and program executor runs, parsing DBF files, executing 
 - [x] Built-in function: TRIM()
 - [x] Built-in function: UPPER() and LOWER()
 - [x] Built-in function: LEN() and SUBSTR()
-- [ ] Built-in function: VAL() and STR()
+- [x] Built-in function: VAL() and STR()
 
 ## REPL and Command Shell
 
