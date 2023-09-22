@@ -20,7 +20,7 @@ type Mux struct {
 	handlers map[string]Handler
 }
 
-// NewMux returns a mux with QUIT, *, and NOTE registered.
+// NewMux returns a mux with the built-in verbs registered.
 func NewMux() *Mux {
 	m := &Mux{handlers: map[string]Handler{}}
 	m.Register("QUIT", func(*context.Context, command.Command) error {
@@ -28,6 +28,8 @@ func NewMux() *Mux {
 	})
 	m.Register("*", func(*context.Context, command.Command) error { return nil })
 	m.Register("NOTE", func(*context.Context, command.Command) error { return nil })
+	m.Register("USE", cmdUSE)
+	m.Register("CLOSE", cmdCLOSE)
 	return m
 }
 
