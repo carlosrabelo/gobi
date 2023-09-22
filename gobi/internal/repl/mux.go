@@ -30,6 +30,7 @@ func NewMux() *Mux {
 	m.Register("NOTE", func(*context.Context, command.Command) error { return nil })
 	m.Register("USE", cmdUSE)
 	m.Register("CLOSE", cmdCLOSE)
+	m.Register("SELECT", cmdSELECT)
 	return m
 }
 
