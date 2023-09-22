@@ -56,14 +56,25 @@ func (c *Context) Active() *Area {
 	return c.Areas[c.ActiveArea]
 }
 
-// Select switches the active area. name is "1"–"10" or "A"–"J", case-insensitive.
+// Select switches the active area. name is "1"–"10", "A"–"J", or an open-table alias.
 func (c *Context) Select(name string) error {
-	n, err := parseArea(name)
-	if err != nil {
-		return err
+	s := strings.TrimSpace(name)
+	if s == "" {
+		return fmt.Errorf("invalid work area: %q", name)
 	}
-	c.ActiveArea = n
-	return nil
+	if n, err := parseArea(s); err == nil {
+		c.ActiveArea = n
+		return nil
+	}
+	want := strings.ToUpper(s)
+	for i := 1; i <= AreaCount; i++ {
+		a := c.Areas[i]
+		if a.HasTable() && a.Alias == want {
+			c.ActiveArea = i
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid work area: %s", s)
 }
 
 func parseArea(name string) (int, error) {
