@@ -17,14 +17,6 @@ const (
 	AreaCount = 10
 )
 
-// Area is one work area. A new area has no table.
-type Area struct {
-	Alias  string
-	Cursor int
-	Found  bool
-	BOF    bool
-}
-
 // Context is the session: work areas, streams, and config.
 type Context struct {
 	Config     *config.Config
@@ -34,6 +26,11 @@ type Context struct {
 	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
+
+	Alternate *os.File // SET ALTERNATE file; closed by CLOSE ALTERNATE / CLOSE ALL
+	Procedure bool     // procedure file open (stub until 029)
+
+	openFiles int
 
 	stdinReader *bufio.Reader
 	stdinSource io.Reader
