@@ -86,7 +86,8 @@ func processLine(ctx *context.Context, line string, hist *History) error {
 
 	hist.Add(line)
 
-	if strings.EqualFold(strings.TrimSpace(line), "QUIT") {
+	cmd := ParseCommand(line)
+	if cmd.Verb == "QUIT" {
 		return errQuit
 	}
 
