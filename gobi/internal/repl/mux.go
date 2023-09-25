@@ -31,6 +31,9 @@ func NewMux() *Mux {
 	m.Register("USE", cmdUSE)
 	m.Register("CLOSE", cmdCLOSE)
 	m.Register("SELECT", cmdSELECT)
+	m.Register("GOTO", cmdGOTO)
+	m.Register("GO", cmdGO)
+	m.Register("SKIP", cmdSKIP)
 	return m
 }
 
