@@ -39,7 +39,7 @@ References: [gobi/pkg/docs/language_spec.md](gobi/pkg/docs/language_spec.md)
 - [x] Basic console line reader with '.' prompt
 - [x] Command history log file and keyboard scrolling
 - [x] Command parser splitting verb and string arguments
-- [ ] Parser support for conditional FOR clause
+- [x] Parser support for conditional FOR clause
 - [ ] Parser support for conditional WHILE clause
 - [ ] Parser support for TO output redirect path
 - [ ] Command multiplexer matching verb to execution handler

@@ -115,3 +115,75 @@ func TestParseDoubleQuestion(t *testing.T) {
 	}
 }
 
+func TestParseForClause(t *testing.T) {
+	cmd := Parse("LIST FOR name = \"Smith\"")
+	if cmd.Verb != "LIST" {
+		t.Fatalf("expected LIST, got %q", cmd.Verb)
+	}
+	if cmd.ForClause != "name = \"Smith\"" {
+		t.Fatalf("expected 'name = \"Smith\"', got %q", cmd.ForClause)
+	}
+	if cmd.Args != "" {
+		t.Fatalf("expected empty args, got %q", cmd.Args)
+	}
+}
+
+func TestParseForClauseLowercase(t *testing.T) {
+	cmd := Parse("list for name = 'Smith'")
+	if cmd.Verb != "LIST" {
+		t.Fatalf("expected LIST, got %q", cmd.Verb)
+	}
+	if cmd.ForClause != "name = 'Smith'" {
+		t.Fatalf("expected 'name = \\'Smith\\'', got %q", cmd.ForClause)
+	}
+}
+
+func TestParseArgsAndFor(t *testing.T) {
+	cmd := Parse("LIST name, address FOR age > 21")
+	if cmd.Verb != "LIST" {
+		t.Fatalf("expected LIST, got %q", cmd.Verb)
+	}
+	if cmd.Args != "name, address" {
+		t.Fatalf("expected 'name, address', got %q", cmd.Args)
+	}
+	if cmd.ForClause != "age > 21" {
+		t.Fatalf("expected 'age > 21', got %q", cmd.ForClause)
+	}
+}
+
+func TestParseQuotedStringInFor(t *testing.T) {
+	cmd := Parse(`LIST FOR name = "John Doe"`)
+	if cmd.Verb != "LIST" {
+		t.Fatalf("expected LIST, got %q", cmd.Verb)
+	}
+	if cmd.ForClause != `name = "John Doe"` {
+		t.Fatalf("expected 'name = \"John Doe\"', got %q", cmd.ForClause)
+	}
+}
+
+func TestParseSingleQuotes(t *testing.T) {
+	cmd := Parse("LIST FOR name = 'John Doe'")
+	if cmd.Verb != "LIST" {
+		t.Fatalf("expected LIST, got %q", cmd.Verb)
+	}
+	if cmd.ForClause != "name = 'John Doe'" {
+		t.Fatalf("expected \"name = 'John Doe'\", got %q", cmd.ForClause)
+	}
+}
+
+func TestParseExtraWhitespace(t *testing.T) {
+	cmd := Parse("  LIST    name ,  address   FOR   age   >   21  ")
+	if cmd.Verb != "LIST" {
+		t.Fatalf("expected LIST, got %q", cmd.Verb)
+	}
+	if cmd.RawVerb != "LIST" {
+		t.Fatalf("expected raw LIST, got %q", cmd.RawVerb)
+	}
+	if cmd.Args != "name , address" {
+		t.Fatalf("expected 'name , address', got %q", cmd.Args)
+	}
+	if cmd.ForClause != "age > 21" {
+		t.Fatalf("expected 'age > 21', got %q", cmd.ForClause)
+	}
+}
+

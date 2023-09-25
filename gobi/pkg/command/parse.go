@@ -33,7 +33,8 @@ func Parse(line string) Command {
 		return cmd
 	}
 
-	cmd.Args = JoinTokens(Tokenize(rest))
+	tokens := Tokenize(rest)
+	cmd.ForClause, cmd.Args = extractForClause(tokens)
 	return cmd
 }
 
@@ -82,6 +83,21 @@ func Tokenize(s string) []string {
 		tokens = append(tokens, cur.String())
 	}
 	return tokens
+}
+
+func extractForClause(tokens []string) (forClause, args string) {
+	var result []string
+	i := 0
+	for i < len(tokens) {
+		if strings.EqualFold(tokens[i], "FOR") {
+			forClause = JoinTokens(tokens[i+1:])
+			break
+		}
+		result = append(result, tokens[i])
+		i++
+	}
+	args = JoinTokens(result)
+	return
 }
 
 // JoinTokens rebuilds a command argument string from tokens.
