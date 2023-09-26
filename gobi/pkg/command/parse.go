@@ -34,7 +34,7 @@ func Parse(line string) Command {
 	}
 
 	tokens := Tokenize(rest)
-	cmd.ForClause, cmd.Args = extractForClause(tokens)
+	cmd.ForClause, cmd.WhileClause, _, _, cmd.Args = extractClauses(tokens)
 	return cmd
 }
 
@@ -83,6 +83,45 @@ func Tokenize(s string) []string {
 		tokens = append(tokens, cur.String())
 	}
 	return tokens
+}
+
+func extractClauses(tokens []string) (forClause, whileClause, toClause, fromClause, args string) {
+	var result []string
+	i := 0
+
+	for i < len(tokens) {
+		tok := tokens[i]
+		upper := strings.ToUpper(tok)
+
+		switch upper {
+		case "FOR":
+			end := nextClauseIndex(tokens, i+1)
+			forClause = JoinTokens(tokens[i+1 : end])
+			i = end
+
+		case "WHILE":
+			end := nextClauseIndex(tokens, i+1)
+			whileClause = JoinTokens(tokens[i+1 : end])
+			i = end
+
+		default:
+			result = append(result, tok)
+			i++
+		}
+	}
+
+	args = JoinTokens(result)
+	return
+}
+
+func nextClauseIndex(tokens []string, start int) int {
+	for i := start; i < len(tokens); i++ {
+		upper := strings.ToUpper(tokens[i])
+		if upper == "FOR" || upper == "WHILE" {
+			return i
+		}
+	}
+	return len(tokens)
 }
 
 func extractForClause(tokens []string) (forClause, args string) {

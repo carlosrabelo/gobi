@@ -187,3 +187,32 @@ func TestParseExtraWhitespace(t *testing.T) {
 	}
 }
 
+func TestParseWhileClause(t *testing.T) {
+	cmd := Parse("LIST WHILE active = .T.")
+	if cmd.Verb != "LIST" {
+		t.Fatalf("expected LIST, got %q", cmd.Verb)
+	}
+	if cmd.Args != "" {
+		t.Fatalf("expected empty args, got %q", cmd.Args)
+	}
+	if cmd.WhileClause != "active = .T." {
+		t.Fatalf("expected 'active = .T.', got %q", cmd.WhileClause)
+	}
+}
+
+func TestParseForAndWhile(t *testing.T) {
+	cmd := Parse("LIST name FOR age > 21 WHILE active")
+	if cmd.Verb != "LIST" {
+		t.Fatalf("expected LIST, got %q", cmd.Verb)
+	}
+	if cmd.Args != "name" {
+		t.Fatalf("expected 'name', got %q", cmd.Args)
+	}
+	if cmd.ForClause != "age > 21" {
+		t.Fatalf("expected 'age > 21', got %q", cmd.ForClause)
+	}
+	if cmd.WhileClause != "active" {
+		t.Fatalf("expected 'active', got %q", cmd.WhileClause)
+	}
+}
+
