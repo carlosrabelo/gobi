@@ -45,19 +45,33 @@ func listRecords(ctx *context.Context, cmd command.Command, opts listOpts) error
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
+	forExpr, err := parseOptionalLogic(cmd.Clauses["FOR"])
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	whileExpr, err := parseOptionalLogic(cmd.Clauses["WHILE"])
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
 	env := newEnv(ctx)
 	printHeader(ctx, cols)
 
 	count := a.RecCount()
 	start := 1
-	if !opts.fromOne {
+	// WHILE starts at the current record; plain LIST / FOR start at 1.
+	if whileExpr != nil || !opts.fromOne {
 		start = a.Cursor
 		if start < 1 {
 			start = 1
 		}
-		if count == 0 || start > count {
-			return nil
+	}
+	if count == 0 || start > count {
+		if opts.leaveEOF {
+			a.Cursor = count + 1
+			a.BOF = false
+			_ = a.LoadCurrent()
 		}
+		return nil
 	}
 
 	printed := 0
@@ -70,6 +84,24 @@ func listRecords(ctx *context.Context, cmd command.Command, opts listOpts) error
 		}
 		if ctx.Config.Deleted && a.Record.Deleted {
 			continue
+		}
+		if whileExpr != nil {
+			ok, err := evalLogic(whileExpr, env)
+			if err != nil {
+				return fail(ctx, "%s", err.Error())
+			}
+			if !ok {
+				break
+			}
+		}
+		if forExpr != nil {
+			ok, err := evalLogic(forExpr, env)
+			if err != nil {
+				return fail(ctx, "%s", err.Error())
+			}
+			if !ok {
+				continue
+			}
 		}
 		if err := printDataLine(ctx, env, cols, n); err != nil {
 			return fail(ctx, "%s", err.Error())
@@ -91,6 +123,33 @@ func listRecords(ctx *context.Context, cmd command.Command, opts listOpts) error
 		_ = a.LoadCurrent()
 	}
 	return nil
+}
+
+func parseOptionalLogic(src string) (expr.Expression, error) {
+	src = strings.TrimSpace(src)
+	if src == "" {
+		return nil, nil
+	}
+	tree, errs := expr.Parse(src)
+	if len(errs) > 0 || tree == nil {
+		msg := "invalid expression"
+		if len(errs) > 0 {
+			msg = errs[0]
+		}
+		return nil, fmt.Errorf("%s", msg)
+	}
+	return tree, nil
+}
+
+func evalLogic(tree expr.Expression, env expr.Env) (bool, error) {
+	v, err := expr.Eval(tree, env)
+	if err != nil {
+		return false, err
+	}
+	if v.Kind != expr.KindLogical {
+		return false, fmt.Errorf("expected logical expression")
+	}
+	return v.Log, nil
 }
 
 type column struct {
