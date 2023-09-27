@@ -65,6 +65,45 @@ func TestLISTAllAndFieldList(t *testing.T) {
 	}
 }
 
+func TestDISPLAYPageAndRejectTO(t *testing.T) {
+	dir := t.TempDir()
+	fields := []dbf.Field{{Name: "N", Type: 'N', Length: 3, Decimals: 0}}
+	recs := make([]dbf.Record, 25)
+	for i := range recs {
+		recs[i] = dbf.Record{Values: []dbf.Value{{Num: float64(i + 1)}}}
+	}
+	mustCreateDBF(t, filepath.Join(dir, "many.dbf"), fields, recs)
+
+	ctx := testCtx(t, dir)
+	var out, errBuf bytes.Buffer
+	ctx.Stdout = &out
+	ctx.Stderr = &errBuf
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("USE many")); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("DISPLAY")); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	// header + 20 data lines
+	if len(lines) != 21 {
+		t.Fatalf("want 21 lines, got %d: %q", len(lines), out.String())
+	}
+	if ctx.Active().Cursor != 20 {
+		t.Fatalf("cursor %d, want 20", ctx.Active().Cursor)
+	}
+
+	err := mux.Dispatch(ctx, command.Split("DISPLAY TO FILE x"))
+	if err == nil {
+		t.Fatal("expected TO rejection")
+	}
+	if !strings.Contains(errBuf.String(), "*** ") {
+		t.Fatalf("stderr %q", errBuf.String())
+	}
+}
+
 func TestLISTForAndWhile(t *testing.T) {
 	dir := t.TempDir()
 	mustCreateDBF(t, filepath.Join(dir, "peeps.dbf"), []dbf.Field{

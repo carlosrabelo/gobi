@@ -21,8 +21,14 @@ func cmdDISPLAY(ctx *context.Context, cmd command.Command) error {
 	if strings.EqualFold(strings.TrimSpace(cmd.Args), "STRUCTURE") {
 		return displayStructure(ctx)
 	}
-	// Record DISPLAY arrives in 010.3.
-	return fail(ctx, "DISPLAY STRUCTURE required")
+	if _, ok := cmd.Clauses["TO"]; ok {
+		return fail(ctx, "DISPLAY does not accept TO")
+	}
+	return listRecords(ctx, cmd, listOpts{
+		fromOne:   false,
+		leaveEOF:  false,
+		pageLimit: pageSize(ctx),
+	})
 }
 
 type listOpts struct {
