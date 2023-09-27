@@ -64,3 +64,44 @@ func TestLISTAllAndFieldList(t *testing.T) {
 		t.Fatalf("field list header still has AGE: %q", lines[0])
 	}
 }
+
+func TestLISTForAndWhile(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "peeps.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 4},
+		{Name: "AGE", Type: 'N', Length: 3, Decimals: 0},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "ANN"}, {Num: 10}}},
+		{Values: []dbf.Value{{Str: "BOB"}, {Num: 20}}},
+		{Values: []dbf.Value{{Str: "CYN"}, {Num: 30}}},
+	})
+
+	ctx := testCtx(t, dir)
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("USE peeps")); err != nil {
+		t.Fatal(err)
+	}
+
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("LIST FOR AGE > 15")); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if strings.Contains(got, "ANN") || !strings.Contains(got, "BOB") || !strings.Contains(got, "CYN") {
+		t.Fatalf("FOR: %q", got)
+	}
+
+	if err := mux.Dispatch(ctx, command.Split("GO TOP")); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("LIST WHILE AGE < 25")); err != nil {
+		t.Fatal(err)
+	}
+	got = out.String()
+	if !strings.Contains(got, "ANN") || !strings.Contains(got, "BOB") || strings.Contains(got, "CYN") {
+		t.Fatalf("WHILE: %q", got)
+	}
+}
