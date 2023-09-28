@@ -18,6 +18,8 @@ type Command struct {
 }
 
 // Parse splits line into verb and clauses.
+// The line is case-insensitive; the Verb field is always upper-cased.
+// White-space is collapsed, and quoted strings (' or ") remain intact.
 func Parse(line string) Command {
 	line = strings.TrimSpace(line)
 	if line == "" {
@@ -33,8 +35,16 @@ func Parse(line string) Command {
 		return cmd
 	}
 
+	// REMARK echoes the rest of the line verbatim, so its text must not be
+	// tokenized or scanned for FOR/WHILE/TO/FROM clause keywords.
+	if cmd.Verb == "REMARK" {
+		cmd.Args = rest
+		return cmd
+	}
+
 	tokens := Tokenize(rest)
-	cmd.ForClause, cmd.WhileClause, _, _, cmd.Args = extractClauses(tokens)
+	cmd.ForClause, cmd.WhileClause, cmd.ToClause, cmd.FromClause, cmd.Args = extractClauses(tokens)
+
 	return cmd
 }
 
@@ -52,6 +62,10 @@ func splitFirstWord(s string) (string, string) {
 		return s, ""
 	}
 	return s[:idx], strings.TrimLeft(s[idx:], " ")
+}
+
+func tokenize(s string) []string {
+	return Tokenize(s)
 }
 
 // Tokenize splits s into whitespace-delimited tokens, preserving quoted strings.
@@ -104,6 +118,19 @@ func extractClauses(tokens []string) (forClause, whileClause, toClause, fromClau
 			whileClause = JoinTokens(tokens[i+1 : end])
 			i = end
 
+		case "TO":
+			end := nextClauseIndex(tokens, i+1)
+			toClause = JoinTokens(tokens[i+1 : end])
+			i = end
+
+		case "FROM":
+			if i+1 < len(tokens) && strings.ToUpper(tokens[i+1]) != "ON" {
+				fromClause = tokens[i+1]
+				i += 2
+			} else {
+				i++
+			}
+
 		default:
 			result = append(result, tok)
 			i++
@@ -117,26 +144,15 @@ func extractClauses(tokens []string) (forClause, whileClause, toClause, fromClau
 func nextClauseIndex(tokens []string, start int) int {
 	for i := start; i < len(tokens); i++ {
 		upper := strings.ToUpper(tokens[i])
-		if upper == "FOR" || upper == "WHILE" {
+		if upper == "FOR" || upper == "WHILE" || upper == "TO" || upper == "FROM" || upper == "FIELD" {
 			return i
 		}
 	}
 	return len(tokens)
 }
 
-func extractForClause(tokens []string) (forClause, args string) {
-	var result []string
-	i := 0
-	for i < len(tokens) {
-		if strings.EqualFold(tokens[i], "FOR") {
-			forClause = JoinTokens(tokens[i+1:])
-			break
-		}
-		result = append(result, tokens[i])
-		i++
-	}
-	args = JoinTokens(result)
-	return
+func joinTokens(tokens []string) string {
+	return JoinTokens(tokens)
 }
 
 // JoinTokens rebuilds a command argument string from tokens.

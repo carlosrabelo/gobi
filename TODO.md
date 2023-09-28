@@ -41,7 +41,7 @@ References: [gobi/pkg/docs/language_spec.md](gobi/pkg/docs/language_spec.md)
 - [x] Command parser splitting verb and string arguments
 - [x] Parser support for conditional FOR clause
 - [x] Parser support for conditional WHILE clause
-- [ ] Parser support for TO output redirect path
+- [x] Parser support for TO output redirect path
 - [ ] Command multiplexer matching verb to execution handler
 
 ## DBF File Layout
