@@ -36,6 +36,8 @@ func NewMux() *Mux {
 	m.Register("SKIP", cmdSKIP)
 	m.Register("DISPLAY", cmdDISPLAY)
 	m.Register("LIST", cmdLIST)
+	m.Register("?", cmdQuestion)
+	m.Register("??", cmdQuestionQuestion)
 	return m
 }
 
