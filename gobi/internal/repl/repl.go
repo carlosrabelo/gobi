@@ -91,6 +91,9 @@ func processLine(ctx *context.Context, line string, hist *History) error {
 		return errQuit
 	}
 
-	fmt.Fprintf(ctx.Stderr, "*** Unrecognized command verb\n")
+	err := commandMux.Dispatch(ctx, cmd)
+	if err != nil {
+		fmt.Fprintln(ctx.Stderr, err.Error())
+	}
 	return nil
 }
