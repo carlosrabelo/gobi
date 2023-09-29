@@ -40,6 +40,7 @@ func NewMux() *Mux {
 	m.Register("??", cmdQuestionQuestion)
 	m.Register("CREATE", cmdCREATE)
 	m.Register("APPEND", cmdAPPEND)
+	m.Register("REPLACE", cmdREPLACE)
 	return m
 }
 
