@@ -1,6 +1,7 @@
 package dbf
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 )
@@ -32,5 +33,12 @@ func readHeader(r io.Reader) (*Header, error) {
 		return nil, fmt.Errorf("dbf: invalid signature 0x%02X", sig)
 	}
 
-	return &Header{Signature: sig}, nil
+	rc := binary.LittleEndian.Uint16(buf[1:3])
+	rl := binary.LittleEndian.Uint16(buf[6:8])
+
+	return &Header{
+		Signature:   sig,
+		RecordCount: rc,
+		RecordLen:   rl,
+	}, nil
 }

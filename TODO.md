@@ -49,7 +49,7 @@ References: [gobi/pkg/docs/language_spec.md](gobi/pkg/docs/language_spec.md)
 References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md)
 
 - [x] Read header signature (0x02 or 0x82)
-- [ ] Read record count (2 bytes) and record length (2 bytes)
+- [x] Read record count (2 bytes) and record length (2 bytes)
 - [ ] Read field count and iterate 16-byte field descriptors
 - [ ] Map field descriptors into memory structs
 - [ ] Header terminator validation (0x0D)
