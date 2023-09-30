@@ -51,7 +51,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] Read header signature (0x02 or 0x82)
 - [x] Read record count (2 bytes) and record length (2 bytes)
 - [x] Read field count and iterate 16-byte field descriptors
-- [ ] Map field descriptors into memory structs
+- [x] Map field descriptors into memory structs
 - [ ] Header terminator validation (0x0D)
 - [ ] Raw record reader with deletion flag check (0x20 vs 0x2A)
 - [ ] Field decoder for Character (C) - space-stripped strings
