@@ -2,6 +2,7 @@ package dbf
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -132,6 +133,32 @@ func TestReadFieldDescriptorsTruncated(t *testing.T) {
 	}
 }
 
+func TestReadFieldDescriptorsMissingTerminator(t *testing.T) {
+	f1 := makeFieldBlock("NAME", 'C', 10, 0)
+	_, err := readFieldDescriptors(bytes.NewReader(f1))
+	if err == nil {
+		t.Fatal("expected error for missing terminator")
+	}
+	if !strings.Contains(err.Error(), "missing header terminator") {
+		t.Errorf("error = %v, want missing header terminator", err)
+	}
+}
+
+func TestReadFieldDescriptorsInvalidTerminator(t *testing.T) {
+	var data []byte
+	for i := 0; i < maxFieldCount; i++ {
+		data = append(data, makeFieldBlock("F", 'C', 1, 0)...)
+	}
+	data = append(data, 0x0A)
+	_, err := readFieldDescriptors(bytes.NewReader(data))
+	if err == nil {
+		t.Fatal("expected error for invalid terminator")
+	}
+	if !strings.Contains(err.Error(), "invalid header terminator") {
+		t.Errorf("error = %v, want invalid header terminator", err)
+	}
+}
+
 func TestReadFieldDescriptorsNameNullPadded(t *testing.T) {
 	b := make([]byte, fieldDescriptorSize)
 	copy(b, "A")
@@ -152,3 +179,31 @@ func TestReadFieldDescriptorsNameNullPadded(t *testing.T) {
 	}
 }
 
+func TestReadFieldDescriptorsMaxFieldsSuccess(t *testing.T) {
+	var data []byte
+	for i := 0; i < maxFieldCount; i++ {
+		data = append(data, makeFieldBlock("F", 'C', 1, 0)...)
+	}
+	data = append(data, 0x0D) // Valid terminator
+
+	fields, err := readFieldDescriptors(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(fields) != maxFieldCount {
+		t.Errorf("field count = %d, want %d", len(fields), maxFieldCount)
+	}
+}
+
+func TestReadFieldDescriptorsMaxFieldsMissingTerminator(t *testing.T) {
+	var data []byte
+	for i := 0; i < maxFieldCount; i++ {
+		data = append(data, makeFieldBlock("F", 'C', 1, 0)...)
+	}
+	// No terminator appended (EOF)
+
+	_, err := readFieldDescriptors(bytes.NewReader(data))
+	if err == nil {
+		t.Fatal("expected error for missing terminator at max field limit")
+	}
+}

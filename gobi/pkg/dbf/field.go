@@ -55,7 +55,7 @@ func readFieldDescriptors(r io.Reader) ([]FieldDescriptor, error) {
 	for i := 0; i < maxFieldCount; i++ {
 		var first [1]byte
 		if _, err := io.ReadFull(r, first[:]); err != nil {
-			return nil, fmt.Errorf("dbf: reading field descriptor %d: %w", i, err)
+			return nil, fmt.Errorf("dbf: missing header terminator: %w", err)
 		}
 
 		if first[0] == headerTerminator {
@@ -72,6 +72,14 @@ func readFieldDescriptors(r io.Reader) ([]FieldDescriptor, error) {
 			return nil, err
 		}
 		fields = append(fields, *fd)
+	}
+
+	var term [1]byte
+	if _, err := io.ReadFull(r, term[:]); err != nil {
+		return nil, fmt.Errorf("dbf: missing header terminator: %w", err)
+	}
+	if term[0] != headerTerminator {
+		return nil, fmt.Errorf("dbf: invalid header terminator 0x%02X, want 0x%02X", term[0], headerTerminator)
 	}
 
 	return fields, nil
