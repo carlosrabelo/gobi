@@ -145,3 +145,69 @@ func (t *Table) Close() error {
 	}
 	return nil
 }
+
+// truncater is optional; *os.File implements it.
+type truncater interface {
+	Truncate(size int64) error
+}
+
+// Zap sets the count to 0, truncates data, and writes the end marker.
+func (t *Table) Zap() error {
+	t.Header.RecordCount = 0
+	if err := t.writeCount(); err != nil {
+		return err
+	}
+	off := int64(t.Header.HeaderLen)
+	if tr, ok := t.rw.(truncater); ok {
+		if err := tr.Truncate(off); err != nil {
+			return err
+		}
+	}
+	if _, err := t.rw.Seek(off, io.SeekStart); err != nil {
+		return err
+	}
+	_, err := t.rw.Write([]byte{endMarker})
+	return err
+}
+
+// PackNonDeleted writes non-deleted records into w as a new table body after the header.
+func PackNonDeleted(src *Table, w io.Writer) (kept uint32, err error) {
+	h := src.Header
+	h.RecordCount = 0
+	if err := WriteHeader(w, h); err != nil {
+		return 0, err
+	}
+	count := int(src.Header.RecordCount)
+	for n := 1; n <= count; n++ {
+		rec, err := src.Read(n)
+		if err != nil {
+			return kept, err
+		}
+		if rec.Deleted {
+			continue
+		}
+		raw, err := EncodeRecord(src.Header.Fields, rec)
+		if err != nil {
+			return kept, err
+		}
+		if _, err := w.Write(raw); err != nil {
+			return kept, err
+		}
+		kept++
+	}
+	if _, err := w.Write([]byte{endMarker}); err != nil {
+		return kept, err
+	}
+	// Patch count in the header we already wrote.
+	if ws, ok := w.(io.WriteSeeker); ok {
+		if _, err := ws.Seek(4, io.SeekStart); err != nil {
+			return kept, err
+		}
+		var b [4]byte
+		binary.LittleEndian.PutUint32(b[:], kept)
+		if _, err := ws.Write(b[:]); err != nil {
+			return kept, err
+		}
+	}
+	return kept, nil
+}
