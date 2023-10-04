@@ -3,6 +3,7 @@ package repl
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
@@ -53,5 +54,40 @@ func TestCOPYTOFor(t *testing.T) {
 	}
 	if rec.Values[0].Str != "BOB" {
 		t.Fatalf("got %+v", rec)
+	}
+}
+
+func TestCOPYSDFAndDelimited(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "src.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 4},
+		{Name: "AGE", Type: 'N', Length: 3, Decimals: 0},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "ANN"}, {Num: 10}}},
+	})
+	ctx := testCtx(t, dir)
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("USE src")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mux.Dispatch(ctx, command.Split("COPY TO out.txt SDF")); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "out.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "ANN") || !strings.Contains(string(raw), "10") {
+		t.Fatalf("SDF %q", raw)
+	}
+	if err := mux.Dispatch(ctx, command.Split("COPY TO d.txt DELIMITED")); err != nil {
+		t.Fatal(err)
+	}
+	raw, err = os.ReadFile(filepath.Join(dir, "d.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"ANN"`) {
+		t.Fatalf("DELIMITED %q", raw)
 	}
 }
