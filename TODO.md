@@ -54,7 +54,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] Map field descriptors into memory structs
 - [x] Header terminator validation (0x0D)
 - [x] Raw record reader with deletion flag check (0x20 vs 0x2A)
-- [ ] Field decoder for Character (C) - space-stripped strings
+- [x] Field decoder for Character (C) - space-stripped strings
 - [ ] Field decoder for Numeric (N) - parsing ASCII into float64
 - [ ] Field decoder for Logical (L) - parsing T/F/Y/N to bool
 - [ ] Raw record writer with field padding
