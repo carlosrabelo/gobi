@@ -150,3 +150,133 @@ func openTableWithRecord(t *testing.T, fields []FieldDescriptor, records [][]byt
 	return tbl, rec
 }
 
+func TestDecodeFieldNumericInteger(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "AGE", Type: FieldTypeNumeric, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, ' ', ' ', '2', '5', '3'},
+	}
+	tbl, rec := openTableWithRecord(t, fields, records)
+
+	val, err := rec.DecodeField(tbl, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	n, ok := val.(float64)
+	if !ok {
+		t.Fatalf("expected float64, got %T", val)
+	}
+	if n != 253 {
+		t.Errorf("value = %v, want 253", n)
+	}
+}
+
+func TestDecodeFieldNumericDecimal(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "PRICE", Type: FieldTypeNumeric, Length: 8, DecimalCount: 2},
+	}
+	records := [][]byte{
+		{0x20, ' ', '1', '2', '3', '4', '.', '5', '6'},
+	}
+	tbl, rec := openTableWithRecord(t, fields, records)
+
+	val, err := rec.DecodeField(tbl, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	n := val.(float64)
+	if n != 1234.56 {
+		t.Errorf("value = %v, want 1234.56", n)
+	}
+}
+
+func TestDecodeFieldNumericLeftPadded(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "AGE", Type: FieldTypeNumeric, Length: 10},
+	}
+	records := [][]byte{
+		{0x20, ' ', ' ', ' ', ' ', ' ', ' ', ' ', '4', '2', '0'},
+	}
+	tbl, rec := openTableWithRecord(t, fields, records)
+
+	val, err := rec.DecodeField(tbl, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	n := val.(float64)
+	if n != 420 {
+		t.Errorf("value = %v, want 420", n)
+	}
+}
+
+func TestDecodeFieldNumericAllSpaces(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "VAL", Type: FieldTypeNumeric, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, ' ', ' ', ' ', ' ', ' '},
+	}
+	tbl, rec := openTableWithRecord(t, fields, records)
+
+	val, err := rec.DecodeField(tbl, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	n := val.(float64)
+	if n != 0 {
+		t.Errorf("value = %v, want 0", n)
+	}
+}
+
+func TestDecodeFieldNumericZero(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "VAL", Type: FieldTypeNumeric, Length: 3},
+	}
+	records := [][]byte{
+		{0x20, ' ', '0', '0'},
+	}
+	tbl, rec := openTableWithRecord(t, fields, records)
+
+	val, err := rec.DecodeField(tbl, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val.(float64) != 0 {
+		t.Errorf("value = %v, want 0", val)
+	}
+}
+
+func TestDecodeFieldNumericNegative(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "VAL", Type: FieldTypeNumeric, Length: 6},
+	}
+	records := [][]byte{
+		{0x20, ' ', '-', '1', '2', '.', '5'},
+	}
+	tbl, rec := openTableWithRecord(t, fields, records)
+
+	val, err := rec.DecodeField(tbl, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val.(float64) != -12.5 {
+		t.Errorf("value = %v, want -12.5", val)
+	}
+}
+
+func TestDecodeFieldNumericInvalid(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "VAL", Type: FieldTypeNumeric, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, ' ', 'A', 'B', 'C', 'D'},
+	}
+	tbl, rec := openTableWithRecord(t, fields, records)
+
+	_, err := rec.DecodeField(tbl, 0)
+	if err == nil {
+		t.Fatal("expected error for invalid numeric")
+	}
+}
+

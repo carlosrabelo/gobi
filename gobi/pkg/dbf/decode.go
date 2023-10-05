@@ -3,6 +3,7 @@ package dbf
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 )
 
 func (r *Record) DecodeField(tbl *Table, index int) (interface{}, error) {
@@ -15,6 +16,8 @@ func (r *Record) DecodeField(tbl *Table, index int) (interface{}, error) {
 	switch fd.Type {
 	case FieldTypeChar:
 		return decodeChar(raw), nil
+	case FieldTypeNumeric:
+		return decodeNumeric(raw)
 	default:
 		return nil, fmt.Errorf("dbf: unsupported field type %c for field %q", byte(fd.Type), fd.Name)
 	}
@@ -22,4 +25,16 @@ func (r *Record) DecodeField(tbl *Table, index int) (interface{}, error) {
 
 func decodeChar(raw []byte) string {
 	return string(bytes.TrimRight(raw, " "))
+}
+
+func decodeNumeric(raw []byte) (float64, error) {
+	s := string(bytes.TrimSpace(raw))
+	if s == "" {
+		return 0, nil
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, fmt.Errorf("dbf: parsing numeric %q: %w", s, err)
+	}
+	return v, nil
 }
