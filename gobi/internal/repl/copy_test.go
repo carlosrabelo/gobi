@@ -57,6 +57,53 @@ func TestCOPYTOFor(t *testing.T) {
 	}
 }
 
+func TestCOPYStructureAndCreateFrom(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "src.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 10},
+		{Name: "AGE", Type: 'N', Length: 3, Decimals: 0},
+	}, []dbf.Record{{Values: []dbf.Value{{Str: "X"}, {Num: 1}}}})
+	ctx := testCtx(t, dir)
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("USE src")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mux.Dispatch(ctx, command.Split("COPY TO empty STRUCTURE")); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(filepath.Join(dir, "empty.dbf"), os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tab, err := dbf.Open(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tab.Header.RecordCount != 0 || len(tab.Header.Fields) != 2 {
+		t.Fatalf("structure %+v count %d", tab.Header.Fields, tab.Header.RecordCount)
+	}
+	f.Close()
+
+	if err := mux.Dispatch(ctx, command.Split("COPY TO ext STRUCTURE EXTENDED")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mux.Dispatch(ctx, command.Split("CREATE neu FROM ext")); err != nil {
+		t.Fatal(err)
+	}
+	f2, err := os.OpenFile(filepath.Join(dir, "neu.dbf"), os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f2.Close()
+	tab2, err := dbf.Open(f2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tab2.Header.RecordCount != 0 || len(tab2.Header.Fields) != 2 || tab2.Header.Fields[0].Name != "NAME" {
+		t.Fatalf("from extended %+v", tab2.Header)
+	}
+}
+
 func TestCOPYSDFAndDelimited(t *testing.T) {
 	dir := t.TempDir()
 	mustCreateDBF(t, filepath.Join(dir, "src.dbf"), []dbf.Field{

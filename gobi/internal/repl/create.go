@@ -13,7 +13,16 @@ import (
 )
 
 func cmdCREATE(ctx *context.Context, cmd command.Command) error {
-	name := strings.TrimSpace(cmd.Args)
+	args := strings.TrimSpace(cmd.Args)
+	from := strings.TrimSpace(cmd.Clauses["FROM"])
+	if from != "" {
+		name := args
+		if name == "" {
+			return fail(ctx, "CREATE FROM requires a name")
+		}
+		return cmdCREATEFROM(ctx, name, from)
+	}
+	name := args
 	if name == "" {
 		return fail(ctx, "CREATE requires a file name")
 	}
