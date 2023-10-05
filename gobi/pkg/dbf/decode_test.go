@@ -280,3 +280,130 @@ func TestDecodeFieldNumericInvalid(t *testing.T) {
 	}
 }
 
+func TestDecodeFieldMixedTypes(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+		{Name: "AGE", Type: FieldTypeNumeric, Length: 3},
+	}
+	records := [][]byte{
+		{0x20, 'J', 'O', 'H', 'N', ' ', ' ', '3', '5'},
+	}
+	tbl, rec := openTableWithRecord(t, fields, records)
+
+	name, _ := rec.DecodeField(tbl, 0)
+	if name.(string) != "JOHN" {
+		t.Errorf("name = %q, want %q", name, "JOHN")
+	}
+
+	age, _ := rec.DecodeField(tbl, 1)
+	if age.(float64) != 35 {
+		t.Errorf("age = %v, want 35", age)
+	}
+}
+
+func TestDecodeFieldLogicalTrue(t *testing.T) {
+	for _, c := range []byte{'T', 't', 'Y', 'y'} {
+		t.Run(string(c), func(t *testing.T) {
+			fields := []FieldDescriptor{
+				{Name: "FLAG", Type: FieldTypeLogical, Length: 1},
+			}
+			records := [][]byte{
+				{0x20, c},
+			}
+			tbl, rec := openTableWithRecord(t, fields, records)
+
+			val, err := rec.DecodeField(tbl, 0)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if val.(bool) != true {
+				t.Errorf("value for %c = %v, want true", c, val)
+			}
+		})
+	}
+}
+
+func TestDecodeFieldLogicalFalse(t *testing.T) {
+	for _, c := range []byte{'F', 'f', 'N', 'n'} {
+		t.Run(string(c), func(t *testing.T) {
+			fields := []FieldDescriptor{
+				{Name: "FLAG", Type: FieldTypeLogical, Length: 1},
+			}
+			records := [][]byte{
+				{0x20, c},
+			}
+			tbl, rec := openTableWithRecord(t, fields, records)
+
+			val, err := rec.DecodeField(tbl, 0)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if val.(bool) != false {
+				t.Errorf("value for %c = %v, want false", c, val)
+			}
+		})
+	}
+}
+
+func TestDecodeFieldLogicalUninitialized(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "FLAG", Type: FieldTypeLogical, Length: 1},
+	}
+	records := [][]byte{
+		{0x20, '?'},
+	}
+	tbl, rec := openTableWithRecord(t, fields, records)
+
+	val, err := rec.DecodeField(tbl, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val.(bool) != false {
+		t.Errorf("value = %v, want false for '?'", val)
+	}
+}
+
+func TestDecodeFieldAllThreeTypes(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+		{Name: "AGE", Type: FieldTypeNumeric, Length: 3},
+		{Name: "ACTIVE", Type: FieldTypeLogical, Length: 1},
+	}
+	records := [][]byte{
+		{0x20, 'J', 'O', 'H', 'N', ' ', ' ', '2', '5', 'T'},
+	}
+	tbl, rec := openTableWithRecord(t, fields, records)
+
+	name, _ := rec.DecodeField(tbl, 0)
+	if name.(string) != "JOHN" {
+		t.Errorf("name = %q, want %q", name, "JOHN")
+	}
+
+	age, _ := rec.DecodeField(tbl, 1)
+	if age.(float64) != 25 {
+		t.Errorf("age = %v, want 25", age)
+	}
+
+	active, _ := rec.DecodeField(tbl, 2)
+	if active.(bool) != true {
+		t.Errorf("active = %v, want true", active)
+	}
+}
+
+func TestDecodeFieldLogicalEmpty(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "FLAG", Type: FieldTypeLogical, Length: 0},
+	}
+	records := [][]byte{
+		{0x20},
+	}
+	tbl, rec := openTableWithRecord(t, fields, records)
+
+	val, err := rec.DecodeField(tbl, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val.(bool) != false {
+		t.Errorf("value = %v, want false for empty slice", val)
+	}
+}

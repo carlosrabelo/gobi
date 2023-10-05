@@ -56,7 +56,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] Raw record reader with deletion flag check (0x20 vs 0x2A)
 - [x] Field decoder for Character (C) - space-stripped strings
 - [x] Field decoder for Numeric (N) - parsing ASCII into float64
-- [ ] Field decoder for Logical (L) - parsing T/F/Y/N to bool
+- [x] Field decoder for Logical (L) - parsing T/F/Y/N to bool
 - [ ] Raw record writer with field padding
 - [ ] End-Of-File (EOF) marker logic (0x1A)
 - [ ] In-place record update by record number offset

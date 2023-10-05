@@ -18,6 +18,8 @@ func (r *Record) DecodeField(tbl *Table, index int) (interface{}, error) {
 		return decodeChar(raw), nil
 	case FieldTypeNumeric:
 		return decodeNumeric(raw)
+	case FieldTypeLogical:
+		return decodeLogical(raw), nil
 	default:
 		return nil, fmt.Errorf("dbf: unsupported field type %c for field %q", byte(fd.Type), fd.Name)
 	}
@@ -37,4 +39,16 @@ func decodeNumeric(raw []byte) (float64, error) {
 		return 0, fmt.Errorf("dbf: parsing numeric %q: %w", s, err)
 	}
 	return v, nil
+}
+
+func decodeLogical(raw []byte) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	switch raw[0] {
+	case 'T', 't', 'Y', 'y':
+		return true
+	default:
+		return false
+	}
 }
