@@ -327,6 +327,146 @@ func encodeDelimited(fields []dbf.Field, rec dbf.Record, idxs []int, delim byte)
 }
 
 func copyStructure(ctx *context.Context, target string, extended bool) error {
-	_ = extended
-	return fail(ctx, "COPY STRUCTURE arrives in 012.3")
+	a := ctx.Active()
+	pathName := target
+	if filepath.Ext(pathName) == "" {
+		pathName += ".dbf"
+	}
+	path, err := ctx.Resolve(pathName)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	if fileExists(path) && ctx.Config.Safety {
+		if _, err := confirmSafety(ctx, path+" already exists. Overwrite it? (Y/N)"); err != nil {
+			return err
+		}
+	}
+	now := time.Now()
+	y, m, d := byte(now.Year()-1900), byte(now.Month()), byte(now.Day())
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".gobi-copy-*")
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	tmpName := tmp.Name()
+	var fields []dbf.Field
+	if extended {
+		fields = []dbf.Field{
+			{Name: "FIELD_NAME", Type: 'C', Length: 10},
+			{Name: "FIELD_TYPE", Type: 'C', Length: 1},
+			{Name: "FIELD_LEN", Type: 'N', Length: 3, Decimals: 0},
+			{Name: "FIELD_DEC", Type: 'N', Length: 3, Decimals: 0},
+		}
+	} else {
+		fields = a.Table.Header.Fields
+	}
+	tab, err := dbf.Create(tmp, fields, y, m, d)
+	if err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return fail(ctx, "%s", err.Error())
+	}
+	if extended {
+		for _, f := range a.Table.Header.Fields {
+			rec := dbf.Record{Values: []dbf.Value{
+				{Str: f.Name},
+				{Str: string(f.Type)},
+				{Num: float64(f.Length)},
+				{Num: float64(f.Decimals)},
+			}}
+			if err := tab.Append(rec); err != nil {
+				_ = tmp.Close()
+				_ = os.Remove(tmpName)
+				return fail(ctx, "%s", err.Error())
+			}
+		}
+	}
+	if err := tab.Close(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return fail(ctx, "%s", err.Error())
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return fail(ctx, "%s", err.Error())
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return fail(ctx, "%s", err.Error())
+	}
+	return nil
+}
+
+func cmdCREATEFROM(ctx *context.Context, name, from string) error {
+	fromPath := from
+	if filepath.Ext(fromPath) == "" {
+		fromPath += ".dbf"
+	}
+	fp, err := ctx.Resolve(fromPath)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	f, err := os.OpenFile(fp, os.O_RDONLY, 0)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	defer f.Close()
+	src, err := dbf.Open(f)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	var fields []dbf.Field
+	for n := 1; n <= int(src.Header.RecordCount); n++ {
+		rec, err := src.Read(n)
+		if err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		if len(rec.Values) < 4 {
+			return fail(ctx, "invalid STRUCTURE EXTENDED")
+		}
+		typ := byte('C')
+		if len(rec.Values[1].Str) > 0 {
+			typ = rec.Values[1].Str[0]
+		}
+		fields = append(fields, dbf.Field{
+			Name:     strings.ToUpper(strings.TrimSpace(rec.Values[0].Str)),
+			Type:     typ,
+			Length:   byte(rec.Values[2].Num),
+			Decimals: byte(rec.Values[3].Num),
+		})
+	}
+	// Reuse CREATE write path without prompts.
+	pathName := name
+	if filepath.Ext(pathName) == "" {
+		pathName += ".dbf"
+	}
+	path, err := ctx.Resolve(pathName)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	if fileExists(path) && ctx.Config.Safety {
+		if _, err := confirmSafety(ctx, path+" already exists. Overwrite it? (Y/N)"); err != nil {
+			return err
+		}
+	}
+	now := time.Now()
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".gobi-create-*")
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	tmpName := tmp.Name()
+	tab, err := dbf.Create(tmp, fields, byte(now.Year()-1900), byte(now.Month()), byte(now.Day()))
+	if err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return fail(ctx, "%s", err.Error())
+	}
+	_ = tab.Close()
+	_ = tmp.Close()
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return fail(ctx, "%s", err.Error())
+	}
+	return nil
 }
