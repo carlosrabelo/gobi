@@ -46,6 +46,7 @@ func NewMux() *Mux {
 	m.Register("PACK", cmdPACK)
 	m.Register("ZAP", cmdZAP)
 	m.Register("COPY", cmdCOPY)
+	m.Register("UPDATE", cmdUPDATE)
 	return m
 }
 
