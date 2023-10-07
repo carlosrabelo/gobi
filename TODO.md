@@ -57,7 +57,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] Field decoder for Character (C) - space-stripped strings
 - [x] Field decoder for Numeric (N) - parsing ASCII into float64
 - [x] Field decoder for Logical (L) - parsing T/F/Y/N to bool
-- [ ] Raw record writer with field padding
+- [x] Raw record writer with field padding
 - [ ] End-Of-File (EOF) marker logic (0x1A)
 - [ ] In-place record update by record number offset
 - [ ] Append new record helper updating header count
