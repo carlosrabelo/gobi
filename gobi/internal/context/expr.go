@@ -32,7 +32,7 @@ func (c *Context) ExprArea() expr.Area {
 
 // FieldValue returns the named field from area (alias empty = active). ok is false if missing.
 func (c *Context) FieldValue(alias, name string) (expr.Value, bool) {
-	a := c.areaByAlias(alias)
+	a := c.AreaByAlias(alias)
 	if a == nil || !a.HasTable() || !a.Landed {
 		return expr.Value{}, false
 	}
@@ -45,7 +45,8 @@ func (c *Context) FieldValue(alias, name string) (expr.Value, bool) {
 	return expr.Value{}, false
 }
 
-func (c *Context) areaByAlias(alias string) *Area {
+// AreaByAlias returns the work area with that alias, or the active area when alias is empty.
+func (c *Context) AreaByAlias(alias string) *Area {
 	if alias == "" {
 		return c.Active()
 	}
