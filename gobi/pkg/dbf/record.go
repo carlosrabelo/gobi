@@ -57,3 +57,23 @@ func (tbl *Table) ReadRecord(r io.Reader) (*Record, error) {
 		Data:    buf,
 	}, nil
 }
+
+func (tbl *Table) ReadAllRecords(r io.Reader) ([]*Record, error) {
+	var records []*Record
+	for {
+		rec, err := tbl.ReadRecord(r)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return records, err
+		}
+		records = append(records, rec)
+	}
+	return records, nil
+}
+
+func WriteEOF(w io.Writer) error {
+	_, err := w.Write([]byte{eofMarker})
+	return err
+}

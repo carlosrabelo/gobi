@@ -2,6 +2,8 @@ package dbf
 
 import (
 	"bytes"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -211,4 +213,183 @@ func TestRecordFieldDataOutOfBounds(t *testing.T) {
 	if rec.FieldData(tbl, 1) != nil {
 		t.Error("expected nil for out-of-bounds index")
 	}
+}
+func TestReadRecordEOF(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x1A, 0x00, 0x00, 0x00, 0x00, 0x00},
+	}
+	data := buildDBFWithRecords(fields, records)
+
+	tbl, err := Open(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_, err = tbl.ReadRecord(bytes.NewReader(records[0]))
+	if err == nil {
+		t.Fatal("expected EOF for 0x1A marker")
+	}
+}
+
+func TestReadAllRecordsWithEOFMarker(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, 'O', 'N', 'E', ' ', ' '},
+		{0x20, 'T', 'W', 'O', ' ', ' '},
+	}
+	all := append([]byte{}, records[0]...)
+	all = append(all, records[1]...)
+	all = append(all, 0x1A)
+
+	data := buildDBFWithRecords(fields, records)
+	tbl, err := Open(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	result, err := tbl.ReadAllRecords(bytes.NewReader(all))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("record count = %d, want 2", len(result))
+	}
+}
+
+func TestReadAllRecordsPhysicalTruncation(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, 'O', 'N', 'E', ' ', ' '},
+		{0x20, 'T', 'W', 'O', ' ', ' '},
+	}
+
+	recLen := 1
+	for _, f := range fields {
+		recLen += int(f.Length)
+	}
+	data := buildDBF(SignatureStd, uint16(len(records)), uint16(recLen), fields, true)
+	for _, rec := range records {
+		data = append(data, rec...)
+	}
+
+	tbl, err := Open(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	all := append([]byte{}, records[0]...)
+	all = append(all, records[1]...)
+
+	result, err := tbl.ReadAllRecords(bytes.NewReader(all))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 2 {
+		t.Errorf("record count = %d, want 2 (physical truncation)", len(result))
+	}
+}
+
+func TestReadAllRecordsEmpty(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	data := buildDBFWithRecords(fields, nil)
+	tbl, err := Open(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	result, err := tbl.ReadAllRecords(bytes.NewReader([]byte{0x1A}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 0 {
+		t.Errorf("record count = %d, want 0", len(result))
+	}
+}
+
+func TestWriteEOF(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteEOF(&buf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if buf.Len() != 1 {
+		t.Fatalf("written bytes = %d, want 1", buf.Len())
+	}
+	if buf.Bytes()[0] != 0x1A {
+		t.Errorf("marker = 0x%02X, want 0x1A", buf.Bytes()[0])
+	}
+}
+
+func TestWriteReadEOFMarker(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	recLen := 6
+
+	var buf bytes.Buffer
+	buf.Write(buildDBF(SignatureStd, 1, uint16(recLen), fields, true))
+	buf.Write([]byte{0x20, 'T', 'E', 'S', 'T', ' '})
+	WriteEOF(&buf)
+
+	tbl, err := Open(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	recs, err := tbl.ReadAllRecords(bytes.NewReader(buf.Bytes()[len(buf.Bytes())-7:]))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(recs) != 1 {
+		t.Errorf("record count = %d, want 1", len(recs))
+	}
+}
+
+func TestReadAllRecordsWithError(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	expectedErr := fmt.Errorf("read error halfway")
+
+	// Provide first record then fail
+	data := []byte{0x20, 'H', 'E', 'L', 'L', 'O'}
+	reader := &mockPartialErrReader{data: data, err: expectedErr}
+
+	_, err := tbl.ReadAllRecords(reader)
+	if err == nil || !strings.Contains(err.Error(), "read error halfway") {
+		t.Errorf("expected read error halfway, got %v", err)
+	}
+}
+
+type mockErrReader struct {
+	err error
+}
+
+func (m *mockErrReader) Read(p []byte) (n int, err error) {
+	return 0, m.err
+}
+
+type mockPartialErrReader struct {
+	data []byte
+	pos  int
+	err  error
+}
+
+func (m *mockPartialErrReader) Read(p []byte) (n int, err error) {
+	if m.pos >= len(m.data) {
+		return 0, m.err
+	}
+	n = copy(p, m.data[m.pos:])
+	m.pos += n
+	return n, nil
 }
