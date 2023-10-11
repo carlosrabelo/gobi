@@ -59,7 +59,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] Field decoder for Logical (L) - parsing T/F/Y/N to bool
 - [x] Raw record writer with field padding
 - [x] End-Of-File (EOF) marker logic (0x1A)
-- [ ] In-place record update by record number offset
+- [x] In-place record update by record number offset
 - [ ] Append new record helper updating header count
 - [ ] Safe file flush and sync on close
 

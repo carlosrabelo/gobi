@@ -3,6 +3,7 @@ package dbf
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 )
@@ -392,4 +393,206 @@ func (m *mockPartialErrReader) Read(p []byte) (n int, err error) {
 	n = copy(p, m.data[m.pos:])
 	m.pos += n
 	return n, nil
+}
+func buildDBFFile(fields []FieldDescriptor, records [][]byte) ([]byte, *Table) {
+	recLen := 1
+	for _, f := range fields {
+		recLen += int(f.Length)
+	}
+	data := buildDBF(SignatureStd, uint16(len(records)), uint16(recLen), fields, true)
+	for _, rec := range records {
+		data = append(data, rec...)
+	}
+	data = append(data, 0x1A)
+	tbl, _ := Open(bytes.NewReader(data))
+	return data, tbl
+}
+
+func TestHeaderSize(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+		{Name: "AGE", Type: FieldTypeNumeric, Length: 3},
+	}
+	_, tbl := buildDBFFile(fields, nil)
+
+	want := 8 + 2*16 + 1
+	if tbl.HeaderSize() != want {
+		t.Errorf("header size = %d, want %d", tbl.HeaderSize(), want)
+	}
+}
+
+func TestRecordOffset(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, 'O', 'N', 'E', ' ', ' '},
+		{0x20, 'T', 'W', 'O', ' ', ' '},
+	}
+	_, tbl := buildDBFFile(fields, records)
+
+	headerSize := tbl.HeaderSize()
+	off0, err := tbl.RecordOffset(0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if off0 != int64(headerSize) {
+		t.Errorf("record 0 offset = %d, want %d", off0, headerSize)
+	}
+
+	off1, err := tbl.RecordOffset(1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want1 := int64(headerSize + int(tbl.Header.RecordLen))
+	if off1 != want1 {
+		t.Errorf("record 1 offset = %d, want %d", off1, want1)
+	}
+}
+
+func TestRecordOffsetOutOfRange(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, 'O', 'N', 'E', ' ', ' '},
+	}
+	_, tbl := buildDBFFile(fields, records)
+
+	_, err := tbl.RecordOffset(-1)
+	if err == nil {
+		t.Error("expected error for negative record number")
+	}
+
+	_, err = tbl.RecordOffset(5)
+	if err == nil {
+		t.Error("expected error for record number beyond count")
+	}
+}
+
+func TestReadRecordAt(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, 'O', 'N', 'E', ' ', ' '},
+		{0x20, 'T', 'W', 'O', ' ', ' '},
+		{0x20, 'T', 'H', 'R', 'E', 'E'},
+	}
+	data, tbl := buildDBFFile(fields, records)
+
+	r := bytes.NewReader(data)
+	rec, err := tbl.ReadRecordAt(r, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	name, _ := rec.DecodeField(tbl, 0)
+	if name.(string) != "TWO" {
+		t.Errorf("name = %q, want %q", name, "TWO")
+	}
+
+	rec0, err := tbl.ReadRecordAt(r, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	name0, _ := rec0.DecodeField(tbl, 0)
+	if name0.(string) != "ONE" {
+		t.Errorf("name = %q, want %q", name0, "ONE")
+	}
+}
+
+func TestReadRecordAtOutOfRange(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, 'O', 'N', 'E', ' ', ' '},
+	}
+	data, tbl := buildDBFFile(fields, records)
+
+	_, err := tbl.ReadRecordAt(bytes.NewReader(data), 99)
+	if err == nil {
+		t.Fatal("expected error for out-of-range record number")
+	}
+}
+
+func TestWriteRecordAtInPlace(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, 'O', 'N', 'E', ' ', ' '},
+		{0x20, 'T', 'W', 'O', ' ', ' '},
+	}
+	data, tbl := buildDBFFile(fields, records)
+
+	buf := make([]byte, len(data))
+	copy(buf, data)
+
+	rec, _ := NewRecord(tbl, false, []interface{}{"NEW"})
+
+	w := &writeSeeker{data: buf}
+	if err := tbl.WriteRecordAt(w, 1, rec); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	readback, err := tbl.ReadRecordAt(bytes.NewReader(w.data), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	name, _ := readback.DecodeField(tbl, 0)
+	if name.(string) != "NEW" {
+		t.Errorf("name = %q, want %q", name, "NEW")
+	}
+
+	rec0, _ := tbl.ReadRecordAt(bytes.NewReader(w.data), 0)
+	name0, _ := rec0.DecodeField(tbl, 0)
+	if name0.(string) != "ONE" {
+		t.Errorf("record 0 should be unchanged: %q, want %q", name0, "ONE")
+	}
+}
+
+func TestRecordFieldDataTruncated(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+
+	// Record data is shorter than expected offsets
+	rec := &Record{Data: []byte{0x20, 'H'}}
+	data := rec.FieldData(tbl, 0)
+	if data != nil {
+		t.Errorf("expected nil for truncated record data, got %q", data)
+	}
+}
+
+func TestReadRecordGenericError(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	expectedErr := fmt.Errorf("read generic error")
+
+	_, err := tbl.ReadRecord(&mockErrReader{err: expectedErr})
+	if err == nil || !strings.Contains(err.Error(), "read generic error") {
+		t.Errorf("expected read generic error, got %v", err)
+	}
+}
+
+type writeSeeker struct {
+	data []byte
+	pos  int
+}
+
+func (w *writeSeeker) Write(p []byte) (int, error) {
+	copy(w.data[w.pos:], p)
+	w.pos += len(p)
+	return len(p), nil
+}
+
+func (w *writeSeeker) Seek(offset int64, whence int) (int64, error) {
+	if whence == io.SeekStart {
+		w.pos = int(offset)
+	}
+	return int64(w.pos), nil
 }

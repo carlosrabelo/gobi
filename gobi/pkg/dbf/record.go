@@ -77,3 +77,29 @@ func WriteEOF(w io.Writer) error {
 	_, err := w.Write([]byte{eofMarker})
 	return err
 }
+
+func (tbl *Table) ReadRecordAt(r io.ReadSeeker, recNo int) (*Record, error) {
+	off, err := tbl.RecordOffset(recNo)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := r.Seek(off, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("dbf: seeking to record %d: %w", recNo, err)
+	}
+	return tbl.ReadRecord(r)
+}
+
+func (tbl *Table) WriteRecordAt(w io.WriteSeeker, recNo int, rec *Record) error {
+	off, err := tbl.RecordOffset(recNo)
+	if err != nil {
+		return err
+	}
+	if len(rec.Data) != int(tbl.Header.RecordLen) {
+		return fmt.Errorf("dbf: record length %d does not match table record length %d", len(rec.Data), tbl.Header.RecordLen)
+	}
+	if _, err := w.Seek(off, io.SeekStart); err != nil {
+		return fmt.Errorf("dbf: seeking to record %d: %w", recNo, err)
+	}
+	_, err = w.Write(rec.Data)
+	return err
+}
