@@ -50,6 +50,8 @@ func NewMux() *Mux {
 	m.Register("JOIN", cmdJOIN)
 	m.Register("TOTAL", cmdTOTAL)
 	m.Register("MODIFY", cmdMODIFY)
+	m.Register("LOCATE", cmdLOCATE)
+	m.Register("CONTINUE", cmdCONTINUE)
 	return m
 }
 

@@ -30,6 +30,15 @@ type Context struct {
 	Alternate *os.File // SET ALTERNATE file; closed by CLOSE ALTERNATE / CLOSE ALL
 	Procedure bool     // procedure file open (stub until 029)
 
+	// Locate holds the last LOCATE FOR/WHILE text for CONTINUE (013).
+	LocateActive bool
+	LocateFOR    string
+	LocateWHILE  string
+
+	// PendingTO/PendingVals hold COUNT/SUM/AVERAGE TO until 014 stores them.
+	PendingTO   []string
+	PendingVals []float64
+
 	openFiles int
 
 	stdinReader *bufio.Reader
