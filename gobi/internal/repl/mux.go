@@ -52,6 +52,7 @@ func NewMux() *Mux {
 	m.Register("MODIFY", cmdMODIFY)
 	m.Register("LOCATE", cmdLOCATE)
 	m.Register("CONTINUE", cmdCONTINUE)
+	m.Register("COUNT", cmdCOUNT)
 	return m
 }
 
