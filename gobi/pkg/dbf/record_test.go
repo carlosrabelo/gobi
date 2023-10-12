@@ -2,6 +2,7 @@ package dbf
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"strings"
@@ -67,6 +68,26 @@ func TestReadRecordDeleted(t *testing.T) {
 	}
 	if !rec.Deleted {
 		t.Error("record should be marked as deleted")
+	}
+}
+
+func TestReadRecordEOF(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x1A, 0x00, 0x00, 0x00, 0x00, 0x00},
+	}
+	data := buildDBFWithRecords(fields, records)
+
+	tbl, err := Open(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_, err = tbl.ReadRecord(bytes.NewReader(records[0]))
+	if err == nil {
+		t.Fatal("expected EOF for 0x1A marker")
 	}
 }
 
@@ -215,25 +236,6 @@ func TestRecordFieldDataOutOfBounds(t *testing.T) {
 		t.Error("expected nil for out-of-bounds index")
 	}
 }
-func TestReadRecordEOF(t *testing.T) {
-	fields := []FieldDescriptor{
-		{Name: "NAME", Type: FieldTypeChar, Length: 5},
-	}
-	records := [][]byte{
-		{0x1A, 0x00, 0x00, 0x00, 0x00, 0x00},
-	}
-	data := buildDBFWithRecords(fields, records)
-
-	tbl, err := Open(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	_, err = tbl.ReadRecord(bytes.NewReader(records[0]))
-	if err == nil {
-		t.Fatal("expected EOF for 0x1A marker")
-	}
-}
 
 func TestReadAllRecordsWithEOFMarker(t *testing.T) {
 	fields := []FieldDescriptor{
@@ -355,45 +357,6 @@ func TestWriteReadEOFMarker(t *testing.T) {
 	}
 }
 
-func TestReadAllRecordsWithError(t *testing.T) {
-	fields := []FieldDescriptor{
-		{Name: "NAME", Type: FieldTypeChar, Length: 5},
-	}
-	tbl := newTestTable(fields)
-	expectedErr := fmt.Errorf("read error halfway")
-
-	// Provide first record then fail
-	data := []byte{0x20, 'H', 'E', 'L', 'L', 'O'}
-	reader := &mockPartialErrReader{data: data, err: expectedErr}
-
-	_, err := tbl.ReadAllRecords(reader)
-	if err == nil || !strings.Contains(err.Error(), "read error halfway") {
-		t.Errorf("expected read error halfway, got %v", err)
-	}
-}
-
-type mockErrReader struct {
-	err error
-}
-
-func (m *mockErrReader) Read(p []byte) (n int, err error) {
-	return 0, m.err
-}
-
-type mockPartialErrReader struct {
-	data []byte
-	pos  int
-	err  error
-}
-
-func (m *mockPartialErrReader) Read(p []byte) (n int, err error) {
-	if m.pos >= len(m.data) {
-		return 0, m.err
-	}
-	n = copy(p, m.data[m.pos:])
-	m.pos += n
-	return n, nil
-}
 func buildDBFFile(fields []FieldDescriptor, records [][]byte) ([]byte, *Table) {
 	recLen := 1
 	for _, f := range fields {
@@ -552,6 +515,219 @@ func TestWriteRecordAtInPlace(t *testing.T) {
 	}
 }
 
+type writeSeeker struct {
+	data []byte
+	pos  int
+}
+
+func (w *writeSeeker) Write(p []byte) (int, error) {
+	copy(w.data[w.pos:], p)
+	w.pos += len(p)
+	return len(p), nil
+}
+
+func (w *writeSeeker) Seek(offset int64, whence int) (int64, error) {
+	if whence == io.SeekStart {
+		w.pos = int(offset)
+	}
+	return int64(w.pos), nil
+}
+
+type growWriteSeeker struct {
+	data []byte
+	pos  int
+}
+
+func (g *growWriteSeeker) Write(p []byte) (int, error) {
+	end := g.pos + len(p)
+	for end > len(g.data) {
+		g.data = append(g.data, 0)
+	}
+	copy(g.data[g.pos:], p)
+	g.pos = end
+	return len(p), nil
+}
+
+func (g *growWriteSeeker) Seek(offset int64, whence int) (int64, error) {
+	if whence == io.SeekStart {
+		g.pos = int(offset)
+	}
+	return int64(g.pos), nil
+}
+
+func TestAppendRecord(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, 'O', 'N', 'E', ' ', ' '},
+		{0x20, 'T', 'W', 'O', ' ', ' '},
+	}
+	data, tbl := buildDBFFile(fields, records)
+
+	buf := make([]byte, len(data)+100)
+	copy(buf, data)
+
+	g := &growWriteSeeker{data: buf}
+	copy(g.data, data)
+
+	rec, _ := NewRecord(tbl, false, []interface{}{"THREE"})
+	recNo, err := tbl.AppendRecord(g, rec)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if recNo != 2 {
+		t.Errorf("returned record number = %d, want 2", recNo)
+	}
+	if tbl.Header.RecordCount != 3 {
+		t.Errorf("header record count = %d, want 3", tbl.Header.RecordCount)
+	}
+
+	readback, err := tbl.ReadRecordAt(bytes.NewReader(g.data), 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	name, _ := readback.DecodeField(tbl, 0)
+	if name.(string) != "THREE" {
+		t.Errorf("appended name = %q, want %q", name, "THREE")
+	}
+}
+
+func TestAppendRecordUpdatesHeaderCount(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, 'O', 'N', 'E', ' ', ' '},
+	}
+	data, tbl := buildDBFFile(fields, records)
+
+	buf := make([]byte, len(data)+100)
+	copy(buf, data)
+	g := &growWriteSeeker{data: buf}
+	copy(g.data, data)
+
+	rec, _ := NewRecord(tbl, false, []interface{}{"TWO"})
+	tbl.AppendRecord(g, rec)
+
+	cnt := binary.LittleEndian.Uint16(g.data[1:3])
+	if cnt != 2 {
+		t.Errorf("on-disk record count = %d, want 2", cnt)
+	}
+}
+
+func TestAppendMultipleRecords(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, 'O', 'N', 'E', ' ', ' '},
+	}
+	data, tbl := buildDBFFile(fields, records)
+
+	buf := make([]byte, len(data)+200)
+	copy(buf, data)
+	g := &growWriteSeeker{data: buf}
+	copy(g.data, data)
+
+	rec1, _ := NewRecord(tbl, false, []interface{}{"TWO"})
+	rec2, _ := NewRecord(tbl, false, []interface{}{"THR"})
+
+	no1, _ := tbl.AppendRecord(g, rec1)
+	no2, _ := tbl.AppendRecord(g, rec2)
+
+	if no1 != 1 {
+		t.Errorf("first append = %d, want 1", no1)
+	}
+	if no2 != 2 {
+		t.Errorf("second append = %d, want 2", no2)
+	}
+	if tbl.Header.RecordCount != 3 {
+		t.Errorf("record count = %d, want 3", tbl.Header.RecordCount)
+	}
+
+	all, _ := tbl.ReadAllRecords(bytes.NewReader(g.data[tbl.HeaderSize():]))
+	if len(all) != 3 {
+		t.Fatalf("total records = %d, want 3", len(all))
+	}
+	names := []string{"ONE", "TWO", "THR"}
+	for i, want := range names {
+		val, _ := all[i].DecodeField(tbl, 0)
+		if val.(string) != want {
+			t.Errorf("record %d = %q, want %q", i, val, want)
+		}
+	}
+}
+
+func TestAppendRecordLengthMismatch(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	records := [][]byte{
+		{0x20, 'O', 'N', 'E', ' ', ' '},
+	}
+	data, tbl := buildDBFFile(fields, records)
+
+	buf := make([]byte, len(data)+100)
+	copy(buf, data)
+	g := &growWriteSeeker{data: buf}
+	copy(g.data, data)
+
+	badRec := &Record{Data: []byte{0x20, 'X'}}
+	_, err := tbl.AppendRecord(g, badRec)
+	if err == nil {
+		t.Fatal("expected error for length mismatch")
+	}
+}
+
+type mockErrReader struct {
+	err error
+}
+
+func (m *mockErrReader) Read(p []byte) (n int, err error) {
+	return 0, m.err
+}
+
+type mockErrReadSeeker struct {
+	seekErr error
+}
+
+func (m *mockErrReadSeeker) Read(p []byte) (n int, err error) {
+	return 0, io.EOF
+}
+
+func (m *mockErrReadSeeker) Seek(offset int64, whence int) (int64, error) {
+	return 0, m.seekErr
+}
+
+type mockErrWriteSeeker struct {
+	seekErr  error
+	writeErr error
+}
+
+func (m *mockErrWriteSeeker) Write(p []byte) (n int, err error) {
+	return 0, m.writeErr
+}
+
+func (m *mockErrWriteSeeker) Seek(offset int64, whence int) (int64, error) {
+	return 0, m.seekErr
+}
+
+type mockPartialErrReader struct {
+	data []byte
+	pos  int
+	err  error
+}
+
+func (m *mockPartialErrReader) Read(p []byte) (n int, err error) {
+	if m.pos >= len(m.data) {
+		return 0, m.err
+	}
+	n = copy(p, m.data[m.pos:])
+	m.pos += n
+	return n, nil
+}
+
 func TestRecordFieldDataTruncated(t *testing.T) {
 	fields := []FieldDescriptor{
 		{Name: "NAME", Type: FieldTypeChar, Length: 5},
@@ -579,20 +755,185 @@ func TestReadRecordGenericError(t *testing.T) {
 	}
 }
 
-type writeSeeker struct {
-	data []byte
-	pos  int
+func TestReadAllRecordsWithError(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	expectedErr := fmt.Errorf("read error halfway")
+
+	// Provide first record then fail
+	data := []byte{0x20, 'H', 'E', 'L', 'L', 'O'}
+	reader := &mockPartialErrReader{data: data, err: expectedErr}
+
+	_, err := tbl.ReadAllRecords(reader)
+	if err == nil || !strings.Contains(err.Error(), "read error halfway") {
+		t.Errorf("expected read error halfway, got %v", err)
+	}
 }
 
-func (w *writeSeeker) Write(p []byte) (int, error) {
-	copy(w.data[w.pos:], p)
-	w.pos += len(p)
+func TestReadRecordAtSeekError(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	tbl.Header.RecordCount = 1
+	expectedErr := fmt.Errorf("seek error")
+
+	_, err := tbl.ReadRecordAt(&mockErrReadSeeker{seekErr: expectedErr}, 0)
+	if err == nil || !strings.Contains(err.Error(), "seek error") {
+		t.Errorf("expected seek error, got %v", err)
+	}
+}
+
+func TestWriteRecordAtLengthMismatch(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	tbl.Header.RecordCount = 1
+
+	rec := &Record{Data: []byte{0x20, 'A'}} // length mismatch
+	err := tbl.WriteRecordAt(&mockErrWriteSeeker{}, 0, rec)
+	if err == nil {
+		t.Fatal("expected error for record length mismatch")
+	}
+}
+
+func TestWriteRecordAtSeekError(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	tbl.Header.RecordCount = 1
+	expectedErr := fmt.Errorf("seek error")
+
+	rec := &Record{Data: []byte{0x20, 'H', 'E', 'L', 'L', 'O'}}
+	err := tbl.WriteRecordAt(&mockErrWriteSeeker{seekErr: expectedErr}, 0, rec)
+	if err == nil || !strings.Contains(err.Error(), "seek error") {
+		t.Errorf("expected seek error, got %v", err)
+	}
+}
+
+func TestWriteRecordAtWriteError(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	tbl.Header.RecordCount = 1
+	expectedErr := fmt.Errorf("write error")
+
+	rec := &Record{Data: []byte{0x20, 'H', 'E', 'L', 'L', 'O'}}
+	err := tbl.WriteRecordAt(&mockErrWriteSeeker{writeErr: expectedErr}, 0, rec)
+	if err == nil || !strings.Contains(err.Error(), "write error") {
+		t.Errorf("expected write error, got %v", err)
+	}
+}
+
+func TestWriteRecordAtInvalidRecordNumber(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	tbl.Header.RecordCount = 1
+
+	rec := &Record{Data: []byte{0x20, 'H', 'E', 'L', 'L', 'O'}}
+	err := tbl.WriteRecordAt(&mockErrWriteSeeker{}, 99, rec) // out of bounds record index
+	if err == nil {
+		t.Fatal("expected error for invalid record number")
+	}
+}
+
+type mockStepWriteSeeker struct {
+	seekCount  int
+	writeCount int
+
+	failSeekAt  int
+	failWriteAt int
+}
+
+func (m *mockStepWriteSeeker) Seek(offset int64, whence int) (int64, error) {
+	m.seekCount++
+	if m.failSeekAt > 0 && m.seekCount == m.failSeekAt {
+		return 0, fmt.Errorf("seek error at step %d", m.seekCount)
+	}
+	return 0, nil
+}
+
+func (m *mockStepWriteSeeker) Write(p []byte) (n int, err error) {
+	m.writeCount++
+	if m.failWriteAt > 0 && m.writeCount == m.failWriteAt {
+		return 0, fmt.Errorf("write error at step %d", m.writeCount)
+	}
 	return len(p), nil
 }
 
-func (w *writeSeeker) Seek(offset int64, whence int) (int64, error) {
-	if whence == io.SeekStart {
-		w.pos = int(offset)
+func TestAppendRecordSeekAppendError(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
 	}
-	return int64(w.pos), nil
+	tbl := newTestTable(fields)
+	rec, _ := NewRecord(tbl, false, []interface{}{"TEST"})
+
+	g := &mockStepWriteSeeker{failSeekAt: 1}
+	_, err := tbl.AppendRecord(g, rec)
+	if err == nil || !strings.Contains(err.Error(), "seeking to append position") {
+		t.Errorf("expected append position seek error, got %v", err)
+	}
+}
+
+func TestAppendRecordWriteDataError(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	rec, _ := NewRecord(tbl, false, []interface{}{"TEST"})
+
+	g := &mockStepWriteSeeker{failWriteAt: 1}
+	_, err := tbl.AppendRecord(g, rec)
+	if err == nil || !strings.Contains(err.Error(), "writing appended record") {
+		t.Errorf("expected writing record error, got %v", err)
+	}
+}
+
+func TestAppendRecordWriteEOFError(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	rec, _ := NewRecord(tbl, false, []interface{}{"TEST"})
+
+	g := &mockStepWriteSeeker{failWriteAt: 2}
+	_, err := tbl.AppendRecord(g, rec)
+	if err == nil || !strings.Contains(err.Error(), "writing EOF marker") {
+		t.Errorf("expected writing EOF marker error, got %v", err)
+	}
+}
+
+func TestAppendRecordSeekCountError(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	rec, _ := NewRecord(tbl, false, []interface{}{"TEST"})
+
+	g := &mockStepWriteSeeker{failSeekAt: 2}
+	_, err := tbl.AppendRecord(g, rec)
+	if err == nil || !strings.Contains(err.Error(), "seeking to record count") {
+		t.Errorf("expected seeking to record count error, got %v", err)
+	}
+}
+
+func TestAppendRecordWriteCountError(t *testing.T) {
+	fields := []FieldDescriptor{
+		{Name: "NAME", Type: FieldTypeChar, Length: 5},
+	}
+	tbl := newTestTable(fields)
+	rec, _ := NewRecord(tbl, false, []interface{}{"TEST"})
+
+	g := &mockStepWriteSeeker{failWriteAt: 3}
+	_, err := tbl.AppendRecord(g, rec)
+	if err == nil || !strings.Contains(err.Error(), "updating record count") {
+		t.Errorf("expected updating record count error, got %v", err)
+	}
 }

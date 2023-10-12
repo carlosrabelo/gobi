@@ -1,6 +1,7 @@
 package dbf
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 )
@@ -77,4 +78,38 @@ func (tbl *Table) RecordOffset(recNo int) (int64, error) {
 		return 0, fmt.Errorf("dbf: record number %d out of range [0, %d)", recNo, tbl.Header.RecordCount)
 	}
 	return int64(tbl.HeaderSize() + recNo*int(tbl.Header.RecordLen)), nil
+}
+
+func (tbl *Table) AppendRecord(w io.WriteSeeker, rec *Record) (int, error) {
+	if len(rec.Data) != int(tbl.Header.RecordLen) {
+		return -1, fmt.Errorf("dbf: record length %d does not match table record length %d", len(rec.Data), tbl.Header.RecordLen)
+	}
+
+	appendOff := int64(tbl.HeaderSize() + int(tbl.Header.RecordCount)*int(tbl.Header.RecordLen))
+	if _, err := w.Seek(appendOff, io.SeekStart); err != nil {
+		return -1, fmt.Errorf("dbf: seeking to append position: %w", err)
+	}
+
+	if _, err := w.Write(rec.Data); err != nil {
+		return -1, fmt.Errorf("dbf: writing appended record: %w", err)
+	}
+
+	if err := WriteEOF(w); err != nil {
+		return -1, fmt.Errorf("dbf: writing EOF marker: %w", err)
+	}
+
+	newCount := tbl.Header.RecordCount + 1
+	recNo := int(tbl.Header.RecordCount)
+	tbl.Header.RecordCount = newCount
+
+	if _, err := w.Seek(1, io.SeekStart); err != nil {
+		return recNo, fmt.Errorf("dbf: seeking to record count: %w", err)
+	}
+	var cnt [2]byte
+	binary.LittleEndian.PutUint16(cnt[:], newCount)
+	if _, err := w.Write(cnt[:]); err != nil {
+		return recNo, fmt.Errorf("dbf: updating record count: %w", err)
+	}
+
+	return recNo, nil
 }

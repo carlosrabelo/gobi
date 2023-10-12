@@ -60,7 +60,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] Raw record writer with field padding
 - [x] End-Of-File (EOF) marker logic (0x1A)
 - [x] In-place record update by record number offset
-- [ ] Append new record helper updating header count
+- [x] Append new record helper updating header count
 - [ ] Safe file flush and sync on close
 
 ## Database Commands
