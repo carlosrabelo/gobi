@@ -53,6 +53,8 @@ func NewMux() *Mux {
 	m.Register("LOCATE", cmdLOCATE)
 	m.Register("CONTINUE", cmdCONTINUE)
 	m.Register("COUNT", cmdCOUNT)
+	m.Register("SUM", cmdSUM)
+	m.Register("AVERAGE", cmdAVERAGE)
 	return m
 }
 
