@@ -2,6 +2,7 @@ package dbf
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -165,6 +166,103 @@ func TestFieldByNameNotFound(t *testing.T) {
 	}
 	if idx != -1 {
 		t.Errorf("index = %d, want -1", idx)
+	}
+}
+
+type mockCloseFile struct {
+	flushCalled bool
+	syncCalled  bool
+	closeCalled bool
+
+	flushErr error
+	syncErr  error
+	closeErr error
+}
+
+func (m *mockCloseFile) Read(p []byte) (n int, err error) {
+	return 0, nil
+}
+
+func (m *mockCloseFile) Flush() error {
+	m.flushCalled = true
+	return m.flushErr
+}
+
+func (m *mockCloseFile) Sync() error {
+	m.syncCalled = true
+	return m.syncErr
+}
+
+func (m *mockCloseFile) Close() error {
+	m.closeCalled = true
+	return m.closeErr
+}
+
+func TestCloseNilUnderlying(t *testing.T) {
+	tbl := &Table{underlying: nil}
+	if err := tbl.Close(); err != nil {
+		t.Errorf("expected no error when underlying is nil, got %v", err)
+	}
+}
+
+func TestCloseBasicReader(t *testing.T) {
+	tbl := &Table{underlying: strings.NewReader("dummy")}
+	if err := tbl.Close(); err != nil {
+		t.Errorf("expected no error for basic reader, got %v", err)
+	}
+}
+
+func TestCloseSuccess(t *testing.T) {
+	mock := &mockCloseFile{}
+	tbl := &Table{underlying: mock}
+	if err := tbl.Close(); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if !mock.flushCalled || !mock.syncCalled || !mock.closeCalled {
+		t.Errorf("expected Flush, Sync, and Close to be called. Got: flush=%t, sync=%t, close=%t",
+			mock.flushCalled, mock.syncCalled, mock.closeCalled)
+	}
+}
+
+func TestCloseFlushError(t *testing.T) {
+	expectedErr := fmt.Errorf("flush error")
+	mock := &mockCloseFile{flushErr: expectedErr}
+	tbl := &Table{underlying: mock}
+	err := tbl.Close()
+	if err == nil || !strings.Contains(err.Error(), "flush failed") {
+		t.Errorf("expected flush failed error, got %v", err)
+	}
+}
+
+func TestCloseSyncError(t *testing.T) {
+	expectedErr := fmt.Errorf("sync error")
+	mock := &mockCloseFile{syncErr: expectedErr}
+	tbl := &Table{underlying: mock}
+	err := tbl.Close()
+	if err == nil || !strings.Contains(err.Error(), "sync failed") {
+		t.Errorf("expected sync failed error, got %v", err)
+	}
+}
+
+func TestCloseCloseError(t *testing.T) {
+	expectedErr := fmt.Errorf("close error")
+	mock := &mockCloseFile{closeErr: expectedErr}
+	tbl := &Table{underlying: mock}
+	err := tbl.Close()
+	if err == nil || !strings.Contains(err.Error(), "close failed") {
+		t.Errorf("expected close failed error, got %v", err)
+	}
+}
+
+func TestOpenReadFieldDescriptorsError(t *testing.T) {
+	// Valid header signature (SignatureStd) but subsequent descriptor read fails.
+	hdr := buildDBF(SignatureStd, 1, 10, nil, false)
+	expectedErr := fmt.Errorf("descriptor read error")
+	reader := &mockPartialErrReader{data: hdr, err: expectedErr}
+
+	_, err := Open(reader)
+	if err == nil || !strings.Contains(err.Error(), "descriptor read error") {
+		t.Errorf("expected descriptor read error, got %v", err)
 	}
 }
 

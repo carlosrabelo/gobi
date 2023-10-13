@@ -54,9 +54,25 @@ func (tbl *Table) Close() error {
 	if tbl.underlying == nil {
 		return nil
 	}
-	if c, ok := tbl.underlying.(io.Closer); ok {
-		return c.Close()
+
+	if f, ok := tbl.underlying.(interface{ Flush() error }); ok {
+		if err := f.Flush(); err != nil {
+			return fmt.Errorf("dbf: flush failed: %w", err)
+		}
 	}
+
+	if s, ok := tbl.underlying.(interface{ Sync() error }); ok {
+		if err := s.Sync(); err != nil {
+			return fmt.Errorf("dbf: sync failed: %w", err)
+		}
+	}
+
+	if c, ok := tbl.underlying.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			return fmt.Errorf("dbf: close failed: %w", err)
+		}
+	}
+
 	return nil
 }
 
