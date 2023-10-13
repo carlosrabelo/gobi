@@ -14,8 +14,11 @@ func newEnv(ctx *context.Context) *sessionEnv {
 	return &sessionEnv{ctx: ctx}
 }
 
-func (e *sessionEnv) Memory(string) (expr.Value, bool) {
-	return expr.Value{}, false
+func (e *sessionEnv) Memory(name string) (expr.Value, bool) {
+	if e.ctx.Symbols == nil {
+		return expr.Value{}, false
+	}
+	return e.ctx.Symbols.Get(name)
 }
 
 func (e *sessionEnv) Field(alias, name string) (expr.Value, bool) {

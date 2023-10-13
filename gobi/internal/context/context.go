@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/config"
+	"github.com/carlosrabelo/gobi/gobi/internal/symbols"
 )
 
 const (
@@ -22,6 +23,7 @@ type Context struct {
 	Config     *config.Config
 	Areas      [AreaCount + 1]*Area // index 1 through 10
 	ActiveArea int
+	Symbols    *symbols.Registry
 
 	Stdin  io.Reader
 	Stdout io.Writer
@@ -49,6 +51,7 @@ type Context struct {
 func New() *Context {
 	c := &Context{
 		Config:     config.New(),
+		Symbols:    symbols.New(),
 		ActiveArea: 1,
 		Stdin:      os.Stdin,
 		Stdout:     os.Stdout,
