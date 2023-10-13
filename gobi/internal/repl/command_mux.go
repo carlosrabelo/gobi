@@ -70,6 +70,7 @@ func (m *CommandMux) register(verb string, handler HandlerFunc) {
 
 func (m *CommandMux) registerAll() {
 	m.register("QUIT", handleQuit)
+	m.register("USE", handleUse)
 }
 
 func stubHandler(verb string) HandlerFunc {

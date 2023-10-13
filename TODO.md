@@ -65,7 +65,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 
 ## Database Commands
 
-- [ ] `USE` command opening target DBF file
+- [x] `USE` command opening target DBF file
 - [ ] `SELECT` switching between Primary and Secondary areas
 - [ ] `CLOSE DATABASES` and `CLOSE INDEX`
 - [ ] `DISPLAY STRUCTURE` and `LIST STRUCTURE`
