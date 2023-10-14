@@ -55,6 +55,8 @@ func NewMux() *Mux {
 	m.Register("COUNT", cmdCOUNT)
 	m.Register("SUM", cmdSUM)
 	m.Register("AVERAGE", cmdAVERAGE)
+	m.Register("STORE", cmdSTORE)
+	m.Register("RELEASE", cmdRELEASE)
 	return m
 }
 
@@ -68,8 +70,17 @@ func (m *Mux) Dispatch(ctx *context.Context, cmd command.Command) error {
 	if cmd.Verb == "" {
 		return nil
 	}
+	if cmd.Verb == "DISPLAY" && isMemoryList(cmd) {
+		return cmdDisplayMemory(ctx, cmd)
+	}
+	if cmd.Verb == "LIST" && isMemoryList(cmd) {
+		return cmdDisplayMemory(ctx, cmd)
+	}
 	h, ok := m.handlers[cmd.Verb]
 	if !ok {
+		if handled, err := tryAssignment(ctx, cmd); handled {
+			return err
+		}
 		msg := "*** Unrecognized command: " + cmd.Verb
 		fmt.Fprintln(ctx.Stderr, msg)
 		return errors.New(msg)
