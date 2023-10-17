@@ -72,3 +72,29 @@ func TestSTOREAssignmentDisplayRelease(t *testing.T) {
 		t.Fatal("RELEASE ALL")
 	}
 }
+
+func TestRELEASEAllLikeExcept(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("STORE 1 TO N1"))
+	_ = mux.Dispatch(ctx, command.Split("STORE 10 TO N10"))
+	_ = mux.Dispatch(ctx, command.Split("STORE 0 TO X"))
+	if err := mux.Dispatch(ctx, command.Split("RELEASE ALL LIKE N?")); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := ctx.Symbols.Get("N1"); ok {
+		t.Fatal("N1")
+	}
+	if _, ok := ctx.Symbols.Get("N10"); !ok {
+		t.Fatal("N10 should remain")
+	}
+	if err := mux.Dispatch(ctx, command.Split("RELEASE ALL EXCEPT X")); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := ctx.Symbols.Get("N10"); ok {
+		t.Fatal("N10 released by EXCEPT X")
+	}
+	if _, ok := ctx.Symbols.Get("X"); !ok {
+		t.Fatal("X kept")
+	}
+}
