@@ -9,6 +9,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
+	"github.com/carlosrabelo/gobi/gobi/pkg/ndx"
 )
 
 func TestDispatchUnknownVerb(t *testing.T) {
@@ -233,4 +234,176 @@ func createTempDBFWithRecords(t *testing.T, dir string, name string, records [][
 		t.Fatalf("failed to write temp DBF: %v", err)
 	}
 	return path
+}
+
+func TestDispatchCloseDatabases(t *testing.T) {
+	var stdout bytes.Buffer
+	ctx := testCtx()
+	ctx.Stdout = &stdout
+
+	ctx.WorkAreas[context.Primary].Table = &dbf.Table{}
+	ctx.WorkAreas[context.Primary].Alias = "TESTDB"
+	ctx.WorkAreas[context.Secondary].Table = &dbf.Table{}
+	ctx.WorkAreas[context.Secondary].Alias = "OTHER"
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "CLOSE", Args: "DATABASES"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ctx.WorkAreas[context.Primary].Table != nil {
+		t.Fatal("expected primary table to be nil after CLOSE DATABASES")
+	}
+	if ctx.WorkAreas[context.Secondary].Table != nil {
+		t.Fatal("expected secondary table to be nil after CLOSE DATABASES")
+	}
+	if ctx.WorkAreas[context.Primary].Alias != "PRIMARY" {
+		t.Fatalf("expected primary alias reset, got %s", ctx.WorkAreas[context.Primary].Alias)
+	}
+	if ctx.WorkAreas[context.Secondary].Alias != "SECONDARY" {
+		t.Fatalf("expected secondary alias reset, got %s", ctx.WorkAreas[context.Secondary].Alias)
+	}
+}
+
+func TestDispatchCloseBare(t *testing.T) {
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	ctx.WorkAreas[context.Primary].Table = &dbf.Table{}
+	ctx.WorkAreas[context.Secondary].Table = &dbf.Table{}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "CLOSE", Args: ""})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ctx.WorkAreas[context.Primary].Table != nil || ctx.WorkAreas[context.Secondary].Table != nil {
+		t.Fatal("expected bare CLOSE to close all databases")
+	}
+}
+
+func TestDispatchCloseDatabasesWithUse(t *testing.T) {
+	tempDir := t.TempDir()
+
+	rec1 := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x20}, append([]byte("Bob       "), []byte(" 35")...)...)
+
+	primaryPath := createTempDBFWithRecords(t, tempDir, "primary.dbf", [][]byte{rec1})
+	secondaryPath := createTempDBFWithRecords(t, tempDir, "secondary.dbf", [][]byte{rec2})
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: primaryPath}); err != nil {
+		t.Fatalf("unexpected error opening primary: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "SELECT", Args: "SECONDARY"}); err != nil {
+		t.Fatalf("unexpected error selecting secondary: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: secondaryPath}); err != nil {
+		t.Fatalf("unexpected error opening secondary: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "CLOSE", Args: "DATABASES"}); err != nil {
+		t.Fatalf("unexpected error closing databases: %v", err)
+	}
+	if ctx.WorkAreas[context.Primary].Table != nil || ctx.WorkAreas[context.Secondary].Table != nil {
+		t.Fatal("expected both work areas to be closed")
+	}
+}
+
+func TestDispatchCloseIndex(t *testing.T) {
+	var stdout bytes.Buffer
+	ctx := testCtx()
+	ctx.Stdout = &stdout
+
+	area := ctx.GetActiveArea()
+	area.Table = &dbf.Table{}
+	area.Indexes = []*ndx.Index{{Path: "stub"}}
+	err := commandMux.Dispatch(ctx, Command{Verb: "CLOSE", Args: "INDEX"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(area.Indexes) != 0 {
+		t.Fatal("expected indexes to be empty after CLOSE INDEX")
+	}
+	if area.Table == nil {
+		t.Fatal("expected database to remain open after CLOSE INDEX")
+	}
+}
+
+func TestDispatchCloseIndexWithUse(t *testing.T) {
+	tempDir := t.TempDir()
+
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "indexdb.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening database: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	area.Indexes = []*ndx.Index{{Path: "stub-index"}}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "CLOSE", Args: "INDEX"}); err != nil {
+		t.Fatalf("unexpected error closing indexes: %v", err)
+	}
+	if len(area.Indexes) != 0 {
+		t.Fatal("expected indexes to be cleared")
+	}
+	if area.Table == nil {
+		t.Fatal("expected database to remain open after CLOSE INDEX")
+	}
+}
+
+func TestDispatchCloseIndexOtherAreaUnchanged(t *testing.T) {
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	ctx.WorkAreas[context.Primary].Indexes = []*ndx.Index{{Path: "primary-index"}}
+	ctx.WorkAreas[context.Secondary].Indexes = []*ndx.Index{{Path: "secondary-index"}}
+	ctx.ActiveArea = context.Secondary
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "CLOSE", Args: "INDEX"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(ctx.WorkAreas[context.Secondary].Indexes) != 0 {
+		t.Fatal("expected secondary indexes to be cleared")
+	}
+	if len(ctx.WorkAreas[context.Primary].Indexes) != 1 {
+		t.Fatal("expected primary indexes to remain open")
+	}
+}
+
+func TestDispatchCloseAll(t *testing.T) {
+	var stdout bytes.Buffer
+	ctx := testCtx()
+	ctx.Stdout = &stdout
+
+	for _, area := range ctx.WorkAreas {
+		area.Table = &dbf.Table{}
+		area.Indexes = []*ndx.Index{{Path: "stub"}}
+	}
+	err := commandMux.Dispatch(ctx, Command{Verb: "CLOSE", Args: "ALL"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, area := range ctx.WorkAreas {
+		if area.Table != nil {
+			t.Fatal("expected table to be nil after CLOSE ALL")
+		}
+		if len(area.Indexes) != 0 {
+			t.Fatal("expected indexes to be empty after CLOSE ALL")
+		}
+	}
+}
+
+func TestDispatchCloseInvalidOption(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "CLOSE", Args: "WINDOWS"})
+	if err == nil {
+		t.Fatal("expected error for invalid CLOSE option")
+	}
 }

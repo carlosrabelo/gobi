@@ -67,7 +67,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 
 - [x] `USE` command opening target DBF file
 - [x] `SELECT` switching between Primary and Secondary areas
-- [ ] `CLOSE DATABASES` and `CLOSE INDEX`
+- [x] `CLOSE DATABASES` and `CLOSE INDEX`
 - [ ] `DISPLAY STRUCTURE` and `LIST STRUCTURE`
 - [ ] `GOTO` absolute record position
 - [ ] `GO TOP` and `GO BOTTOM`
