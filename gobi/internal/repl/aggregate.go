@@ -21,7 +21,9 @@ func cmdCOUNT(ctx *context.Context, cmd command.Command) error {
 	}
 	a.Cursor = saved
 	_ = a.LoadCurrent()
-	storePendingTO(ctx, cmd.Clauses["TO"], []float64{float64(n)})
+	if err := storePendingTO(ctx, cmd.Clauses["TO"], []float64{float64(n)}); err != nil {
+		return err
+	}
 	if ctx.Config.Talk {
 		fmt.Fprintln(ctx.Stdout, n)
 	}
@@ -65,7 +67,9 @@ func sumOrAvg(ctx *context.Context, cmd command.Command, average bool) error {
 		}
 	}
 	if len(toNames) > 0 {
-		storePendingTO(ctx, strings.Join(toNames, ","), vals)
+		if err := storePendingTO(ctx, strings.Join(toNames, ","), vals); err != nil {
+			return err
+		}
 	} else {
 		ctx.PendingTO = nil
 		ctx.PendingVals = vals
@@ -82,7 +86,7 @@ func sumOrAvg(ctx *context.Context, cmd command.Command, average bool) error {
 	return nil
 }
 
-func storePendingTO(ctx *context.Context, toClause string, vals []float64) {
+func storePendingTO(ctx *context.Context, toClause string, vals []float64) error {
 	toClause = strings.TrimSpace(toClause)
 	var names []string
 	if toClause != "" {
@@ -95,6 +99,18 @@ func storePendingTO(ctx *context.Context, toClause string, vals []float64) {
 	}
 	ctx.PendingTO = names
 	ctx.PendingVals = vals
+	if len(names) == 0 {
+		return nil
+	}
+	if len(names) != len(vals) {
+		return fail(ctx, "TO list length must match values")
+	}
+	for i, name := range names {
+		if err := ctx.Symbols.Set(name, expr.NumberVal(vals[i])); err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+	}
+	return nil
 }
 
 func parseSumArgs(cmd command.Command) (exprs []string, toNames []string, err error) {

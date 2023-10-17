@@ -56,6 +56,9 @@ func TestCOUNTForTalkAndCursor(t *testing.T) {
 	if len(ctx.PendingTO) != 1 || ctx.PendingTO[0] != "N" || ctx.PendingVals[0] != 2 {
 		t.Fatalf("pending TO: %v %v", ctx.PendingTO, ctx.PendingVals)
 	}
+	if v, ok := ctx.Symbols.Get("N"); !ok || v.Num != 2 {
+		t.Fatalf("COUNT TO registry: %v %v", ok, v)
+	}
 
 	ctx.Config.Talk = false
 	out.Reset()
@@ -109,6 +112,9 @@ func TestSUMAndAVERAGE(t *testing.T) {
 	}
 	if len(ctx.PendingTO) != 1 || ctx.PendingTO[0] != "S" || ctx.PendingVals[0] != 90 {
 		t.Fatalf("SUM TO: %v %v", ctx.PendingTO, ctx.PendingVals)
+	}
+	if v, ok := ctx.Symbols.Get("S"); !ok || v.Num != 90 {
+		t.Fatalf("SUM TO registry: %v %v", ok, v)
 	}
 
 	out.Reset()
