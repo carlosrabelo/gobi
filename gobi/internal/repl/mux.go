@@ -57,6 +57,8 @@ func NewMux() *Mux {
 	m.Register("AVERAGE", cmdAVERAGE)
 	m.Register("STORE", cmdSTORE)
 	m.Register("RELEASE", cmdRELEASE)
+	m.Register("SAVE", cmdSAVE)
+	m.Register("RESTORE", cmdRESTORE)
 	return m
 }
 
