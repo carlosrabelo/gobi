@@ -407,3 +407,51 @@ func TestDispatchCloseInvalidOption(t *testing.T) {
 		t.Fatal("expected error for invalid CLOSE option")
 	}
 }
+
+func TestDispatchDisplayStructure(t *testing.T) {
+	tempDir := t.TempDir()
+
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "structdb.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "DISPLAY", Args: "STRUCTURE"}); err != nil {
+		t.Fatalf("unexpected error on DISPLAY STRUCTURE: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "STRUCTURE FOR FILE:  STRUCTDB.DBF") {
+		t.Fatalf("unexpected header in output: %q", output)
+	}
+	if !strings.Contains(output, "NAME") || !strings.Contains(output, "AGE") {
+		t.Fatalf("expected field names in output: %q", output)
+	}
+	if !strings.Contains(output, "** TOTAL **") {
+		t.Fatalf("expected total width line in output: %q", output)
+	}
+}
+
+func TestDispatchDisplayStructureNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "DISPLAY", Args: "STRUCTURE"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchListStructureNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "STRUCTURE"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
