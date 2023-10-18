@@ -455,3 +455,99 @@ func TestDispatchListStructureNoDatabase(t *testing.T) {
 		t.Fatalf("expected no database error, got %v", err)
 	}
 }
+
+func TestDispatchGotoNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "GOTO", Args: "1"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchGotoNoArgs(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "GOTO", Args: ""})
+	if err == nil || !strings.Contains(err.Error(), "requires a record number") {
+		t.Fatalf("expected missing record number error, got %v", err)
+	}
+}
+
+func TestDispatchGotoInvalidNumber(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "gotodb.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "GOTO", Args: "abc"})
+	if err == nil || !strings.Contains(err.Error(), "Invalid record number") {
+		t.Fatalf("expected invalid record number error, got %v", err)
+	}
+}
+
+func TestDispatchGoto(t *testing.T) {
+	tempDir := t.TempDir()
+
+	rec1 := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x20}, append([]byte("Bob       "), []byte(" 35")...)...)
+	rec3 := append([]byte{0x20}, append([]byte("Charlie   "), []byte(" 45")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "gotodb.dbf", [][]byte{rec1, rec2, rec3})
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.RecordNo != 0 {
+		t.Fatalf("expected initial record 0, got %d", area.RecordNo)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "GOTO", Args: "2"}); err != nil {
+		t.Fatalf("unexpected error on GOTO 2: %v", err)
+	}
+	if area.RecordNo != 1 {
+		t.Fatalf("expected record index 1, got %d", area.RecordNo)
+	}
+	if area.ActiveRecord == nil {
+		t.Fatal("expected active record to be loaded")
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "GO", Args: "TO 3"}); err != nil {
+		t.Fatalf("unexpected error on GO TO 3: %v", err)
+	}
+	if area.RecordNo != 2 {
+		t.Fatalf("expected record index 2, got %d", area.RecordNo)
+	}
+	name, err := area.ActiveRecord.DecodeField(area.Table, 0)
+	if err != nil {
+		t.Fatalf("decode NAME: %v", err)
+	}
+	if s, ok := name.(string); !ok || !strings.Contains(s, "Charlie") {
+		t.Fatalf("expected NAME=Charlie, got %#v", name)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "GOTO", Args: "4"}); err != nil {
+		t.Fatalf("unexpected error on GOTO past EOF: %v", err)
+	}
+	if area.RecordNo != 3 {
+		t.Fatalf("expected record index 3 at EOF, got %d", area.RecordNo)
+	}
+	if area.ActiveRecord != nil {
+		t.Fatal("expected no active record past EOF")
+	}
+
+	err = commandMux.Dispatch(ctx, Command{Verb: "GOTO", Args: "0"})
+	if err == nil || !strings.Contains(err.Error(), "out of range") {
+		t.Fatalf("expected out of range error for GOTO 0, got %v", err)
+	}
+}

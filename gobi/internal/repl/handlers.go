@@ -2,6 +2,8 @@ package repl
 
 import (
 	"fmt"
+	"io"
+	"strconv"
 	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
@@ -120,5 +122,62 @@ func displayStructure(ctx *context.Context) error {
 		totalWidth += int(fd.Length)
 	}
 	fmt.Fprintf(ctx.Stdout, "** TOTAL **                %05d\r\n", totalWidth)
+	return nil
+}
+
+func handleGo(ctx *context.Context, cmd Command) error {
+	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
+	parts := strings.Fields(arg)
+	if len(parts) == 2 && parts[0] == "TO" {
+		return gotoRecordFromArgs(ctx, parts[1])
+	}
+	return fmt.Errorf("*** Unrecognized GO option: %s", strings.TrimSpace(cmd.Args))
+}
+
+func handleGoto(ctx *context.Context, cmd Command) error {
+	return gotoRecordFromArgs(ctx, strings.TrimSpace(cmd.Args))
+}
+
+func gotoRecordFromArgs(ctx *context.Context, arg string) error {
+	if arg == "" {
+		return fmt.Errorf("*** GOTO requires a record number")
+	}
+	userRecNo, err := strconv.Atoi(arg)
+	if err != nil {
+		return fmt.Errorf("*** Invalid record number: %s", arg)
+	}
+	return goToRecord(ctx, userRecNo)
+}
+
+func goToRecord(ctx *context.Context, userRecNo int) error {
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+	if userRecNo < 1 {
+		return fmt.Errorf("*** Record number out of range")
+	}
+
+	recCount := int(area.Table.Header.RecordCount)
+	recIdx := userRecNo - 1
+
+	if recIdx >= recCount {
+		area.RecordNo = recIdx
+		area.ActiveRecord = nil
+		return nil
+	}
+
+	rseeker, ok := area.Table.Underlying().(io.ReadSeeker)
+	if !ok {
+		return fmt.Errorf("*** Underlying database stream is not seekable")
+	}
+
+	rec, err := area.Table.ReadRecordAt(rseeker, recIdx)
+	if err != nil {
+		return fmt.Errorf("*** Error reading record %d: %w", userRecNo, err)
+	}
+
+	area.RecordNo = recIdx
+	area.ActiveRecord = rec
 	return nil
 }

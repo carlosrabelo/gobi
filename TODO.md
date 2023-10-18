@@ -69,7 +69,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `SELECT` switching between Primary and Secondary areas
 - [x] `CLOSE DATABASES` and `CLOSE INDEX`
 - [x] `DISPLAY STRUCTURE` and `LIST STRUCTURE`
-- [ ] `GOTO` absolute record position
+- [x] `GOTO` absolute record position
 - [ ] `GO TOP` and `GO BOTTOM`
 - [ ] `SKIP` moving cursor relative to active database size
 - [ ] `LIST` showing fields with FOR/WHILE filtering
