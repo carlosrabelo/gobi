@@ -18,6 +18,7 @@ type Handler func(ctx *context.Context, cmd command.Command) error
 // Mux maps upper-case verbs to handlers.
 type Mux struct {
 	handlers map[string]Handler
+	prog     *Program
 }
 
 // NewMux returns a mux with the built-in verbs registered.
@@ -59,6 +60,22 @@ func NewMux() *Mux {
 	m.Register("RELEASE", cmdRELEASE)
 	m.Register("SAVE", cmdSAVE)
 	m.Register("RESTORE", cmdRESTORE)
+	m.Register("DO", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdDO(ctx, cmd)
+	})
+	m.Register("RETURN", func(ctx *context.Context, cmd command.Command) error {
+		if m.prog == nil || len(m.prog.Stack) == 0 {
+			return fail(ctx, "RETURN outside a program")
+		}
+		m.prog.Stack = m.prog.Stack[:len(m.prog.Stack)-1]
+		return nil
+	})
+	m.Register("CANCEL", func(ctx *context.Context, cmd command.Command) error {
+		if m.prog != nil {
+			m.prog.Stack = nil
+		}
+		return nil
+	})
 	return m
 }
 
