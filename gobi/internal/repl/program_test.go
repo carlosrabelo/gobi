@@ -46,3 +46,49 @@ func TestDOMissingFile(t *testing.T) {
 		// fail() wraps message; ensure we got an error
 	}
 }
+
+func TestDONestedReturnCancel(t *testing.T) {
+	dir := t.TempDir()
+	child := filepath.Join(dir, "child.prg")
+	parent := filepath.Join(dir, "parent.prg")
+	if err := os.WriteFile(child, []byte("STORE 1 TO C\nRETURN\nSTORE 99 TO C\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(parent, []byte("DO child\nSTORE 2 TO P\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := testCtx(t, dir)
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("DO parent")); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := ctx.Symbols.Get("C"); !ok || v.Num != 1 {
+		t.Fatalf("C after RETURN: %v %v", ok, v)
+	}
+	if v, ok := ctx.Symbols.Get("P"); !ok || v.Num != 2 {
+		t.Fatalf("P: %v %v", ok, v)
+	}
+
+	deep := filepath.Join(dir, "deep.prg")
+	mid := filepath.Join(dir, "mid.prg")
+	top := filepath.Join(dir, "top.prg")
+	if err := os.WriteFile(deep, []byte("CANCEL\nSTORE 1 TO Z\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mid, []byte("DO deep\nSTORE 2 TO Z\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(top, []byte("DO mid\nSTORE 3 TO Z\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx.Symbols.ReleaseAll()
+	if err := mux.Dispatch(ctx, command.Split("DO top")); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := ctx.Symbols.Get("Z"); ok {
+		t.Fatal("CANCEL should drop all frames before STORE")
+	}
+	if len(mux.prog.Stack) != 0 {
+		t.Fatalf("stack after CANCEL: %d", len(mux.prog.Stack))
+	}
+}
