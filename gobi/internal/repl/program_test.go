@@ -92,3 +92,55 @@ func TestDONestedReturnCancel(t *testing.T) {
 		t.Fatalf("stack after CANCEL: %d", len(mux.prog.Stack))
 	}
 }
+
+func TestIFElseEndif(t *testing.T) {
+	dir := t.TempDir()
+	prg := filepath.Join(dir, "cond.prg")
+	body := "" +
+		"STORE .T. TO F\n" +
+		"IF F\n" +
+		"STORE 1 TO T\n" +
+		"ELSE\n" +
+		"STORE 0 TO T\n" +
+		"ENDIF\n" +
+		"IF .F.\n" +
+		"STORE 1 TO Z\n" +
+		"ELSE\n" +
+		"STORE 2 TO Z\n" +
+		"ENDIF\n" +
+		"IF .T.\n" +
+		"IF .T.\n" +
+		"STORE 3 TO N\n" +
+		"ENDIF\n" +
+		"ENDIF\n"
+	if err := os.WriteFile(prg, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := testCtx(t, dir)
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("DO cond")); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := ctx.Symbols.Get("T"); v.Num != 1 {
+		t.Fatalf("true branch T=%v", v)
+	}
+	if v, _ := ctx.Symbols.Get("Z"); v.Num != 2 {
+		t.Fatalf("false branch Z=%v", v)
+	}
+	if v, _ := ctx.Symbols.Get("N"); v.Num != 3 {
+		t.Fatalf("nested N=%v", v)
+	}
+
+	bad := filepath.Join(dir, "bad.prg")
+	if err := os.WriteFile(bad, []byte("STORE 1 TO X\nIF .T.\nSTORE 2 TO X\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx.Symbols.ReleaseAll()
+	err := mux.Dispatch(ctx, command.Split("DO bad"))
+	if err == nil {
+		t.Fatal("expected missing ENDIF")
+	}
+	if _, ok := ctx.Symbols.Get("X"); ok {
+		t.Fatal("must not run first line when ENDIF missing")
+	}
+}

@@ -184,6 +184,3 @@ func runProgram(ctx *context.Context, m *Mux) error {
 	return nil
 }
 
-func runControl(ctx *context.Context, m *Mux, fr *Frame, cmd command.Command) error {
-	return fail(ctx, "%s is not supported yet", cmd.Verb)
-}
