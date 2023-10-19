@@ -208,3 +208,24 @@ func goBottom(ctx *context.Context) error {
 	}
 	return goToRecord(ctx, recCount)
 }
+
+func handleSkip(ctx *context.Context, cmd Command) error {
+	arg := strings.TrimSpace(cmd.Args)
+	delta := 1
+	if arg != "" {
+		n, err := strconv.Atoi(arg)
+		if err != nil {
+			return fmt.Errorf("*** Invalid SKIP value: %s", arg)
+		}
+		delta = n
+	}
+	return skipRecords(ctx, delta)
+}
+
+func skipRecords(ctx *context.Context, delta int) error {
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+	return goToRecord(ctx, area.RecordNo+1+delta)
+}
