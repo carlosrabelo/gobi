@@ -131,7 +131,14 @@ func handleGo(ctx *context.Context, cmd Command) error {
 	if len(parts) == 2 && parts[0] == "TO" {
 		return gotoRecordFromArgs(ctx, parts[1])
 	}
-	return fmt.Errorf("*** Unrecognized GO option: %s", strings.TrimSpace(cmd.Args))
+	switch arg {
+	case "TOP":
+		return goTop(ctx)
+	case "BOTTOM":
+		return goBottom(ctx)
+	default:
+		return fmt.Errorf("*** Unrecognized GO option: %s", strings.TrimSpace(cmd.Args))
+	}
 }
 
 func handleGoto(ctx *context.Context, cmd Command) error {
@@ -180,4 +187,24 @@ func goToRecord(ctx *context.Context, userRecNo int) error {
 	area.RecordNo = recIdx
 	area.ActiveRecord = rec
 	return nil
+}
+
+func goTop(ctx *context.Context) error {
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+	return goToRecord(ctx, 1)
+}
+
+func goBottom(ctx *context.Context) error {
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+	recCount := int(area.Table.Header.RecordCount)
+	if recCount == 0 {
+		return goToRecord(ctx, 1)
+	}
+	return goToRecord(ctx, recCount)
 }
