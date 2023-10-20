@@ -144,3 +144,36 @@ func TestIFElseEndif(t *testing.T) {
 		t.Fatal("must not run first line when ENDIF missing")
 	}
 }
+
+func TestDOWHILELoopExit(t *testing.T) {
+	dir := t.TempDir()
+	prg := filepath.Join(dir, "loop.prg")
+	body := "" +
+		"STORE 0 TO N\n" +
+		"DO WHILE N < 3\n" +
+		"STORE N + 1 TO N\n" +
+		"ENDDO\n" +
+		"STORE 0 TO L\n" +
+		"DO WHILE .T.\n" +
+		"STORE L + 1 TO L\n" +
+		"IF L >= 2\n" +
+		"EXIT\n" +
+		"ENDIF\n" +
+		"LOOP\n" +
+		"STORE 99 TO L\n" +
+		"ENDDO\n"
+	if err := os.WriteFile(prg, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := testCtx(t, dir)
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("DO loop")); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := ctx.Symbols.Get("N"); v.Num != 3 {
+		t.Fatalf("N=%v want 3", v)
+	}
+	if v, _ := ctx.Symbols.Get("L"); v.Num != 2 {
+		t.Fatalf("L=%v want 2 (LOOP/EXIT)", v)
+	}
+}

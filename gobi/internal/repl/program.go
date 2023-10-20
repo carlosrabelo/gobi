@@ -121,7 +121,7 @@ func validateBlocks(lines []string) error {
 			}
 			ifDepth--
 		case "DO":
-			if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(cmd.Args)), "WHILE") {
+			if isDoWhile(cmd) {
 				whileDepth++
 			}
 		case "ENDDO":
@@ -166,7 +166,7 @@ func runProgram(ctx *context.Context, m *Mux) error {
 			}
 			continue
 		case "DO":
-			if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(cmd.Args)), "WHILE") {
+			if isDoWhile(cmd) {
 				if err := runControl(ctx, m, fr, cmd); err != nil {
 					return err
 				}
@@ -183,4 +183,3 @@ func runProgram(ctx *context.Context, m *Mux) error {
 	}
 	return nil
 }
-

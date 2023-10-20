@@ -25,9 +25,11 @@ func runControl(ctx *context.Context, m *Mux, fr *Frame, cmd command.Command) er
 	case "DO":
 		return runWHILE(ctx, fr, cmd)
 	case "ENDDO":
-		return fail(ctx, "ENDDO without DO WHILE")
-	case "LOOP", "EXIT":
-		return fail(ctx, "%s outside DO WHILE", cmd.Verb)
+		return handleENDDO(ctx, fr)
+	case "LOOP":
+		return handleLOOP(ctx, fr)
+	case "EXIT":
+		return handleEXIT(ctx, fr)
 	default:
 		return fail(ctx, "unknown control %s", cmd.Verb)
 	}
@@ -89,10 +91,8 @@ func findMatching(lines []string, startIdx int, startVerb, endVerb string) (int,
 		c := command.Split(lines[i])
 		switch c.Verb {
 		case startVerb:
-			if startVerb == "DO" {
-				if !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(c.Args)), "WHILE") {
-					continue
-				}
+			if startVerb == "DO" && !isDoWhile(c) {
+				continue
 			}
 			depth++
 		case endVerb:
@@ -115,10 +115,8 @@ func findEndFromInside(lines []string, fromIdx int, startVerb, endVerb string) (
 		c := command.Split(lines[i])
 		switch c.Verb {
 		case startVerb:
-			if startVerb == "DO" {
-				if !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(c.Args)), "WHILE") {
-					continue
-				}
+			if startVerb == "DO" && !isDoWhile(c) {
+				continue
 			}
 			depth++
 		case endVerb:
@@ -155,9 +153,97 @@ func findElse(lines []string, ifIdx int) (elseIdx int, found bool, err error) {
 	return 0, false, errString("IF without ENDIF")
 }
 
+func isDoWhile(cmd command.Command) bool {
+	if cmd.Verb != "DO" {
+		return false
+	}
+	if _, ok := cmd.Clauses["WHILE"]; ok {
+		return true
+	}
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(cmd.Args)), "WHILE")
+}
+
+func whileCond(cmd command.Command) string {
+	if w := strings.TrimSpace(cmd.Clauses["WHILE"]); w != "" {
+		return w
+	}
+	args := strings.TrimSpace(cmd.Args)
+	if strings.HasPrefix(strings.ToUpper(args), "WHILE") {
+		return strings.TrimSpace(args[len("WHILE"):])
+	}
+	return ""
+}
+
 func runWHILE(ctx *context.Context, fr *Frame, cmd command.Command) error {
-	_ = ctx
-	_ = fr
-	_ = cmd
-	return fail(ctx, "DO WHILE is not supported yet")
+	cond := whileCond(cmd)
+	ok, err := evalCond(ctx, cond)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	whileLine := fr.PC - 1
+	endLine, err := findMatching(fr.Lines, whileLine, "DO", "ENDDO")
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	if !ok {
+		fr.PC = endLine + 1
+		return nil
+	}
+	// Enter body; on ENDDO we jump back (handled in runControl).
+	return nil
+}
+
+func handleENDDO(ctx *context.Context, fr *Frame) error {
+	whileLine, err := findOpenWHILE(fr.Lines, fr.PC-1)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	fr.PC = whileLine // re-evaluate DO WHILE
+	return nil
+}
+
+func handleLOOP(ctx *context.Context, fr *Frame) error {
+	whileLine, err := findOpenWHILE(fr.Lines, fr.PC-1)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	fr.PC = whileLine
+	return nil
+}
+
+func handleEXIT(ctx *context.Context, fr *Frame) error {
+	whileLine, err := findOpenWHILE(fr.Lines, fr.PC-1)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	endLine, err := findMatching(fr.Lines, whileLine, "DO", "ENDDO")
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	fr.PC = endLine + 1
+	return nil
+}
+
+// findOpenWHILE walks backward to the innermost DO WHILE that contains fromIdx.
+// fromIdx is the LOOP, EXIT, or ENDDO line; scanning starts at the line above it.
+func findOpenWHILE(lines []string, fromIdx int) (int, error) {
+	depth := 0
+	for i := fromIdx - 1; i >= 0; i-- {
+		if isCommentLine(lines[i]) {
+			continue
+		}
+		c := command.Split(lines[i])
+		switch c.Verb {
+		case "ENDDO":
+			depth++
+		case "DO":
+			if isDoWhile(c) {
+				if depth == 0 {
+					return i, nil
+				}
+				depth--
+			}
+		}
+	}
+	return 0, errString("LOOP/EXIT/ENDDO without DO WHILE")
 }
