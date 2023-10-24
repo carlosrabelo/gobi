@@ -8,9 +8,9 @@ import (
 
 // Entry is one index slot: optional child page, record number, and key bytes.
 type Entry struct {
-	Child  uint32
-	RecNo  uint32
-	Key    []byte // length KeyLen (padded for character keys)
+	Child uint32
+	RecNo uint32
+	Key   []byte // length KeyLen (padded for character keys)
 }
 
 // EncodeKeyChar space-pads s to keyLen.
