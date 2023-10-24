@@ -2,6 +2,7 @@ package repl
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -188,11 +189,28 @@ func TestDispatchSelectSwitchWorkAreas(t *testing.T) {
 		t.Fatal("expected primary table to remain open after USE in secondary")
 	}
 
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error listing secondary: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Bob") || strings.Contains(stdout.String(), "Alice") {
+		t.Fatalf("expected secondary LIST to show Bob only, got: %q", stdout.String())
+	}
+
 	if err := commandMux.Dispatch(ctx, Command{Verb: "SELECT", Args: "PRIMARY"}); err != nil {
 		t.Fatalf("unexpected error selecting primary: %v", err)
 	}
 	if ctx.ActiveArea != context.Primary {
 		t.Fatal("expected primary to be active after SELECT PRIMARY")
+	}
+
+	stdout.Reset()
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error listing primary: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Alice") || strings.Contains(stdout.String(), "Bob") {
+		t.Fatalf("expected primary LIST to show Alice only, got: %q", stdout.String())
 	}
 }
 
@@ -308,6 +326,11 @@ func TestDispatchCloseDatabasesWithUse(t *testing.T) {
 	if ctx.WorkAreas[context.Primary].Table != nil || ctx.WorkAreas[context.Secondary].Table != nil {
 		t.Fatal("expected both work areas to be closed")
 	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected LIST error after CLOSE DATABASES, got %v", err)
+	}
 }
 
 func TestDispatchCloseIndex(t *testing.T) {
@@ -354,6 +377,15 @@ func TestDispatchCloseIndexWithUse(t *testing.T) {
 	}
 	if area.Table == nil {
 		t.Fatal("expected database to remain open after CLOSE INDEX")
+	}
+
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error listing after CLOSE INDEX: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Alice") {
+		t.Fatalf("expected LIST to work after CLOSE INDEX, got: %q", stdout.String())
 	}
 }
 
@@ -736,5 +768,100 @@ func TestDispatchSkip(t *testing.T) {
 	err = commandMux.Dispatch(ctx, Command{Verb: "SKIP", Args: "-1"})
 	if err == nil || !strings.Contains(err.Error(), "out of range") {
 		t.Fatalf("expected out of range error for SKIP -1 at first record, got %v", err)
+	}
+}
+
+func TestDispatchList(t *testing.T) {
+	tempDir := t.TempDir()
+
+	rec1 := append([]byte{0x2A}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x2A}, append([]byte("Bob       "), []byte(" 35")...)...)
+	rec3 := append([]byte{0x20}, append([]byte("Charlie   "), []byte(" 45")...)...)
+
+	dbfPath := createTempDBFWithRecords(t, tempDir, "listdb.dbf", [][]byte{rec1, rec2, rec3})
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "LIST"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected 'No database file is in use' error, got %v", err)
+	}
+
+	err = commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath})
+	if err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	stdout.Reset()
+	err = commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "STRUCTURE"})
+	if err != nil {
+		t.Fatalf("unexpected error on LIST STRUCTURE: %v", err)
+	}
+	structOut := stdout.String()
+	if !strings.Contains(structOut, "STRUCTURE FOR FILE:  LISTDB.DBF") || !strings.Contains(structOut, "NAME") || !strings.Contains(structOut, "AGE") {
+		t.Fatalf("unexpected list structure output: %q", structOut)
+	}
+
+	stdout.Reset()
+	err = commandMux.Dispatch(ctx, Command{Verb: "LIST"})
+	if err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	listOut := stdout.String()
+	if !strings.Contains(listOut, "Alice") || !strings.Contains(listOut, "Bob") || !strings.Contains(listOut, "Charlie") {
+		t.Fatalf("unexpected plain list output: %q", listOut)
+	}
+
+	stdout.Reset()
+	err = commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	listNameOut := stdout.String()
+	if !strings.Contains(listNameOut, "Alice") || strings.Contains(listNameOut, "25") {
+		t.Fatalf("expected only NAME column in output, got: %q", listNameOut)
+	}
+
+	stdout.Reset()
+	err = commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME, AGE", ForClause: "DELETED()"})
+	if err != nil {
+		t.Fatalf("unexpected error on LIST FOR: %v", err)
+	}
+	listForOut := stdout.String()
+	if !strings.Contains(listForOut, "Alice") || !strings.Contains(listForOut, "Bob") || strings.Contains(listForOut, "Charlie") {
+		t.Fatalf("expected only Alice and Bob, got: %q", listForOut)
+	}
+
+	area := ctx.GetActiveArea()
+	area.RecordNo = 1
+	rseeker, _ := area.Table.Underlying().(io.ReadSeeker)
+	area.ActiveRecord, _ = area.Table.ReadRecordAt(rseeker, 1)
+
+	stdout.Reset()
+	err = commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME, AGE", WhileClause: "DELETED()"})
+	if err != nil {
+		t.Fatalf("unexpected error on LIST WHILE: %v", err)
+	}
+	listWhileOut := stdout.String()
+	if !strings.Contains(listWhileOut, "Bob") || strings.Contains(listWhileOut, "Charlie") || strings.Contains(listWhileOut, "Alice") {
+		t.Fatalf("expected only Bob, got: %q", listWhileOut)
+	}
+
+	outFilePath := filepath.Join(tempDir, "output.txt")
+	stdout.Reset()
+	err = commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME", ToClause: outFilePath})
+	if err != nil {
+		t.Fatalf("unexpected error on LIST TO: %v", err)
+	}
+
+	fileBytes, err := os.ReadFile(outFilePath)
+	if err != nil {
+		t.Fatalf("failed to read redirected output file: %v", err)
+	}
+	fileOut := string(fileBytes)
+	if !strings.Contains(fileOut, "Alice") || !strings.Contains(fileOut, "Bob") || !strings.Contains(fileOut, "Charlie") {
+		t.Fatalf("redirected file content incorrect: %q", fileOut)
 	}
 }

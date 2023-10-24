@@ -72,7 +72,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `GOTO` absolute record position
 - [x] `GO TOP` and `GO BOTTOM`
 - [x] `SKIP` moving cursor relative to active database size
-- [ ] `LIST` showing fields with FOR/WHILE filtering
+- [x] `LIST` showing fields with FOR/WHILE filtering
 - [ ] `DISPLAY` paginating records list to stdout
 - [ ] `APPEND` line prompt adding records interactively
 - [ ] `REPLACE` field value evaluations

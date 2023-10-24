@@ -3,11 +3,13 @@ package repl
 import (
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
+	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
 
 func handleQuit(ctx *context.Context, cmd Command) error {
@@ -91,12 +93,310 @@ func handleDisplay(ctx *context.Context, cmd Command) error {
 	return fmt.Errorf("*** DISPLAY: feature not yet implemented")
 }
 
+type column struct {
+	expr expr.Expression
+	fd   *dbf.FieldDescriptor
+}
+
+type outputRecordsOpts struct {
+	maxRecords       int
+	maxScanned       int
+	startFromCurrent bool
+	moveToEOFAfter   bool
+}
+
 func handleList(ctx *context.Context, cmd Command) error {
 	argUpper := strings.ToUpper(strings.TrimSpace(cmd.Args))
 	if argUpper == "STRUCTURE" {
 		return displayStructure(ctx)
 	}
-	return fmt.Errorf("*** LIST: feature not yet implemented")
+
+	return outputRecords(ctx, cmd, outputRecordsOpts{
+		maxRecords:       0,
+		startFromCurrent: false,
+		moveToEOFAfter:   true,
+	})
+}
+
+func outputRecords(ctx *context.Context, cmd Command, opts outputRecordsOpts) error {
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	var err error
+	var out io.Writer = ctx.Stdout
+	if cmd.ToClause != "" {
+		filePath := resolveOutputPath(ctx, cmd.ToClause)
+		f, err := os.Create(filePath)
+		if err != nil {
+			return fmt.Errorf("*** Could not create output file: %w", err)
+		}
+		defer f.Close()
+		out = io.MultiWriter(ctx.Stdout, f)
+	}
+
+	var forExp, whileExp expr.Expression
+	if forExp, whileExp, err = parseForWhileClauses(cmd); err != nil {
+		return err
+	}
+
+	var cols []column
+	if strings.TrimSpace(cmd.Args) == "" {
+		for i := range area.Table.Fields {
+			fd := &area.Table.Fields[i]
+			ident := &expr.Identifier{
+				Name: fd.Name,
+			}
+			cols = append(cols, column{expr: ident, fd: fd})
+		}
+	} else {
+		parts := splitCommaOutsideParens(cmd.Args)
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			lexer := expr.NewLexer(part)
+			parser := expr.NewParser(lexer)
+			exp := parser.ParseExpression()
+			if len(parser.Errors()) > 0 {
+				return fmt.Errorf("*** Syntax error in field list: %s", strings.Join(parser.Errors(), "; "))
+			}
+			var matchedFd *dbf.FieldDescriptor
+			if ident, ok := exp.(*expr.Identifier); ok {
+				fd, idx := area.Table.FieldByName(ident.Name)
+				if fd != nil {
+					matchedFd = &area.Table.Fields[idx]
+				}
+			}
+			cols = append(cols, column{expr: exp, fd: matchedFd})
+		}
+	}
+
+	widths := make([]int, len(cols))
+	var headerParts []string
+	for i, col := range cols {
+		name := col.expr.String()
+		width := len(name)
+		if col.fd != nil {
+			if int(col.fd.Length) > width {
+				width = int(col.fd.Length)
+			}
+		}
+		if width < 5 {
+			width = 5
+		}
+		widths[i] = width
+		headerParts = append(headerParts, fmt.Sprintf("%-*s", width, strings.ToUpper(name)))
+	}
+	fmt.Fprintf(out, "Record#  %s\r\n", strings.Join(headerParts, "  "))
+
+	rseeker, ok := area.Table.Underlying().(io.ReadSeeker)
+	if !ok {
+		return fmt.Errorf("*** Underlying database stream is not seekable")
+	}
+
+	recCount := int(area.Table.Header.RecordCount)
+
+	seq, err := recordSequence(area)
+	if err != nil {
+		return err
+	}
+
+	startPos := 0
+	if opts.startFromCurrent || whileExp != nil {
+		startPos = positionInSequence(seq, area.RecordNo, recCount)
+	}
+
+	env := newReplEnvironment(ctx)
+	displayed := 0
+	scanned := 0
+	lastDisplayed := -1
+	var lastRecord *dbf.Record
+
+	for _, i := range seq[startPos:] {
+		if opts.maxRecords > 0 && displayed >= opts.maxRecords {
+			break
+		}
+		if opts.maxScanned > 0 && scanned >= opts.maxScanned {
+			break
+		}
+		scanned++
+
+		rec, err := area.Table.ReadRecordAt(rseeker, i)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("*** Error reading record %d: %w", i, err)
+		}
+
+		area.RecordNo = i
+		area.ActiveRecord = rec
+
+		if whileExp != nil {
+			res, err := expr.Eval(whileExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in WHILE clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** WHILE clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				break
+			}
+		}
+
+		if forExp != nil {
+			res, err := expr.Eval(forExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in FOR clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** FOR clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				continue
+			}
+		}
+
+		fmt.Fprintf(out, "%5d  ", i+1)
+		var valParts []string
+		for j, col := range cols {
+			valObj, err := expr.Eval(col.expr, env)
+			if err != nil {
+				valParts = append(valParts, fmt.Sprintf("%-*s", widths[j], ""))
+				continue
+			}
+			valParts = append(valParts, formatColumnValue(col, valObj, widths[j]))
+		}
+		fmt.Fprintf(out, "%s\r\n", strings.Join(valParts, "  "))
+
+		displayed++
+		lastDisplayed = i
+		lastRecord = rec
+	}
+
+	if opts.moveToEOFAfter && whileExp == nil {
+		area.RecordNo = recCount
+		area.ActiveRecord = nil
+	} else if lastDisplayed >= 0 {
+		area.RecordNo = lastDisplayed
+		area.ActiveRecord = lastRecord
+	}
+
+	return nil
+}
+
+func formatColumnValue(col column, valObj expr.Object, width int) string {
+	if col.fd != nil {
+		switch col.fd.Type {
+		case dbf.FieldTypeChar:
+			return fmt.Sprintf("%-*s", width, valObj.String())
+		case dbf.FieldTypeNumeric:
+			if numObj, ok := valObj.(*expr.NumberObject); ok {
+				if col.fd.DecimalCount > 0 {
+					return fmt.Sprintf("%*.*f", width, col.fd.DecimalCount, numObj.Value)
+				}
+				return fmt.Sprintf("%*.0f", width, numObj.Value)
+			}
+			return fmt.Sprintf("%*s", width, valObj.String())
+		case dbf.FieldTypeLogical:
+			return fmt.Sprintf("%-*s", width, valObj.String())
+		default:
+			return fmt.Sprintf("%-*s", width, valObj.String())
+		}
+	}
+
+	switch v := valObj.(type) {
+	case *expr.NumberObject:
+		return fmt.Sprintf("%*.2f", width, v.Value)
+	default:
+		return fmt.Sprintf("%-*s", width, valObj.String())
+	}
+}
+
+func parseForWhileClauses(cmd Command) (expr.Expression, expr.Expression, error) {
+	var forExp expr.Expression
+	if cmd.ForClause != "" {
+		lexer := expr.NewLexer(cmd.ForClause)
+		parser := expr.NewParser(lexer)
+		forExp = parser.ParseExpression()
+		if len(parser.Errors()) > 0 {
+			return nil, nil, fmt.Errorf("*** Syntax error in FOR clause: %s", strings.Join(parser.Errors(), "; "))
+		}
+	}
+
+	var whileExp expr.Expression
+	if cmd.WhileClause != "" {
+		lexer := expr.NewLexer(cmd.WhileClause)
+		parser := expr.NewParser(lexer)
+		whileExp = parser.ParseExpression()
+		if len(parser.Errors()) > 0 {
+			return nil, nil, fmt.Errorf("*** Syntax error in WHILE clause: %s", strings.Join(parser.Errors(), "; "))
+		}
+	}
+
+	return forExp, whileExp, nil
+}
+
+func recordSequence(area *context.WorkArea) ([]int, error) {
+	recCount := int(area.Table.Header.RecordCount)
+	seq := make([]int, recCount)
+	for i := range seq {
+		seq[i] = i
+	}
+	return seq, nil
+}
+
+func positionInSequence(seq []int, recNo, recCount int) int {
+	if recNo >= recCount {
+		return len(seq)
+	}
+	for pos, recIdx := range seq {
+		if recIdx == recNo {
+			return pos
+		}
+	}
+	return len(seq)
+}
+
+func splitCommaOutsideParens(s string) []string {
+	var parts []string
+	var cur strings.Builder
+	parens := 0
+	inSingle := false
+	inDouble := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case ch == '\'' && !inDouble:
+			inSingle = !inSingle
+			cur.WriteByte(ch)
+		case ch == '"' && !inSingle:
+			inDouble = !inDouble
+			cur.WriteByte(ch)
+		case ch == '(' && !inSingle && !inDouble:
+			parens++
+			cur.WriteByte(ch)
+		case ch == ')' && !inSingle && !inDouble:
+			parens--
+			cur.WriteByte(ch)
+		case ch == ',' && !inSingle && !inDouble && parens == 0:
+			parts = append(parts, strings.TrimSpace(cur.String()))
+			cur.Reset()
+		default:
+			cur.WriteByte(ch)
+		}
+	}
+	if cur.Len() > 0 {
+		parts = append(parts, strings.TrimSpace(cur.String()))
+	}
+	return parts
 }
 
 func displayStructure(ctx *context.Context) error {

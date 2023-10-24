@@ -24,3 +24,7 @@ func resolveDataPath(ctx *context.Context, filename, defaultExt string) string {
 func resolveDBFFilePath(ctx *context.Context, filename string) string {
 	return resolveDataPath(ctx, filename, ".dbf")
 }
+
+func resolveOutputPath(ctx *context.Context, filename string) string {
+	return resolveDataPath(ctx, filename, "")
+}
