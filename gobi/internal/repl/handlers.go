@@ -10,6 +10,7 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
+	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
 func handleQuit(ctx *context.Context, cmd Command) error {
@@ -87,10 +88,31 @@ func handleClose(ctx *context.Context, cmd Command) error {
 
 func handleDisplay(ctx *context.Context, cmd Command) error {
 	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
-	if arg == "STRUCTURE" {
+	switch arg {
+	case "STRUCTURE":
 		return displayStructure(ctx)
+	default:
+		if cmd.ToClause != "" {
+			return fmt.Errorf("*** DISPLAY does not support TO clause")
+		}
+		return outputRecords(ctx, cmd, outputRecordsOpts{
+			maxRecords:       displayPageSize(ctx),
+			startFromCurrent: true,
+			moveToEOFAfter:   false,
+		})
 	}
-	return fmt.Errorf("*** DISPLAY: feature not yet implemented")
+}
+
+func displayPageSize(ctx *context.Context) int {
+	rows := term.DefaultRows
+	if ctx != nil && ctx.Screen != nil {
+		rows = ctx.Screen.Rows()
+	}
+	size := rows - 4
+	if size < 1 {
+		size = 1
+	}
+	return size
 }
 
 type column struct {

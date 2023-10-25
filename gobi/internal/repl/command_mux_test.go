@@ -2,6 +2,7 @@ package repl
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -863,5 +864,191 @@ func TestDispatchList(t *testing.T) {
 	fileOut := string(fileBytes)
 	if !strings.Contains(fileOut, "Alice") || !strings.Contains(fileOut, "Bob") || !strings.Contains(fileOut, "Charlie") {
 		t.Fatalf("redirected file content incorrect: %q", fileOut)
+	}
+}
+
+func createTempDBFWithNRecords(t *testing.T, dir string, name string, count int) string {
+	records := make([][]byte, count)
+	for i := 0; i < count; i++ {
+		nameField := fmt.Sprintf("U%-9d", i+1)
+		records[i] = append([]byte{0x20}, append([]byte(nameField), []byte("  1")...)...)
+	}
+	return createTempDBFWithRecords(t, dir, name, records)
+}
+
+func countRecordDataLines(output string) int {
+	count := 0
+	for _, line := range strings.Split(output, "\r\n") {
+		if len(line) >= 6 && line[0] == ' ' && line[5] == ' ' {
+			count++
+		}
+	}
+	return count
+}
+
+func TestDispatchDisplayNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "DISPLAY"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchDisplayRecords(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createTempDBFWithNRecords(t, tempDir, "dispdb.dbf", 25)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "GO", Args: "TOP"}); err != nil {
+		t.Fatalf("unexpected error on GO TOP: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "DISPLAY", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error on DISPLAY: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "Record#") || !strings.Contains(output, "NAME") {
+		t.Fatalf("expected header in output: %q", output)
+	}
+	pageSize := displayPageSize(ctx)
+	if count := countRecordDataLines(output); count != pageSize {
+		t.Fatalf("expected %d data lines, got %d", pageSize, count)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.RecordNo != pageSize-1 {
+		t.Fatalf("expected cursor on last displayed record, got index %d", area.RecordNo)
+	}
+
+	stdout.Reset()
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	if count := countRecordDataLines(stdout.String()); count != 25 {
+		t.Fatalf("expected LIST to show all 25 records, got %d", count)
+	}
+}
+
+func TestDispatchDisplayPagination(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createTempDBFWithNRecords(t, tempDir, "pagedb.dbf", 25)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "GO", Args: "TOP"}); err != nil {
+		t.Fatalf("unexpected error on GO TOP: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "DISPLAY"}); err != nil {
+		t.Fatalf("unexpected error on first DISPLAY: %v", err)
+	}
+	if count := countRecordDataLines(stdout.String()); count != displayPageSize(ctx) {
+		t.Fatalf("expected first page of %d records, got %d", displayPageSize(ctx), count)
+	}
+
+	area := ctx.GetActiveArea()
+	if err := commandMux.Dispatch(ctx, Command{Verb: "SKIP", Args: "1"}); err != nil {
+		t.Fatalf("unexpected error on SKIP: %v", err)
+	}
+
+	stdout.Reset()
+	if err := commandMux.Dispatch(ctx, Command{Verb: "DISPLAY"}); err != nil {
+		t.Fatalf("unexpected error on second DISPLAY: %v", err)
+	}
+	if count := countRecordDataLines(stdout.String()); count != 5 {
+		t.Fatalf("expected second page of 5 records, got %d", count)
+	}
+	if area.RecordNo != 24 {
+		t.Fatalf("expected cursor on last record, got index %d", area.RecordNo)
+	}
+}
+
+func TestDispatchDisplayFromCurrentRecord(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createTempDBFWithNRecords(t, tempDir, "curdb.dbf", 10)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "GOTO", Args: "8"}); err != nil {
+		t.Fatalf("unexpected error on GOTO: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "DISPLAY", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error on DISPLAY: %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "    8") {
+		t.Fatalf("expected DISPLAY to start at record 8, got: %q", output)
+	}
+	if count := countRecordDataLines(output); count != 3 {
+		t.Fatalf("expected 3 records from position 8, got %d", count)
+	}
+}
+
+func TestDispatchDisplayForWhile(t *testing.T) {
+	tempDir := t.TempDir()
+
+	rec1 := append([]byte{0x2A}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x2A}, append([]byte("Bob       "), []byte(" 35")...)...)
+	rec3 := append([]byte{0x20}, append([]byte("Charlie   "), []byte(" 45")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "dispfilter.dbf", [][]byte{rec1, rec2, rec3})
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:      "DISPLAY",
+		Args:      "NAME",
+		ForClause: "DELETED()",
+	}); err != nil {
+		t.Fatalf("unexpected error on DISPLAY FOR: %v", err)
+	}
+	output := stdout.String()
+	if count := countRecordDataLines(output); count != 2 {
+		t.Fatalf("expected 2 deleted records, got %d", count)
+	}
+	if strings.Contains(output, "Charlie") {
+		t.Fatalf("expected deleted records only, got: %q", output)
+	}
+}
+
+func TestDispatchDisplayRejectsTO(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "dispdb.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "DISPLAY", ToClause: "out.txt"})
+	if err == nil || !strings.Contains(err.Error(), "does not support TO") {
+		t.Fatalf("expected TO clause error, got %v", err)
 	}
 }
