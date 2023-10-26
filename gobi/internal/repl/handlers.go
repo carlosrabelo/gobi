@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -550,4 +551,129 @@ func skipRecords(ctx *context.Context, delta int) error {
 		return fmt.Errorf("*** No database file is in use")
 	}
 	return goToRecord(ctx, area.RecordNo+1+delta)
+}
+
+func handleAppend(ctx *context.Context, cmd Command) error {
+	if strings.TrimSpace(cmd.FromClause) != "" {
+		return fmt.Errorf("*** APPEND FROM: feature not yet implemented")
+	}
+	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
+	if arg != "" {
+		return fmt.Errorf("*** APPEND requires FROM <filename>")
+	}
+
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
+	if !ok {
+		return fmt.Errorf("*** Database file is not writable")
+	}
+
+	reader := ctx.StdinReader()
+	tbl := area.Table
+
+	for {
+		values := make([]interface{}, len(tbl.Fields))
+		cancelled := false
+
+		for i, fd := range tbl.Fields {
+			line, err := readAppendLine(ctx, reader, fmt.Sprintf("%s ? ", fd.Name))
+			if err != nil {
+				if err == io.EOF {
+					return nil
+				}
+				return fmt.Errorf("*** Error reading input: %w", err)
+			}
+
+			if i == 0 && strings.TrimSpace(line) == "" {
+				cancelled = true
+				break
+			}
+
+			val, err := parseFieldInput(fd, line)
+			if err != nil {
+				return err
+			}
+			values[i] = val
+		}
+
+		if cancelled {
+			break
+		}
+
+		rec, err := dbf.NewRecord(tbl, false, values)
+		if err != nil {
+			return fmt.Errorf("*** Error building record: %w", err)
+		}
+
+		recNo, err := tbl.AppendRecord(wseeker, rec)
+		if err != nil {
+			return fmt.Errorf("*** Error appending record: %w", err)
+		}
+
+		area.RecordNo = recNo
+		area.ActiveRecord = rec
+
+		if err := syncOpenIndexesAfterAppend(ctx, area, recNo); err != nil {
+			return err
+		}
+
+		talkPrint(ctx, "New record added\r\n")
+	}
+
+	return nil
+}
+
+func readAppendLine(ctx *context.Context, reader *bufio.Reader, promptText string) (string, error) {
+	fmt.Fprint(ctx.Stdout, promptText)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(line, "\r\n"), nil
+}
+
+func parseFieldInput(fd dbf.FieldDescriptor, line string) (interface{}, error) {
+	switch fd.Type {
+	case dbf.FieldTypeChar:
+		return line, nil
+	case dbf.FieldTypeNumeric:
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			return "", nil
+		}
+		if _, err := strconv.ParseFloat(trimmed, 64); err != nil {
+			return nil, fmt.Errorf("*** Invalid numeric value for %s: %s", fd.Name, line)
+		}
+		return trimmed, nil
+	case dbf.FieldTypeLogical:
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			return false, nil
+		}
+		switch strings.ToUpper(trimmed)[0] {
+		case 'T', 'Y':
+			return true, nil
+		case 'F', 'N':
+			return false, nil
+		default:
+			return nil, fmt.Errorf("*** Invalid logical value for %s: %s", fd.Name, line)
+		}
+	default:
+		return nil, fmt.Errorf("*** Unsupported field type for %s", fd.Name)
+	}
+}
+
+func syncOpenIndexesAfterAppend(ctx *context.Context, area *context.WorkArea, recNo int) error {
+	return nil
+}
+
+func talkPrint(ctx *context.Context, s string) {
+	if ctx == nil || ctx.Stdout == nil || ctx.Config == nil || !ctx.Config.Talk {
+		return
+	}
+	fmt.Fprint(ctx.Stdout, s)
 }

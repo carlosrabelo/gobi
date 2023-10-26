@@ -74,7 +74,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `SKIP` moving cursor relative to active database size
 - [x] `LIST` showing fields with FOR/WHILE filtering
 - [x] `DISPLAY` paginating records list to stdout
-- [ ] `APPEND` line prompt adding records interactively
+- [x] `APPEND` line prompt adding records interactively
 - [ ] `REPLACE` field value evaluations
 - [ ] `DELETE` marking active record for deletion
 - [ ] `RECALL` restoring deleted record marker

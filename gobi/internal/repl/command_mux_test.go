@@ -1052,3 +1052,133 @@ func TestDispatchDisplayRejectsTO(t *testing.T) {
 		t.Fatalf("expected TO clause error, got %v", err)
 	}
 }
+
+func TestDispatchAppendNoDatabase(t *testing.T) {
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("\n")
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "APPEND"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchAppendCancelImmediately(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createTempDBFWithRecords(t, tempDir, "appenddb.dbf", nil)
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("\n")
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "APPEND"}); err != nil {
+		t.Fatalf("unexpected error on APPEND: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.Table.Header.RecordCount != 0 {
+		t.Fatalf("expected no records appended, got %d", area.Table.Header.RecordCount)
+	}
+}
+
+func TestDispatchAppendRecord(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createTempDBFWithRecords(t, tempDir, "appenddb.dbf", nil)
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("Alice\n25\n\n")
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "APPEND"}); err != nil {
+		t.Fatalf("unexpected error on APPEND: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.Table.Header.RecordCount != 1 {
+		t.Fatalf("expected 1 record, got %d", area.Table.Header.RecordCount)
+	}
+	if area.RecordNo != 0 {
+		t.Fatalf("expected cursor on new record 0, got %d", area.RecordNo)
+	}
+	if area.ActiveRecord == nil {
+		t.Fatal("expected active record to be loaded")
+	}
+
+	stdout.Reset()
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME, AGE"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "Alice") || !strings.Contains(output, "25") {
+		t.Fatalf("expected appended record in LIST output, got: %q", output)
+	}
+}
+
+func TestDispatchAppendMultipleRecords(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createTempDBFWithRecords(t, tempDir, "appenddb.dbf", nil)
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("Alice\n25\nBob\n35\n\n")
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "APPEND"}); err != nil {
+		t.Fatalf("unexpected error on APPEND: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.Table.Header.RecordCount != 2 {
+		t.Fatalf("expected 2 records, got %d", area.Table.Header.RecordCount)
+	}
+	if area.RecordNo != 1 {
+		t.Fatalf("expected cursor on second record, got index %d", area.RecordNo)
+	}
+}
+
+func TestDispatchAppendInvalidNumeric(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createTempDBFWithRecords(t, tempDir, "appenddb.dbf", nil)
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("Alice\nxyz\n")
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "APPEND"})
+	if err == nil || !strings.Contains(err.Error(), "Invalid numeric value") {
+		t.Fatalf("expected invalid numeric error, got %v", err)
+	}
+}
+
+func TestDispatchAppendRequiresFrom(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createTempDBFWithRecords(t, tempDir, "appenddb.dbf", nil)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "APPEND", Args: "something"})
+	if err == nil || !strings.Contains(err.Error(), "requires FROM") {
+		t.Fatalf("expected FROM requirement error, got %v", err)
+	}
+}
