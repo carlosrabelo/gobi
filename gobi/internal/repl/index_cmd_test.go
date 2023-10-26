@@ -54,3 +54,36 @@ func TestINDEXON(t *testing.T) {
 		t.Fatalf("search: rec=%d ok=%v err=%v", rec, ok, err)
 	}
 }
+
+func TestSEEKHitAndMiss(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "peeps.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 4},
+		{Name: "AGE", Type: 'N', Length: 3, Decimals: 0},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "ANN"}, {Num: 10}}},
+		{Values: []dbf.Value{{Str: "BOB"}, {Num: 20}}},
+	})
+	ctx := testCtx(t, dir)
+	ctx.Config.Safety = false
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("USE peeps")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mux.Dispatch(ctx, command.Split("INDEX ON AGE TO ages")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mux.Dispatch(ctx, command.Split("SEEK 20")); err != nil {
+		t.Fatal(err)
+	}
+	a := ctx.Active()
+	if !a.Found || a.Cursor != 2 {
+		t.Fatalf("SEEK hit: found=%v cursor=%d", a.Found, a.Cursor)
+	}
+	if err := mux.Dispatch(ctx, command.Split("SEEK 99")); err != nil {
+		t.Fatal(err)
+	}
+	if a.Found || a.Cursor != 3 {
+		t.Fatalf("SEEK miss: found=%v cursor=%d", a.Found, a.Cursor)
+	}
+}
