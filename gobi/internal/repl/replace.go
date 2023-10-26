@@ -114,7 +114,7 @@ func replaceOne(ctx *context.Context, env expr.Env, tree expr.Expression, fi int
 		return fail(ctx, "%s", err.Error())
 	}
 	a.Record = rec
-	return nil
+	return syncAllIndexes(ctx)
 }
 
 func parseReplaceArgs(args string) (field, exprSrc string, err error) {

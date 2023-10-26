@@ -3,6 +3,7 @@ package repl
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
@@ -85,5 +86,34 @@ func TestSEEKHitAndMiss(t *testing.T) {
 	}
 	if a.Found || a.Cursor != 3 {
 		t.Fatalf("SEEK miss: found=%v cursor=%d", a.Found, a.Cursor)
+	}
+}
+
+func TestAPPENDUpdatesIndex(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "peeps.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 4},
+		{Name: "AGE", Type: 'N', Length: 3, Decimals: 0},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "ANN"}, {Num: 10}}},
+	})
+	ctx := testCtx(t, dir)
+	ctx.Config.Safety = false
+	ctx.Stdin = strings.NewReader("DAN\n40\n\n")
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("USE peeps")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mux.Dispatch(ctx, command.Split("INDEX ON AGE TO ages")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mux.Dispatch(ctx, command.Split("APPEND")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mux.Dispatch(ctx, command.Split("SEEK 40")); err != nil {
+		t.Fatal(err)
+	}
+	if !ctx.Active().Found || ctx.Active().Cursor != 2 {
+		t.Fatalf("APPEND not in index: found=%v cursor=%d", ctx.Active().Found, ctx.Active().Cursor)
 	}
 }
