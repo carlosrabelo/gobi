@@ -55,6 +55,9 @@ func cmdAPPEND(ctx *context.Context, cmd command.Command) error {
 		if err := a.LoadCurrent(); err != nil {
 			return fail(ctx, "%s", err.Error())
 		}
+		if err := appendIndexKeys(ctx, a.Cursor); err != nil {
+			return err
+		}
 	}
 	return nil
 }
