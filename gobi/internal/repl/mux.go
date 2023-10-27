@@ -64,6 +64,7 @@ func NewMux() *Mux {
 	m.Register("REINDEX", cmdREINDEX)
 	m.Register("FIND", cmdFIND)
 	m.Register("SEEK", cmdSEEK)
+	m.Register("SORT", cmdSORT)
 	m.Register("DO", func(ctx *context.Context, cmd command.Command) error {
 		return m.cmdDO(ctx, cmd)
 	})
