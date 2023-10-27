@@ -75,7 +75,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `LIST` showing fields with FOR/WHILE filtering
 - [x] `DISPLAY` paginating records list to stdout
 - [x] `APPEND` line prompt adding records interactively
-- [ ] `REPLACE` field value evaluations
+- [x] `REPLACE` field value evaluations
 - [ ] `DELETE` marking active record for deletion
 - [ ] `RECALL` restoring deleted record marker
 - [ ] `PACK` rewriting DBF to drop deleted records

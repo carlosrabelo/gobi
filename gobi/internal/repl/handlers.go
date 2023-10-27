@@ -671,9 +671,206 @@ func syncOpenIndexesAfterAppend(ctx *context.Context, area *context.WorkArea, re
 	return nil
 }
 
-func talkPrint(ctx *context.Context, s string) {
+func syncOpenIndexesAfterReplace(ctx *context.Context, area *context.WorkArea, recNo int, oldRec *dbf.Record) error {
+	return nil
+}
+
+func handleReplace(ctx *context.Context, cmd Command) error {
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	scope, rest, err := parseScopeClause(cmd.Args)
+	if err != nil {
+		return err
+	}
+
+	fieldName, valueExprStr, err := parseReplaceArgs(rest)
+	if err != nil {
+		return err
+	}
+
+	fd, fieldIdx := area.Table.FieldByName(fieldName)
+	if fd == nil {
+		return fmt.Errorf("*** Unknown field: %s", fieldName)
+	}
+
+	lexer := expr.NewLexer(valueExprStr)
+	parser := expr.NewParser(lexer)
+	valueExp := parser.ParseExpression()
+	if len(parser.Errors()) > 0 {
+		return fmt.Errorf("*** Syntax error in REPLACE expression: %s", strings.Join(parser.Errors(), "; "))
+	}
+
+	forExp, whileExp, err := parseForWhileClauses(cmd)
+	if err != nil {
+		return err
+	}
+
+	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
+	if !ok {
+		return fmt.Errorf("*** Database file is not writable")
+	}
+
+	tbl := area.Table
+	recCount := int(tbl.Header.RecordCount)
+	startRec, limit := scanRange(area, scope, forExp != nil, whileExp != nil, true)
+	if !scope.explicit && forExp == nil && whileExp == nil && startRec >= recCount {
+		return fmt.Errorf("*** Record number out of range")
+	}
+
+	env := newReplEnvironment(ctx)
+	replaced := 0
+	scanned := 0
+	lastReplaced := -1
+	var lastRecord *dbf.Record
+
+	for i := startRec; i < recCount; i++ {
+		if limit > 0 && scanned >= limit {
+			break
+		}
+		scanned++
+
+		rec, err := tbl.ReadRecordAt(wseeker, i)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("*** Error reading record %d: %w", i, err)
+		}
+
+		area.RecordNo = i
+		area.ActiveRecord = rec
+
+		if whileExp != nil {
+			res, err := expr.Eval(whileExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in WHILE clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** WHILE clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				break
+			}
+		}
+
+		if forExp != nil {
+			res, err := expr.Eval(forExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in FOR clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** FOR clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				continue
+			}
+		}
+
+		valObj, err := expr.Eval(valueExp, env)
+		if err != nil {
+			return fmt.Errorf("*** Evaluation error in REPLACE expression: %w", err)
+		}
+
+		val, err := exprObjectToValue(valObj)
+		if err != nil {
+			return err
+		}
+
+		updated, err := replaceRecordField(tbl, rec, fieldIdx, val)
+		if err != nil {
+			return fmt.Errorf("*** Error updating record %d: %w", i+1, err)
+		}
+
+		if err := tbl.WriteRecordAt(wseeker, i, updated); err != nil {
+			return fmt.Errorf("*** Error writing record %d: %w", i+1, err)
+		}
+
+		if err := syncOpenIndexesAfterReplace(ctx, area, i, rec); err != nil {
+			return err
+		}
+
+		area.ActiveRecord = updated
+		replaced++
+		lastReplaced = i
+		lastRecord = updated
+	}
+
+	if lastReplaced >= 0 {
+		area.RecordNo = lastReplaced
+		area.ActiveRecord = lastRecord
+	}
+
+	if replaced > 0 {
+		talkPrint(ctx, "%d record(s) replaced\r\n", replaced)
+	}
+
+	return nil
+}
+
+func parseReplaceArgs(args string) (string, string, error) {
+	args = strings.TrimSpace(args)
+	if args == "" {
+		return "", "", fmt.Errorf("*** REPLACE requires <field> WITH <expr>")
+	}
+
+	tokens := tokenize(args)
+	withIdx := -1
+	for i, tok := range tokens {
+		if strings.ToUpper(tok) == "WITH" {
+			withIdx = i
+			break
+		}
+	}
+	if withIdx < 1 {
+		return "", "", fmt.Errorf("*** REPLACE requires <field> WITH <expr>")
+	}
+
+	fieldName := strings.ToUpper(tokens[0])
+	valueExpr := joinTokens(tokens[withIdx+1:])
+	if valueExpr == "" {
+		return "", "", fmt.Errorf("*** REPLACE requires <field> WITH <expr>")
+	}
+
+	return fieldName, valueExpr, nil
+}
+
+func exprObjectToValue(obj expr.Object) (interface{}, error) {
+	switch v := obj.(type) {
+	case *expr.StringObject:
+		return v.Value, nil
+	case *expr.NumberObject:
+		return v.Value, nil
+	case *expr.BooleanObject:
+		return v.Value, nil
+	default:
+		return nil, fmt.Errorf("*** REPLACE expression must evaluate to a string, number, or logical value")
+	}
+}
+
+func replaceRecordField(tbl *dbf.Table, rec *dbf.Record, fieldIdx int, val interface{}) (*dbf.Record, error) {
+	values := make([]interface{}, len(tbl.Fields))
+	for i := range tbl.Fields {
+		if i == fieldIdx {
+			values[i] = val
+			continue
+		}
+		decoded, err := rec.DecodeField(tbl, i)
+		if err != nil {
+			return nil, err
+		}
+		values[i] = decoded
+	}
+	return dbf.NewRecord(tbl, rec.Deleted, values)
+}
+
+func talkPrint(ctx *context.Context, format string, args ...interface{}) {
 	if ctx == nil || ctx.Stdout == nil || ctx.Config == nil || !ctx.Config.Talk {
 		return
 	}
-	fmt.Fprint(ctx.Stdout, s)
+	fmt.Fprintf(ctx.Stdout, format, args...)
 }

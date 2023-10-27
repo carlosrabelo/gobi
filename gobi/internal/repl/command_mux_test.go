@@ -1182,3 +1182,148 @@ func TestDispatchAppendRequiresFrom(t *testing.T) {
 		t.Fatalf("expected FROM requirement error, got %v", err)
 	}
 }
+
+func createListTestDBF(t *testing.T, tempDir string) string {
+	rec1 := append([]byte{0x2A}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x2A}, append([]byte("Bob       "), []byte(" 35")...)...)
+	rec3 := append([]byte{0x20}, append([]byte("Charlie   "), []byte(" 45")...)...)
+	return createTempDBFWithRecords(t, tempDir, "listdb.dbf", [][]byte{rec1, rec2, rec3})
+}
+
+func TestDispatchReplaceNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "REPLACE", Args: `NAME WITH "X"`})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchReplaceInvalidSyntax(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "REPLACE", Args: "NAME"})
+	if err == nil || !strings.Contains(err.Error(), "WITH") {
+		t.Fatalf("expected REPLACE syntax error, got %v", err)
+	}
+}
+
+func TestDispatchReplaceUnknownField(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "REPLACE", Args: `NOPE WITH "X"`})
+	if err == nil || !strings.Contains(err.Error(), "Unknown field") {
+		t.Fatalf("expected unknown field error, got %v", err)
+	}
+}
+
+func TestDispatchReplaceCurrentRecord(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "REPLACE", Args: `NAME WITH "Updated"`}); err != nil {
+		t.Fatalf("unexpected error on REPLACE: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.ActiveRecord == nil {
+		t.Fatal("expected active record after REPLACE")
+	}
+
+	stdout.Reset()
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "Updated") || strings.Contains(output, "Alice") {
+		t.Fatalf("expected NAME=Updated on current record, got: %q", output)
+	}
+}
+
+func TestDispatchReplaceFor(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:      "REPLACE",
+		Args:      "AGE WITH 50",
+		ForClause: "DELETED()",
+	}); err != nil {
+		t.Fatalf("unexpected error on REPLACE FOR: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME, AGE"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "Alice") || !strings.Contains(output, "50") {
+		t.Fatalf("expected deleted Alice with AGE 50, got: %q", output)
+	}
+	if !strings.Contains(output, "Bob") {
+		t.Fatalf("expected Bob in output, got: %q", output)
+	}
+	if strings.Contains(output, "Charlie") && strings.Contains(strings.Split(output, "Charlie")[1], "50") {
+		t.Fatalf("expected Charlie to keep original age, got: %q", output)
+	}
+}
+
+func TestDispatchReplaceExpression(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "GOTO", Args: "3"}); err != nil {
+		t.Fatalf("unexpected error on GOTO: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "REPLACE", Args: `NAME WITH UPPER("charlie")`}); err != nil {
+		t.Fatalf("unexpected error on REPLACE: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	name, err := area.ActiveRecord.DecodeField(area.Table, 0)
+	if err != nil {
+		t.Fatalf("decode NAME: %v", err)
+	}
+	if s, ok := name.(string); !ok || !strings.Contains(s, "CHARLIE") {
+		t.Fatalf("expected NAME=CHARLIE, got %#v", name)
+	}
+}
