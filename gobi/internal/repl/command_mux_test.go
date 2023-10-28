@@ -1327,3 +1327,86 @@ func TestDispatchReplaceExpression(t *testing.T) {
 		t.Fatalf("expected NAME=CHARLIE, got %#v", name)
 	}
 }
+
+func TestDispatchDeleteNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "DELETE"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchDeleteCurrentRecord(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "GOTO", Args: "3"}); err != nil {
+		t.Fatalf("unexpected error on GOTO: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "DELETE"}); err != nil {
+		t.Fatalf("unexpected error on DELETE: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.ActiveRecord == nil || !area.ActiveRecord.Deleted {
+		t.Fatal("expected current record to be marked deleted")
+	}
+}
+
+func TestDispatchDeleteFor(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:      "DELETE",
+		ForClause: ".T.",
+	}); err != nil {
+		t.Fatalf("unexpected error on DELETE FOR: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME", ForClause: "DELETED()"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "Alice") || !strings.Contains(output, "Bob") || !strings.Contains(output, "Charlie") {
+		t.Fatalf("expected all records deleted, got: %q", output)
+	}
+}
+
+func TestDispatchDeleteAlreadyDeleted(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "DELETE"}); err != nil {
+		t.Fatalf("unexpected error on DELETE already-deleted record: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if !area.ActiveRecord.Deleted {
+		t.Fatal("expected active record to remain deleted")
+	}
+}

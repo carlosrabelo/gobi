@@ -874,3 +874,130 @@ func talkPrint(ctx *context.Context, format string, args ...interface{}) {
 	}
 	fmt.Fprintf(ctx.Stdout, format, args...)
 }
+
+func handleDelete(ctx *context.Context, cmd Command) error {
+	scope, rest, err := parseScopeClause(cmd.Args)
+	if err != nil {
+		return err
+	}
+	if rest != "" {
+		return fmt.Errorf("*** Unexpected argument: %s", rest)
+	}
+
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	forExp, whileExp, err := parseForWhileClauses(cmd)
+	if err != nil {
+		return err
+	}
+
+	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
+	if !ok {
+		return fmt.Errorf("*** Database file is not writable")
+	}
+
+	tbl := area.Table
+	recCount := int(tbl.Header.RecordCount)
+	startRec, limit := scanRange(area, scope, forExp != nil, whileExp != nil, true)
+	if !scope.explicit && forExp == nil && whileExp == nil && startRec >= recCount {
+		return fmt.Errorf("*** Record number out of range")
+	}
+
+	env := newReplEnvironment(ctx)
+	deleted := 0
+	scanned := 0
+	lastDeleted := -1
+	var lastRecord *dbf.Record
+
+	for i := startRec; i < recCount; i++ {
+		if limit > 0 && scanned >= limit {
+			break
+		}
+		scanned++
+
+		rec, err := tbl.ReadRecordAt(wseeker, i)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("*** Error reading record %d: %w", i, err)
+		}
+
+		area.RecordNo = i
+		area.ActiveRecord = rec
+
+		if whileExp != nil {
+			res, err := expr.Eval(whileExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in WHILE clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** WHILE clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				break
+			}
+		}
+
+		if forExp != nil {
+			res, err := expr.Eval(forExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in FOR clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** FOR clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				continue
+			}
+		}
+
+		if rec.Deleted {
+			lastDeleted = i
+			lastRecord = rec
+			continue
+		}
+
+		marked, err := markRecordDeleted(tbl, rec)
+		if err != nil {
+			return fmt.Errorf("*** Error deleting record %d: %w", i+1, err)
+		}
+
+		if err := tbl.WriteRecordAt(wseeker, i, marked); err != nil {
+			return fmt.Errorf("*** Error writing record %d: %w", i+1, err)
+		}
+
+		area.ActiveRecord = marked
+		deleted++
+		lastDeleted = i
+		lastRecord = marked
+	}
+
+	if lastDeleted >= 0 {
+		area.RecordNo = lastDeleted
+		area.ActiveRecord = lastRecord
+	}
+
+	if deleted > 0 {
+		talkPrint(ctx, "%d record(s) deleted\r\n", deleted)
+	}
+
+	return nil
+}
+
+func markRecordDeleted(tbl *dbf.Table, rec *dbf.Record) (*dbf.Record, error) {
+	values := make([]interface{}, len(tbl.Fields))
+	for i := range tbl.Fields {
+		decoded, err := rec.DecodeField(tbl, i)
+		if err != nil {
+			return nil, err
+		}
+		values[i] = decoded
+	}
+	return dbf.NewRecord(tbl, true, values)
+}
