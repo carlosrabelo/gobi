@@ -23,3 +23,20 @@ func TestAtSAY(t *testing.T) {
 		t.Fatalf("cell %q", ctx.Screen.CellAt(0, 0).Ch)
 	}
 }
+
+func TestAtGETLimit(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split(`STORE "x" TO V`))
+	for i := 0; i < 128; i++ {
+		if err := mux.Dispatch(ctx, command.Split("@ 0, 0 GET V")); err != nil {
+			t.Fatalf("get %d: %v", i, err)
+		}
+	}
+	if err := mux.Dispatch(ctx, command.Split("@ 0, 0 GET V")); err == nil {
+		t.Fatal("expected 129th GET error")
+	}
+	if len(mux.gets) != 128 {
+		t.Fatalf("pending %d", len(mux.gets))
+	}
+}
