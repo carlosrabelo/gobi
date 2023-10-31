@@ -11,6 +11,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/internal/config"
 	"github.com/carlosrabelo/gobi/gobi/internal/symbols"
+	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
 const (
@@ -24,6 +25,7 @@ type Context struct {
 	Areas      [AreaCount + 1]*Area // index 1 through 10
 	ActiveArea int
 	Symbols    *symbols.Registry
+	Screen     *term.Screen
 
 	Stdin  io.Reader
 	Stdout io.Writer
