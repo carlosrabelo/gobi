@@ -19,6 +19,7 @@ type Handler func(ctx *context.Context, cmd command.Command) error
 type Mux struct {
 	handlers map[string]Handler
 	prog     *Program
+	gets     []PendingGET
 }
 
 // NewMux returns a mux with the built-in verbs registered.
@@ -65,6 +66,9 @@ func NewMux() *Mux {
 	m.Register("FIND", cmdFIND)
 	m.Register("SEEK", cmdSEEK)
 	m.Register("SORT", cmdSORT)
+	m.Register("@", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdAt(ctx, cmd)
+	})
 	m.Register("DO", func(ctx *context.Context, cmd command.Command) error {
 		return m.cmdDO(ctx, cmd)
 	})
