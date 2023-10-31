@@ -69,6 +69,9 @@ func NewMux() *Mux {
 	m.Register("@", func(ctx *context.Context, cmd command.Command) error {
 		return m.cmdAt(ctx, cmd)
 	})
+	m.Register("READ", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdREAD(ctx, cmd)
+	})
 	m.Register("DO", func(ctx *context.Context, cmd command.Command) error {
 		return m.cmdDO(ctx, cmd)
 	})
