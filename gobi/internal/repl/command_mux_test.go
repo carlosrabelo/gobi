@@ -1410,3 +1410,85 @@ func TestDispatchDeleteAlreadyDeleted(t *testing.T) {
 		t.Fatal("expected active record to remain deleted")
 	}
 }
+
+func TestDispatchRecallNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "RECALL"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchRecallCurrentRecord(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "RECALL"}); err != nil {
+		t.Fatalf("unexpected error on RECALL: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.ActiveRecord == nil || area.ActiveRecord.Deleted {
+		t.Fatal("expected current record to be recalled")
+	}
+}
+
+func TestDispatchRecallFor(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:      "RECALL",
+		ForClause: "DELETED()",
+	}); err != nil {
+		t.Fatalf("unexpected error on RECALL FOR: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME", ForClause: "DELETED()"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	if count := countRecordDataLines(stdout.String()); count != 0 {
+		t.Fatalf("expected no deleted records after RECALL FOR, got %d", count)
+	}
+}
+
+func TestDispatchRecallNotDeleted(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "GOTO", Args: "3"}); err != nil {
+		t.Fatalf("unexpected error on GOTO: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "RECALL"}); err != nil {
+		t.Fatalf("unexpected error on RECALL active record: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.ActiveRecord.Deleted {
+		t.Fatal("expected active record to remain not deleted")
+	}
+}
