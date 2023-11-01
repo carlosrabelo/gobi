@@ -99,7 +99,8 @@ func TestAPPENDUpdatesIndex(t *testing.T) {
 	})
 	ctx := testCtx(t, dir)
 	ctx.Config.Safety = false
-	ctx.Stdin = strings.NewReader("DAN\n40\n\n")
+	// Full-screen APPEND: NAME then AGE then Ctrl-W then Esc.
+	ctx.Stdin = strings.NewReader("DAN\t40\x17\x1b")
 	mux := NewMux()
 	if err := mux.Dispatch(ctx, command.Split("USE peeps")); err != nil {
 		t.Fatal(err)

@@ -1,0 +1,185 @@
+package repl
+
+import (
+	"fmt"
+	"io"
+	"strconv"
+	"strings"
+
+	"github.com/carlosrabelo/gobi/gobi/internal/context"
+	"github.com/carlosrabelo/gobi/gobi/pkg/command"
+	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
+	"github.com/carlosrabelo/gobi/gobi/pkg/term"
+)
+
+func cmdEDIT(ctx *context.Context, cmd command.Command) error {
+	a := ctx.Active()
+	if !a.HasTable() {
+		return fail(ctx, "no database in use")
+	}
+	args := strings.TrimSpace(cmd.Args)
+	if args != "" {
+		n, err := strconv.Atoi(strings.Fields(args)[0])
+		if err != nil {
+			return fail(ctx, "invalid record number")
+		}
+		if err := ctx.Goto(n); err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+	}
+	if !a.Landed {
+		return fail(ctx, "no current record")
+	}
+	return editForm(ctx, false)
+}
+
+func editForm(ctx *context.Context, appendMode bool) error {
+	a := ctx.Active()
+	fields := a.Table.Header.Fields
+	scr := ensureScreen(ctx)
+	keys := term.NewReader(ctx.Stdin)
+
+	for {
+		if appendMode && uint64(a.RecCount()) >= maxRecords {
+			return fail(ctx, "record count limit exceeded")
+		}
+		values := make([]string, len(fields))
+		if !appendMode {
+			for i, f := range fields {
+				values[i] = strings.TrimRight(fieldDisplay(a.Record.Values[i], f), " ")
+			}
+		}
+		cur := 0
+		redraw := func() {
+			scr.Clear()
+			title := "APPEND"
+			if !appendMode {
+				title = fmt.Sprintf("RECORD #%5d", a.Cursor)
+			}
+			scr.WriteString(0, 0, title, false)
+			for i, f := range fields {
+				label := f.Name + ": "
+				scr.WriteString(i+1, 0, label, false)
+				text := values[i]
+				w := int(f.Length)
+				if len(text) > w {
+					text = text[:w]
+				}
+				for len(text) < w {
+					text += " "
+				}
+				scr.WriteString(i+1, len(label), text, i == cur && ctx.Config.Intensity)
+			}
+			_ = scr.PresentClear(ctx.Stdout)
+		}
+		redraw()
+
+		saveRecord := func() error {
+			rec := dbf.Record{Values: make([]dbf.Value, len(fields))}
+			if !appendMode {
+				rec.Deleted = a.Record.Deleted
+			}
+			for i, f := range fields {
+				v, err := parseFieldInput(f, values[i])
+				if err != nil {
+					return err
+				}
+				rec.Values[i] = v
+			}
+			if appendMode {
+				if err := a.Table.Append(rec); err != nil {
+					return err
+				}
+				a.Cursor = a.RecCount()
+				a.BOF = false
+				if err := a.LoadCurrent(); err != nil {
+					return err
+				}
+				return appendIndexKeys(ctx, a.Cursor)
+			}
+			if err := a.Table.Write(a.Cursor, rec); err != nil {
+				return err
+			}
+			a.Record = rec
+			return syncAllIndexes(ctx)
+		}
+
+		for {
+			k, err := keys.ReadKey()
+			if err != nil {
+				if err == io.EOF {
+					return nil
+				}
+				return fail(ctx, "%s", err.Error())
+			}
+			switch k {
+			case term.KeyEsc, term.KeyCtrlQ:
+				return nil
+			case term.KeyCtrlW:
+				if err := saveRecord(); err != nil {
+					return fail(ctx, "%s", err.Error())
+				}
+				if appendMode {
+					break // outer: new blank
+				}
+				return nil
+			case term.KeyCtrlX:
+				if appendMode {
+					continue
+				}
+				if err := saveRecord(); err != nil {
+					return fail(ctx, "%s", err.Error())
+				}
+				if a.Cursor >= a.RecCount() {
+					return nil
+				}
+				if err := ctx.Skip(1); err != nil {
+					return fail(ctx, "%s", err.Error())
+				}
+				goto outer
+			case term.KeyCtrlR:
+				if appendMode {
+					continue
+				}
+				if err := saveRecord(); err != nil {
+					return fail(ctx, "%s", err.Error())
+				}
+				if a.Cursor <= 1 {
+					return nil
+				}
+				if err := ctx.Skip(-1); err != nil {
+					return fail(ctx, "%s", err.Error())
+				}
+				goto outer
+			case term.KeyCtrlU:
+				if !appendMode {
+					a.Record.Deleted = !a.Record.Deleted
+					_ = a.Table.Write(a.Cursor, a.Record)
+					redraw()
+				}
+			case term.KeyCtrlY:
+				values[cur] = ""
+				redraw()
+			case term.KeyTab, term.KeyEnter:
+				cur = (cur + 1) % len(fields)
+				redraw()
+			case term.KeyBackspace:
+				if len(values[cur]) > 0 {
+					values[cur] = values[cur][:len(values[cur])-1]
+					redraw()
+				}
+			default:
+				if k >= 32 && k < 127 {
+					if len(values[cur]) < int(fields[cur].Length) {
+						values[cur] += string(byte(k))
+						redraw()
+					}
+				}
+			}
+			if k == term.KeyCtrlW && appendMode {
+				goto outer
+			}
+		}
+	outer:
+	}
+}

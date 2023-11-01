@@ -22,44 +22,7 @@ func cmdAPPEND(ctx *context.Context, cmd command.Command) error {
 	if from := strings.TrimSpace(cmd.Clauses["FROM"]); from != "" {
 		return appendFrom(ctx, from, cmd.Args)
 	}
-	fields := a.Table.Header.Fields
-	for {
-		if uint64(a.RecCount()) >= maxRecords {
-			return fail(ctx, "record count limit exceeded")
-		}
-		rec := dbf.Record{Values: make([]dbf.Value, len(fields))}
-		stopped := false
-		for i, f := range fields {
-			line, err := readPromptLine(ctx, f.Name+": ")
-			if err != nil {
-				return fail(ctx, "%s", err.Error())
-			}
-			if i == 0 && strings.TrimSpace(line) == "" {
-				stopped = true
-				break
-			}
-			v, err := parseFieldInput(f, line)
-			if err != nil {
-				return fail(ctx, "%s", err.Error())
-			}
-			rec.Values[i] = v
-		}
-		if stopped {
-			break
-		}
-		if err := a.Table.Append(rec); err != nil {
-			return fail(ctx, "%s", err.Error())
-		}
-		a.Cursor = a.RecCount()
-		a.BOF = false
-		if err := a.LoadCurrent(); err != nil {
-			return fail(ctx, "%s", err.Error())
-		}
-		if err := appendIndexKeys(ctx, a.Cursor); err != nil {
-			return err
-		}
-	}
-	return nil
+	return editForm(ctx, true)
 }
 
 func parseFieldInput(f dbf.Field, line string) (dbf.Value, error) {
