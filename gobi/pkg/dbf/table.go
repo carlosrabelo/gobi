@@ -129,3 +129,64 @@ func (tbl *Table) AppendRecord(w io.WriteSeeker, rec *Record) (int, error) {
 
 	return recNo, nil
 }
+
+func (tbl *Table) Pack(w io.ReadWriteSeeker) (int, error) {
+	trunc, ok := w.(interface{ Truncate(int64) error })
+	if !ok {
+		return 0, fmt.Errorf("dbf: underlying writer does not support truncate")
+	}
+
+	headerSize := tbl.HeaderSize()
+	headerBuf := make([]byte, headerSize)
+	if _, err := w.Seek(0, io.SeekStart); err != nil {
+		return 0, fmt.Errorf("dbf: seeking to header: %w", err)
+	}
+	if _, err := io.ReadFull(w, headerBuf); err != nil {
+		return 0, fmt.Errorf("dbf: reading header: %w", err)
+	}
+
+	oldCount := int(tbl.Header.RecordCount)
+	var active []*Record
+	for i := 0; i < oldCount; i++ {
+		rec, err := tbl.ReadRecordAt(w, i)
+		if err != nil {
+			return 0, fmt.Errorf("dbf: reading record %d: %w", i, err)
+		}
+		if rec.Deleted {
+			continue
+		}
+		data := make([]byte, len(rec.Data))
+		copy(data, rec.Data)
+		data[0] = deletionActive
+		active = append(active, &Record{Deleted: false, Data: data})
+	}
+
+	newCount := uint16(len(active))
+	binary.LittleEndian.PutUint16(headerBuf[1:3], newCount)
+
+	if _, err := w.Seek(0, io.SeekStart); err != nil {
+		return 0, fmt.Errorf("dbf: seeking to rewrite header: %w", err)
+	}
+	if _, err := w.Write(headerBuf); err != nil {
+		return 0, fmt.Errorf("dbf: writing header: %w", err)
+	}
+
+	for _, rec := range active {
+		if err := tbl.WriteRecord(w, rec); err != nil {
+			return 0, fmt.Errorf("dbf: writing packed record: %w", err)
+		}
+	}
+
+	if err := WriteEOF(w); err != nil {
+		return 0, fmt.Errorf("dbf: writing EOF marker: %w", err)
+	}
+
+	newSize := int64(headerSize + len(active)*int(tbl.Header.RecordLen) + 1)
+	if err := trunc.Truncate(newSize); err != nil {
+		return 0, fmt.Errorf("dbf: truncating file: %w", err)
+	}
+
+	removed := oldCount - len(active)
+	tbl.Header.RecordCount = newCount
+	return removed, nil
+}

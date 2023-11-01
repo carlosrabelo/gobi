@@ -1128,3 +1128,41 @@ func markRecordRecalled(tbl *dbf.Table, rec *dbf.Record) (*dbf.Record, error) {
 	}
 	return dbf.NewRecord(tbl, false, values)
 }
+
+func handlePack(ctx *context.Context, cmd Command) error {
+	if strings.TrimSpace(cmd.Args) != "" {
+		return fmt.Errorf("*** Unexpected argument: %s", strings.TrimSpace(cmd.Args))
+	}
+
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
+	if !ok {
+		return fmt.Errorf("*** Database file is not writable")
+	}
+
+	removed, err := area.Table.Pack(wseeker)
+	if err != nil {
+		return fmt.Errorf("*** Error packing database: %w", err)
+	}
+
+	area.RecordNo = 0
+	if area.Table.Header.RecordCount > 0 {
+		rec, err := area.Table.ReadRecordAt(wseeker, 0)
+		if err != nil {
+			return fmt.Errorf("*** Error reading first record after pack: %w", err)
+		}
+		area.ActiveRecord = rec
+	} else {
+		area.ActiveRecord = nil
+	}
+
+	if removed > 0 {
+		talkPrint(ctx, "%d record(s) packed\r\n", removed)
+	}
+
+	return nil
+}

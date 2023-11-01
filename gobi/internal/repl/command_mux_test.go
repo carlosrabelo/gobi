@@ -1492,3 +1492,105 @@ func TestDispatchRecallNotDeleted(t *testing.T) {
 		t.Fatal("expected active record to remain not deleted")
 	}
 }
+
+func TestDispatchPackNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "PACK"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchPackDropsDeleted(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "PACK"}); err != nil {
+		t.Fatalf("unexpected error on PACK: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.Table.Header.RecordCount != 1 {
+		t.Fatalf("expected 1 record after PACK, got %d", area.Table.Header.RecordCount)
+	}
+
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "Charlie") {
+		t.Fatalf("expected Charlie after PACK, got: %q", output)
+	}
+	if strings.Contains(output, "Alice") || strings.Contains(output, "Bob") {
+		t.Fatalf("expected deleted records removed, got: %q", output)
+	}
+
+	info, err := os.Stat(dbfPath)
+	if err != nil {
+		t.Fatalf("stat packed file: %v", err)
+	}
+	headerSize := 8 + 2*16 + 1
+	wantSize := int64(headerSize + 14 + 1)
+	if info.Size() != wantSize {
+		t.Fatalf("expected packed file size %d, got %d", wantSize, info.Size())
+	}
+}
+
+func TestDispatchPackNoDeleted(t *testing.T) {
+	tempDir := t.TempDir()
+	rec1 := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x20}, append([]byte("Bob       "), []byte(" 35")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "packdb.dbf", [][]byte{rec1, rec2})
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "PACK"}); err != nil {
+		t.Fatalf("unexpected error on PACK: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.Table.Header.RecordCount != 2 {
+		t.Fatalf("expected 2 records after PACK, got %d", area.Table.Header.RecordCount)
+	}
+}
+
+func TestDispatchPackAllDeleted(t *testing.T) {
+	tempDir := t.TempDir()
+	rec1 := append([]byte{0x2A}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x2A}, append([]byte("Bob       "), []byte(" 35")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "packdb.dbf", [][]byte{rec1, rec2})
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error opening table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "PACK"}); err != nil {
+		t.Fatalf("unexpected error on PACK: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.Table.Header.RecordCount != 0 {
+		t.Fatalf("expected 0 records after PACK, got %d", area.Table.Header.RecordCount)
+	}
+	if area.ActiveRecord != nil {
+		t.Fatal("expected no active record after packing empty table")
+	}
+}

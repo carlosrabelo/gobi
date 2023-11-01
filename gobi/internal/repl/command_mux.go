@@ -82,6 +82,7 @@ func (m *CommandMux) registerAll() {
 	m.register("REPLACE", handleReplace)
 	m.register("DELETE", handleDelete)
 	m.register("RECALL", handleRecall)
+	m.register("PACK", handlePack)
 }
 
 func stubHandler(verb string) HandlerFunc {
