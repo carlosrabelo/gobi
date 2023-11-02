@@ -1166,3 +1166,33 @@ func handlePack(ctx *context.Context, cmd Command) error {
 
 	return nil
 }
+
+func handleZap(ctx *context.Context, cmd Command) error {
+	if strings.TrimSpace(cmd.Args) != "" {
+		return fmt.Errorf("*** Unexpected argument: %s", strings.TrimSpace(cmd.Args))
+	}
+
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
+	if !ok {
+		return fmt.Errorf("*** Database file is not writable")
+	}
+
+	removed, err := area.Table.Zap(wseeker)
+	if err != nil {
+		return fmt.Errorf("*** Error zapping database: %w", err)
+	}
+
+	area.RecordNo = 0
+	area.ActiveRecord = nil
+
+	if removed > 0 {
+		talkPrint(ctx, "%d record(s) zapped\r\n", removed)
+	}
+
+	return nil
+}

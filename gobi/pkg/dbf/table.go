@@ -190,3 +190,44 @@ func (tbl *Table) Pack(w io.ReadWriteSeeker) (int, error) {
 	tbl.Header.RecordCount = newCount
 	return removed, nil
 }
+
+func (tbl *Table) Zap(w io.ReadWriteSeeker) (int, error) {
+	trunc, ok := w.(interface{ Truncate(int64) error })
+	if !ok {
+		return 0, fmt.Errorf("dbf: underlying writer does not support truncate")
+	}
+
+	headerSize := tbl.HeaderSize()
+	headerBuf := make([]byte, headerSize)
+	if _, err := w.Seek(0, io.SeekStart); err != nil {
+		return 0, fmt.Errorf("dbf: seeking to header: %w", err)
+	}
+	if _, err := io.ReadFull(w, headerBuf); err != nil {
+		return 0, fmt.Errorf("dbf: reading header: %w", err)
+	}
+
+	oldCount := int(tbl.Header.RecordCount)
+	binary.LittleEndian.PutUint16(headerBuf[1:3], 0)
+
+	if _, err := w.Seek(0, io.SeekStart); err != nil {
+		return 0, fmt.Errorf("dbf: seeking to rewrite header: %w", err)
+	}
+	if _, err := w.Write(headerBuf); err != nil {
+		return 0, fmt.Errorf("dbf: writing header: %w", err)
+	}
+
+	if _, err := w.Seek(int64(headerSize), io.SeekStart); err != nil {
+		return 0, fmt.Errorf("dbf: seeking to data area: %w", err)
+	}
+	if err := WriteEOF(w); err != nil {
+		return 0, fmt.Errorf("dbf: writing EOF marker: %w", err)
+	}
+
+	newSize := int64(headerSize + 1)
+	if err := trunc.Truncate(newSize); err != nil {
+		return 0, fmt.Errorf("dbf: truncating file: %w", err)
+	}
+
+	tbl.Header.RecordCount = 0
+	return oldCount, nil
+}
