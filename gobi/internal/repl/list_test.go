@@ -8,6 +8,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
+	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
 func TestLISTAllAndFieldList(t *testing.T) {
@@ -62,6 +63,29 @@ func TestLISTAllAndFieldList(t *testing.T) {
 	}
 	if strings.Contains(lines[0], "AGE") {
 		t.Fatalf("field list header still has AGE: %q", lines[0])
+	}
+}
+
+func TestDISPLAYPageFollowsScreenRows(t *testing.T) {
+	dir := t.TempDir()
+	fields := []dbf.Field{{Name: "N", Type: 'N', Length: 3, Decimals: 0}}
+	recs := make([]dbf.Record, 50)
+	for i := range recs {
+		recs[i] = dbf.Record{Values: []dbf.Value{{Num: float64(i + 1)}}}
+	}
+	mustCreateDBF(t, filepath.Join(dir, "many.dbf"), fields, recs)
+	ctx := testCtx(t, dir)
+	ctx.Screen = term.NewSize(80, 40)
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE many"))
+	out.Reset()
+	_ = mux.Dispatch(ctx, command.Split("DISPLAY"))
+	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	// header + (40-4)=36 data lines
+	if len(lines) != 37 {
+		t.Fatalf("want 37 lines, got %d", len(lines))
 	}
 }
 

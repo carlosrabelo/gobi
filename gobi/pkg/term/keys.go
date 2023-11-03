@@ -75,11 +75,27 @@ func (kr *Reader) ReadKey() (int, error) {
 	}
 }
 
-// PeekKey returns a waiting key without consuming, or 0 if none (non-blocking best-effort).
-// For injected streams, reads one byte if available via buffered unread only — tests use ReadKey.
+// Inkey returns the next waiting key without blocking. If the underlying reader
+// is not ready, returns 0. For test streams with buffered unread data, consumes one key.
 func (kr *Reader) Inkey() int {
 	if len(kr.buf) > 0 {
-		k, _ := kr.ReadKey()
+		k, err := kr.ReadKey()
+		if err != nil {
+			return 0
+		}
+		return k
+	}
+	// Non-blocking: try a one-byte read via type assert when possible.
+	type sized interface{ Len() int }
+	if s, ok := kr.r.(sized); ok && s.Len() == 0 {
+		return 0
+	}
+	// Best effort: if Read would block we cannot know; tests preload via strings.Reader.
+	if s, ok := kr.r.(interface{ Len() int }); ok && s.Len() > 0 {
+		k, err := kr.ReadKey()
+		if err != nil {
+			return 0
+		}
 		return k
 	}
 	return 0

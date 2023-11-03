@@ -26,6 +26,7 @@ type Context struct {
 	ActiveArea int
 	Symbols    *symbols.Registry
 	Screen     *term.Screen
+	Keys       *term.Reader
 
 	Stdin  io.Reader
 	Stdout io.Writer

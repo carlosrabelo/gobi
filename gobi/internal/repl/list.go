@@ -37,9 +37,16 @@ type listOpts struct {
 	pageLimit int  // 0 = no page cap; DISPLAY uses rows-4
 }
 
-func pageSize(*context.Context) int {
-	// Classic 24-row screen minus 4 until spec 018.
-	return 20
+func pageSize(ctx *context.Context) int {
+	rows := 24
+	if ctx.Screen != nil {
+		rows = ctx.Screen.Rows
+	}
+	n := rows - 4
+	if n < 1 {
+		n = 1
+	}
+	return n
 }
 
 func listRecords(ctx *context.Context, cmd command.Command, opts listOpts) error {
