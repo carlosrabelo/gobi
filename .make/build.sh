@@ -3,8 +3,5 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
-packages="$(go list ./... 2>/dev/null || true)"
-if [ -z "$packages" ]; then
-	exit 0
-fi
-go build ./...
+mkdir -p bin
+go build -o bin/gobi ./gobi/cmd/gobi

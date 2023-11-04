@@ -20,27 +20,38 @@ dBase III Plus interpreter written in Go.
 
 ## Installation
 
-This repository has no host program yet. Spec `019` adds the `gobi` binary and the install targets. Until then, clone the tree and use the Development targets below.
-
 ```bash
 git clone https://github.com/carlosrabelo/gobi.git
 cd gobi
+make build
+make install          # ~/.local/bin/gobi
+# make install-system # /usr/local/bin/gobi
 ```
 
 ## Usage
 
-There is no host program in this spec. Contributors work from the Makefile targets in Development.
+```bash
+gobi                  # dot prompt
+gobi script.prg       # run a command file, then exit
+gobi -e 'USE c; LIST' # run semicolon-separated commands, then exit
+make run -- -e QUIT   # build if needed and execute bin/gobi
+```
 
 ## Development
 
 ```bash
-make build       # go build ./... (does not write bin/gobi)
-make test        # go test ./...
-make test-cover  # coverage.out and coverage.html at the git root
-make fmt         # gofmt -w on sources under gobi/
-make lint        # go vet ./...
-make quality     # gofmt -l check, lint, and test
-make clean       # remove bin/* (keep .gitkeep), coverage.out, coverage.html
+make build            # write bin/gobi
+make run              # build if needed; run bin/gobi (args after --)
+make install          # copy bin/gobi to ~/.local/bin (no compile)
+make install-system   # copy bin/gobi to /usr/local/bin (no compile)
+make uninstall
+make uninstall-system
+make test             # go test ./...
+make test-cover       # coverage.out and coverage.html at the git root
+make fmt              # gofmt -w on sources under gobi/
+make lint             # go vet ./...
+make quality          # gofmt -l check, lint, and test
+make clean            # remove bin/* (keep .gitkeep), coverage.out, coverage.html
 ```
 
 ## License
