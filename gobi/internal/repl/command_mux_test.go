@@ -1667,3 +1667,126 @@ func TestDispatchZapEmptyTable(t *testing.T) {
 		t.Fatalf("expected 0 records after ZAP, got %d", area.Table.Header.RecordCount)
 	}
 }
+func TestDispatchCreateInteractive(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := filepath.Join(tempDir, "newdb.dbf")
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("NAME,C,10\nAGE,N,3,0\n\n")
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "CREATE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error on CREATE: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.Table == nil {
+		t.Fatal("expected table to be opened after CREATE")
+	}
+	if area.Alias != "NEWDB" {
+		t.Fatalf("expected alias NEWDB, got %s", area.Alias)
+	}
+	if area.Table.Header.RecordCount != 0 {
+		t.Fatalf("expected 0 records, got %d", area.Table.Header.RecordCount)
+	}
+	if len(area.Table.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(area.Table.Fields))
+	}
+
+	if _, err := os.Stat(dbfPath); err != nil {
+		t.Fatalf("expected created file on disk: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "STRUCTURE"}); err != nil {
+		t.Fatalf("unexpected error on LIST STRUCTURE: %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "NAME") || !strings.Contains(output, "AGE") {
+		t.Fatalf("expected created structure in output, got: %q", output)
+	}
+}
+
+func TestDispatchCreatePromptedFilename(t *testing.T) {
+	tempDir := t.TempDir()
+
+	ctx := testCtx()
+	ctx.Config.DefaultDir = tempDir
+	ctx.Stdin = strings.NewReader("promptdb\nNAME,C,5\n\n")
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "CREATE"}); err != nil {
+		t.Fatalf("unexpected error on CREATE: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.Table == nil {
+		t.Fatal("expected table to be opened after CREATE")
+	}
+	if area.Alias != "PROMPTDB" {
+		t.Fatalf("expected alias PROMPTDB, got %s", area.Alias)
+	}
+
+	dbfPath := filepath.Join(tempDir, "promptdb.dbf")
+	if _, err := os.Stat(dbfPath); err != nil {
+		t.Fatalf("expected created file on disk: %v", err)
+	}
+}
+
+func TestDispatchCreateDestroyExistingNo(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+
+	infoBefore, err := os.Stat(dbfPath)
+	if err != nil {
+		t.Fatalf("stat existing file: %v", err)
+	}
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("N\n")
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "CREATE", Args: dbfPath}); err != nil {
+		t.Fatalf("unexpected error on CREATE: %v", err)
+	}
+
+	infoAfter, err := os.Stat(dbfPath)
+	if err != nil {
+		t.Fatalf("stat existing file after cancel: %v", err)
+	}
+	if infoAfter.Size() != infoBefore.Size() {
+		t.Fatalf("expected existing file unchanged, size before=%d after=%d", infoBefore.Size(), infoAfter.Size())
+	}
+}
+
+func TestDispatchCreateBadFieldName(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := filepath.Join(tempDir, "baddb.dbf")
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("1BAD,C,5\n")
+	ctx.Stdout = &bytes.Buffer{}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "CREATE", Args: dbfPath})
+	if err == nil || !strings.Contains(err.Error(), "BAD NAME FIELD") {
+		t.Fatalf("expected BAD NAME FIELD error, got %v", err)
+	}
+	if _, statErr := os.Stat(dbfPath); statErr == nil {
+		t.Fatal("expected no file created after bad field name")
+	}
+}
+
+func TestDispatchCreateNoFields(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := filepath.Join(tempDir, "emptydb.dbf")
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("\n")
+	ctx.Stdout = &bytes.Buffer{}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "CREATE", Args: dbfPath})
+	if err == nil || !strings.Contains(err.Error(), "At least one field is required") {
+		t.Fatalf("expected at least one field error, got %v", err)
+	}
+}

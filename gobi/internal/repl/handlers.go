@@ -1196,3 +1196,162 @@ func handleZap(ctx *context.Context, cmd Command) error {
 
 	return nil
 }
+func handleCreate(ctx *context.Context, cmd Command) error {
+	reader := ctx.StdinReader()
+	filename := strings.TrimSpace(cmd.Args)
+
+	if filename == "" {
+		line, err := readAppendLine(ctx, reader, "ENTER FILENAME: ")
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("*** Error reading input: %w", err)
+		}
+		filename = strings.TrimSpace(line)
+		if filename == "" {
+			return fmt.Errorf("*** CREATE requires a filename")
+		}
+	}
+
+	filePath := resolveDBFFilePath(ctx, filename)
+
+	destroy, err := confirmDestroyExistingFile(ctx, reader, filePath)
+	if err != nil {
+		return err
+	}
+	if !destroy {
+		return nil
+	}
+
+	fmt.Fprintln(ctx.Stdout, "ENTER RECORD STRUCTURE AS FOLLOWS:")
+	fmt.Fprintln(ctx.Stdout, "FIELD NAME,TYPE,WIDTH,DECIMAL PLACES")
+
+	fields, err := readCreateFieldDefinitions(ctx, reader)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("*** Could not create file: %w", err)
+	}
+
+	tbl, err := dbf.Create(f, fields)
+	if err != nil {
+		f.Close()
+		return fmt.Errorf("*** Error creating database: %w", err)
+	}
+	tbl.Close()
+
+	return handleUse(ctx, Command{Verb: "USE", Args: filename})
+}
+
+func confirmDestroyExistingFile(ctx *context.Context, reader *bufio.Reader, filePath string) (bool, error) {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return true, nil
+	}
+
+	line, err := readAppendLine(ctx, reader, "DESTROY EXISTING FILE? (Y/N) ")
+	if err != nil {
+		if err == io.EOF {
+			return false, nil
+		}
+		return false, fmt.Errorf("*** Error reading input: %w", err)
+	}
+
+	switch strings.ToUpper(strings.TrimSpace(line)) {
+	case "Y":
+		return true, nil
+	case "N", "":
+		return false, nil
+	default:
+		return false, fmt.Errorf("*** Invalid response to DESTROY EXISTING FILE?")
+	}
+}
+
+func readCreateFieldDefinitions(ctx *context.Context, reader *bufio.Reader) ([]dbf.FieldDescriptor, error) {
+	var fields []dbf.FieldDescriptor
+	seenNames := make(map[string]bool)
+
+	for i := 1; i <= 32; i++ {
+		line, err := readAppendLine(ctx, reader, fmt.Sprintf("%03d ", i))
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("*** Error reading input: %w", err)
+		}
+		if strings.TrimSpace(line) == "" {
+			break
+		}
+
+		fd, err := parseCreateFieldDefinition(line)
+		if err != nil {
+			return nil, err
+		}
+		if seenNames[fd.Name] {
+			return nil, fmt.Errorf("*** Duplicate field name: %s", fd.Name)
+		}
+		seenNames[fd.Name] = true
+		fields = append(fields, fd)
+	}
+
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("*** At least one field is required")
+	}
+	return fields, nil
+}
+
+func parseCreateFieldDefinition(line string) (dbf.FieldDescriptor, error) {
+	parts := strings.Split(line, ",")
+	if len(parts) < 3 {
+		return dbf.FieldDescriptor{}, fmt.Errorf("*** Invalid field definition")
+	}
+
+	name := strings.ToUpper(strings.TrimSpace(parts[0]))
+	if err := dbf.ValidateFieldName(name); err != nil {
+		return dbf.FieldDescriptor{}, fmt.Errorf("*** BAD NAME FIELD")
+	}
+
+	typeStr := strings.ToUpper(strings.TrimSpace(parts[1]))
+	if len(typeStr) != 1 {
+		return dbf.FieldDescriptor{}, fmt.Errorf("*** Invalid field type")
+	}
+
+	width, err := strconv.Atoi(strings.TrimSpace(parts[2]))
+	if err != nil || width <= 0 || width > 254 {
+		return dbf.FieldDescriptor{}, fmt.Errorf("*** Invalid field width")
+	}
+
+	dec := 0
+	if len(parts) >= 4 {
+		decPart := strings.TrimSpace(parts[3])
+		if decPart != "" {
+			dec, err = strconv.Atoi(decPart)
+			if err != nil || dec < 0 {
+				return dbf.FieldDescriptor{}, fmt.Errorf("*** Invalid decimal places")
+			}
+		}
+	}
+
+	var fd dbf.FieldDescriptor
+	fd.Name = name
+
+	switch typeStr[0] {
+	case 'C':
+		fd.Type = dbf.FieldTypeChar
+		fd.Length = byte(width)
+	case 'N':
+		fd.Type = dbf.FieldTypeNumeric
+		fd.Length = byte(width)
+		fd.DecimalCount = byte(dec)
+	case 'L':
+		fd.Type = dbf.FieldTypeLogical
+		fd.Length = 1
+	default:
+		return dbf.FieldDescriptor{}, fmt.Errorf("*** Invalid field type")
+	}
+
+	return fd, nil
+}

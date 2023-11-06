@@ -80,7 +80,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `RECALL` restoring deleted record marker
 - [x] `PACK` rewriting DBF to drop deleted records
 - [x] `ZAP` truncating active DBF data area
-- [ ] `CREATE` interactively defining schema and creating new DBF
+- [x] `CREATE` interactively defining schema and creating new DBF
 - [ ] `EDIT` interactive full-screen form record editor
 - [ ] `MODIFY STRUCTURE` changing schema of active DBF
 - [ ] `COPY TO` exporting records/schema to a new DBF
