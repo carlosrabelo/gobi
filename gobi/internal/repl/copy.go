@@ -13,6 +13,9 @@ import (
 )
 
 func cmdCOPY(ctx *context.Context, cmd command.Command) error {
+	if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(cmd.Args)), "FILE") {
+		return cmdCOPYFILE(ctx, cmd)
+	}
 	a := ctx.Active()
 	if !a.HasTable() {
 		return fail(ctx, "no database in use")
