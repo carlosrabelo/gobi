@@ -3,6 +3,7 @@ package repl
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
@@ -10,6 +11,9 @@ import (
 )
 
 func cmdDELETE(ctx *context.Context, cmd command.Command) error {
+	if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(cmd.Args)), "FILE") {
+		return cmdDELETEFILE(ctx, cmd)
+	}
 	return markDeleted(ctx, cmd, true)
 }
 
