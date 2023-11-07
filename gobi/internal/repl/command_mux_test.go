@@ -1790,3 +1790,75 @@ func TestDispatchCreateNoFields(t *testing.T) {
 		t.Fatalf("expected at least one field error, got %v", err)
 	}
 }
+
+func TestDispatchEditNoDatabase(t *testing.T) {
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("\n")
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "EDIT", Args: "1"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchEditRequiresRecordNumber(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createTempDBFWithRecords(t, tempDir, "editdb.dbf", nil)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "EDIT"})
+	if err == nil || !strings.Contains(err.Error(), "requires a record number") {
+		t.Fatalf("expected record number error, got %v", err)
+	}
+}
+
+func TestDispatchEditOutOfRange(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "editdb.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "EDIT", Args: "5"})
+	if err == nil || !strings.Contains(err.Error(), "Record number out of range") {
+		t.Fatalf("expected out of range error, got %v", err)
+	}
+}
+
+func TestDispatchEditLineModeSave(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "editdb.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("Bob\n\n")
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "EDIT", Args: "1"}); err != nil {
+		t.Fatalf("unexpected error on EDIT: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Bob") {
+		t.Fatalf("expected edited name Bob, got: %q", stdout.String())
+	}
+}
