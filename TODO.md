@@ -82,7 +82,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `ZAP` truncating active DBF data area
 - [x] `CREATE` interactively defining schema and creating new DBF
 - [x] `EDIT` interactive full-screen form record editor
-- [ ] `MODIFY STRUCTURE` changing schema of active DBF
+- [x] `MODIFY STRUCTURE` changing schema of active DBF
 - [ ] `COPY TO` exporting records/schema to a new DBF
 - [ ] `APPEND FROM` importing records from another DBF or text file
 - [ ] `UPDATE FROM` modifying active DBF records using secondary area data
