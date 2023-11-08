@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
@@ -13,7 +14,6 @@ func runControl(ctx *context.Context, m *Mux, fr *Frame, cmd command.Command) er
 	case "IF":
 		return runIF(ctx, fr, cmd)
 	case "ELSE":
-		// Jump past the matching ENDIF (we are inside a true IF branch).
 		end, err := findEndFromInside(fr.Lines, fr.PC-1, "IF", "ENDIF")
 		if err != nil {
 			return fail(ctx, "%s", err.Error())
@@ -23,6 +23,9 @@ func runControl(ctx *context.Context, m *Mux, fr *Frame, cmd command.Command) er
 	case "ENDIF":
 		return nil
 	case "DO":
+		if strings.EqualFold(strings.TrimSpace(cmd.Args), "CASE") {
+			return runCASE(ctx, fr)
+		}
 		return runWHILE(ctx, fr, cmd)
 	case "ENDDO":
 		return handleENDDO(ctx, fr)
@@ -30,9 +33,133 @@ func runControl(ctx *context.Context, m *Mux, fr *Frame, cmd command.Command) er
 		return handleLOOP(ctx, fr)
 	case "EXIT":
 		return handleEXIT(ctx, fr)
+	case "CASE", "OTHERWISE":
+		// Skip to ENDCASE when falling through a taken branch's end.
+		end, err := findEndFromInside(fr.Lines, fr.PC-1, "DO", "ENDCASE")
+		if err != nil {
+			// DO CASE uses Verb DO — find matching ENDCASE by scanning
+			end, err = findEndCASE(fr.Lines, fr.PC-1)
+		}
+		if err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		fr.PC = end + 1
+		return nil
+	case "ENDCASE":
+		return nil
+	case "TEXT":
+		return runTEXT(ctx, fr)
+	case "ENDTEXT":
+		return nil
 	default:
 		return fail(ctx, "unknown control %s", cmd.Verb)
 	}
+}
+
+func runTEXT(ctx *context.Context, fr *Frame) error {
+	for fr.PC < len(fr.Lines) {
+		line := fr.Lines[fr.PC]
+		fr.PC++
+		c := command.Split(line)
+		if c.Verb == "ENDTEXT" {
+			return nil
+		}
+		fmt.Fprintln(ctx.Stdout, line)
+	}
+	return fail(ctx, "TEXT without ENDTEXT")
+}
+
+func runCASE(ctx *context.Context, fr *Frame) error {
+	caseLine := fr.PC - 1
+	endLine, err := findEndCASE(fr.Lines, caseLine)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	i := caseLine + 1
+	matched := false
+	for i < endLine {
+		if isCommentLine(fr.Lines[i]) {
+			i++
+			continue
+		}
+		c := command.Split(fr.Lines[i])
+		switch c.Verb {
+		case "CASE":
+			if matched {
+				fr.PC = endLine + 1
+				return nil
+			}
+			ok, err := evalCond(ctx, c.Args)
+			if err != nil {
+				return fail(ctx, "%s", err.Error())
+			}
+			i++
+			if ok {
+				matched = true
+				fr.PC = i
+				return nil
+			}
+			// skip body until next CASE/OTHERWISE/ENDCASE
+			i = skipCaseBody(fr.Lines, i, endLine)
+		case "OTHERWISE":
+			if matched {
+				fr.PC = endLine + 1
+				return nil
+			}
+			fr.PC = i + 1
+			return nil
+		case "ENDCASE":
+			fr.PC = endLine + 1
+			return nil
+		default:
+			i++
+		}
+	}
+	fr.PC = endLine + 1
+	return nil
+}
+
+func skipCaseBody(lines []string, from, endLine int) int {
+	depth := 0
+	for i := from; i < endLine; i++ {
+		if isCommentLine(lines[i]) {
+			continue
+		}
+		c := command.Split(lines[i])
+		if c.Verb == "DO" && strings.EqualFold(strings.TrimSpace(c.Args), "CASE") {
+			depth++
+		}
+		if c.Verb == "ENDCASE" {
+			if depth == 0 {
+				return i
+			}
+			depth--
+		}
+		if depth == 0 && (c.Verb == "CASE" || c.Verb == "OTHERWISE") {
+			return i
+		}
+	}
+	return endLine
+}
+
+func findEndCASE(lines []string, startIdx int) (int, error) {
+	depth := 0
+	for i := startIdx; i < len(lines); i++ {
+		if isCommentLine(lines[i]) {
+			continue
+		}
+		c := command.Split(lines[i])
+		if c.Verb == "DO" && strings.EqualFold(strings.TrimSpace(c.Args), "CASE") {
+			depth++
+		}
+		if c.Verb == "ENDCASE" {
+			depth--
+			if depth == 0 {
+				return i, nil
+			}
+		}
+	}
+	return 0, errString("DO CASE without ENDCASE")
 }
 
 func runIF(ctx *context.Context, fr *Frame, cmd command.Command) error {

@@ -102,7 +102,7 @@ func isCommentLine(line string) bool {
 }
 
 func validateBlocks(lines []string) error {
-	var ifDepth, whileDepth int
+	var ifDepth, whileDepth, caseDepth, textDepth int
 	for _, line := range lines {
 		if isCommentLine(line) {
 			continue
@@ -123,12 +123,26 @@ func validateBlocks(lines []string) error {
 		case "DO":
 			if isDoWhile(cmd) {
 				whileDepth++
+			} else if strings.EqualFold(strings.TrimSpace(cmd.Args), "CASE") {
+				caseDepth++
 			}
 		case "ENDDO":
 			if whileDepth == 0 {
 				return errString("ENDDO without DO WHILE")
 			}
 			whileDepth--
+		case "ENDCASE":
+			if caseDepth == 0 {
+				return errString("ENDCASE without DO CASE")
+			}
+			caseDepth--
+		case "TEXT":
+			textDepth++
+		case "ENDTEXT":
+			if textDepth == 0 {
+				return errString("ENDTEXT without TEXT")
+			}
+			textDepth--
 		}
 	}
 	if ifDepth != 0 {
@@ -136,6 +150,12 @@ func validateBlocks(lines []string) error {
 	}
 	if whileDepth != 0 {
 		return errString("DO WHILE without ENDDO")
+	}
+	if caseDepth != 0 {
+		return errString("DO CASE without ENDCASE")
+	}
+	if textDepth != 0 {
+		return errString("TEXT without ENDTEXT")
 	}
 	return nil
 }
@@ -160,13 +180,13 @@ func runProgram(ctx *context.Context, m *Mux) error {
 		case "CANCEL":
 			m.prog.Stack = nil
 			return nil
-		case "IF", "ELSE", "ENDIF", "ENDDO", "LOOP", "EXIT":
+		case "IF", "ELSE", "ENDIF", "ENDDO", "LOOP", "EXIT", "CASE", "OTHERWISE", "ENDCASE", "TEXT", "ENDTEXT":
 			if err := runControl(ctx, m, fr, cmd); err != nil {
 				return err
 			}
 			continue
 		case "DO":
-			if isDoWhile(cmd) {
+			if isDoWhile(cmd) || strings.EqualFold(strings.TrimSpace(cmd.Args), "CASE") {
 				if err := runControl(ctx, m, fr, cmd); err != nil {
 					return err
 				}
