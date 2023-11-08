@@ -75,7 +75,7 @@ func cmdWAIT(ctx *context.Context, cmd command.Command) error {
 	k := int(b)
 	if to != "" {
 		ch := string(b)
-		if k == term.KeyEnter || b == '\n' {
+		if k == 13 || b == '\n' {
 			ch = "\r"
 		}
 		if err := ctx.Symbols.Set(strings.Fields(to)[0], expr.StringVal(ch)); err != nil {
