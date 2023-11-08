@@ -52,6 +52,10 @@ func NewMux() *Mux {
 	m.Register("HELP", func(ctx *context.Context, cmd command.Command) error {
 		return m.cmdHELP(ctx, cmd)
 	})
+	m.Register("ACCEPT", cmdACCEPT)
+	m.Register("INPUT", cmdINPUT)
+	m.Register("WAIT", cmdWAIT)
+	m.Register("REMARK", cmdREMARK)
 	m.Register("REPLACE", cmdREPLACE)
 	m.Register("DELETE", cmdDELETE)
 	m.Register("RECALL", cmdRECALL)
