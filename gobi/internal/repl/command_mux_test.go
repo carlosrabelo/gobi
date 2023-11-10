@@ -1951,3 +1951,187 @@ func TestDispatchModifyStructureAddField(t *testing.T) {
 		t.Fatalf("expected PHONE in structure, got: %q", stdout.String())
 	}
 }
+func TestDispatchCopyNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "COPY", ToClause: "out.dbf"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchCopyNoToClause(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createTempDBFWithRecords(t, tempDir, "copydb.dbf", nil)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "COPY"})
+	if err == nil || !strings.Contains(err.Error(), "COPY requires TO") {
+		t.Fatalf("expected COPY requires TO error, got %v", err)
+	}
+}
+
+func TestDispatchCopyAllActiveRecords(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+	outPath := filepath.Join(tempDir, "copyout.dbf")
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "COPY", ToClause: outPath}); err != nil {
+		t.Fatalf("unexpected error on COPY TO: %v", err)
+	}
+
+	outCtx := testCtx()
+	outCtx.Stdout = &bytes.Buffer{}
+	if err := commandMux.Dispatch(outCtx, Command{Verb: "USE", Args: outPath}); err != nil {
+		t.Fatalf("open copy: %v", err)
+	}
+
+	area := outCtx.GetActiveArea()
+	if area.Table.Header.RecordCount != 1 {
+		t.Fatalf("expected 1 copied record, got %d", area.Table.Header.RecordCount)
+	}
+	if len(area.Table.Fields) != 2 {
+		t.Fatalf("expected 2 fields in copy, got %d", len(area.Table.Fields))
+	}
+
+	var stdout bytes.Buffer
+	outCtx.Stdout = &stdout
+	if err := commandMux.Dispatch(outCtx, Command{Verb: "LIST", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Charlie") {
+		t.Fatalf("expected Charlie in copy, got: %q", stdout.String())
+	}
+}
+
+func TestDispatchCopyFieldSubset(t *testing.T) {
+	tempDir := t.TempDir()
+	rec1 := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x20}, append([]byte("Bob       "), []byte(" 35")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "copydb.dbf", [][]byte{rec1, rec2})
+	outPath := filepath.Join(tempDir, "nameonly.dbf")
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:     "COPY",
+		ToClause: outPath,
+		Args:     "FIELD NAME",
+	}); err != nil {
+		t.Fatalf("unexpected error on COPY TO FIELD: %v", err)
+	}
+
+	outCtx := testCtx()
+	outCtx.Stdout = &bytes.Buffer{}
+	if err := commandMux.Dispatch(outCtx, Command{Verb: "USE", Args: outPath}); err != nil {
+		t.Fatalf("open copy: %v", err)
+	}
+
+	area := outCtx.GetActiveArea()
+	if len(area.Table.Fields) != 1 {
+		t.Fatalf("expected 1 field in copy, got %d", len(area.Table.Fields))
+	}
+	if area.Table.Fields[0].Name != "NAME" {
+		t.Fatalf("expected NAME field, got %s", area.Table.Fields[0].Name)
+	}
+	if area.Table.Header.RecordCount != 2 {
+		t.Fatalf("expected 2 copied records, got %d", area.Table.Header.RecordCount)
+	}
+}
+
+func TestDispatchCopyForClause(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+	outPath := filepath.Join(tempDir, "filtered.dbf")
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:      "COPY",
+		ToClause:  outPath,
+		ForClause: ".F.",
+	}); err != nil {
+		t.Fatalf("unexpected error on COPY TO FOR: %v", err)
+	}
+
+	outCtx := testCtx()
+	outCtx.Stdout = &bytes.Buffer{}
+	if err := commandMux.Dispatch(outCtx, Command{Verb: "USE", Args: outPath}); err != nil {
+		t.Fatalf("open copy: %v", err)
+	}
+
+	area := outCtx.GetActiveArea()
+	if area.Table.Header.RecordCount != 0 {
+		t.Fatalf("expected 0 records copied for FOR .F., got %d", area.Table.Header.RecordCount)
+	}
+	if len(area.Table.Fields) != 2 {
+		t.Fatalf("expected structure copied with 2 fields, got %d", len(area.Table.Fields))
+	}
+}
+
+func TestDispatchCopyWhileFromRecord(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createListTestDBF(t, tempDir)
+	outPath := filepath.Join(tempDir, "whileout.dbf")
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "GOTO", Args: "3"}); err != nil {
+		t.Fatalf("goto record 3: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:        "COPY",
+		ToClause:    outPath,
+		WhileClause: ".T.",
+	}); err != nil {
+		t.Fatalf("unexpected error on COPY TO WHILE: %v", err)
+	}
+
+	outCtx := testCtx()
+	outCtx.Stdout = &bytes.Buffer{}
+	if err := commandMux.Dispatch(outCtx, Command{Verb: "USE", Args: outPath}); err != nil {
+		t.Fatalf("open copy: %v", err)
+	}
+
+	area := outCtx.GetActiveArea()
+	if area.Table.Header.RecordCount != 1 {
+		t.Fatalf("expected 1 record copied from record 3, got %d", area.Table.Header.RecordCount)
+	}
+
+	var stdout bytes.Buffer
+	outCtx.Stdout = &stdout
+	if err := commandMux.Dispatch(outCtx, Command{Verb: "LIST", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Charlie") {
+		t.Fatalf("expected Charlie in WHILE copy, got: %q", stdout.String())
+	}
+}
