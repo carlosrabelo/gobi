@@ -26,6 +26,7 @@ func markDeleted(ctx *context.Context, cmd command.Command, deleted bool) error 
 	if !a.HasTable() {
 		return fail(ctx, "no database in use")
 	}
+	scope := parseScope(cmd)
 	forExpr, err := parseOptionalLogic(cmd.Clauses["FOR"])
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
@@ -36,23 +37,29 @@ func markDeleted(ctx *context.Context, cmd command.Command, deleted bool) error 
 	}
 	env := newEnv(ctx)
 
-	if forExpr == nil && whileExpr == nil {
+	count := a.RecCount()
+	start, end := scopeRange(count, a.Cursor, scope)
+	if scope.Kind == "" && forExpr == nil && whileExpr == nil {
 		if !a.Landed {
 			return fail(ctx, "no current record")
 		}
 		return writeMark(ctx, deleted)
 	}
-
-	count := a.RecCount()
-	start := 1
-	if whileExpr != nil {
-		start = a.Cursor
-		if start < 1 {
-			start = 1
+	if scope.Kind == "" {
+		start = 1
+		end = count
+		if whileExpr != nil {
+			start = a.Cursor
+			if start < 1 {
+				start = 1
+			}
 		}
 	}
+	if end < start {
+		return nil
+	}
 	last := 0
-	for n := start; n <= count; n++ {
+	for n := start; n <= end; n++ {
 		a.Cursor = n
 		a.BOF = false
 		if err := a.LoadCurrent(); err != nil {
