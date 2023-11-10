@@ -11,15 +11,37 @@ import (
 )
 
 func cmdLIST(ctx *context.Context, cmd command.Command) error {
-	if strings.EqualFold(strings.TrimSpace(cmd.Args), "STRUCTURE") {
+	args := strings.TrimSpace(cmd.Args)
+	up := strings.ToUpper(args)
+	if strings.EqualFold(args, "STRUCTURE") {
 		return displayStructure(ctx)
+	}
+	if strings.HasPrefix(up, "FILES") || strings.HasPrefix(up, "STATUS") || strings.EqualFold(args, "MEMORY") {
+		if strings.EqualFold(args, "MEMORY") {
+			return printMemory(ctx)
+		}
+		if strings.HasPrefix(up, "FILES") {
+			return cmdDIR(ctx, cmd)
+		}
+		return displayStatus(ctx)
 	}
 	return listRecords(ctx, cmd, listOpts{fromOne: true, leaveEOF: true, pageLimit: 0})
 }
 
 func cmdDISPLAY(ctx *context.Context, cmd command.Command) error {
-	if strings.EqualFold(strings.TrimSpace(cmd.Args), "STRUCTURE") {
+	args := strings.TrimSpace(cmd.Args)
+	up := strings.ToUpper(args)
+	if strings.EqualFold(args, "STRUCTURE") {
 		return displayStructure(ctx)
+	}
+	if strings.EqualFold(args, "MEMORY") {
+		return printMemory(ctx)
+	}
+	if strings.HasPrefix(up, "FILES") {
+		return cmdDIR(ctx, cmd)
+	}
+	if strings.HasPrefix(up, "STATUS") {
+		return displayStatus(ctx)
 	}
 	if _, ok := cmd.Clauses["TO"]; ok {
 		return fail(ctx, "DISPLAY does not accept TO")
@@ -29,6 +51,27 @@ func cmdDISPLAY(ctx *context.Context, cmd command.Command) error {
 		leaveEOF:  false,
 		pageLimit: pageSize(ctx),
 	})
+}
+
+func displayStatus(ctx *context.Context) error {
+	fmt.Fprintf(ctx.Stdout, "Area: %d\n", ctx.ActiveArea)
+	for i := 1; i <= context.AreaCount; i++ {
+		a := ctx.Areas[i]
+		if !a.HasTable() {
+			continue
+		}
+		fmt.Fprintf(ctx.Stdout, "  %d: %s", i, a.Path)
+		for _, n := range a.NDX {
+			if n != "" {
+				fmt.Fprintf(ctx.Stdout, " %s", n)
+			}
+		}
+		fmt.Fprintln(ctx.Stdout)
+	}
+	c := ctx.Config
+	fmt.Fprintf(ctx.Stdout, "TALK=%v INTENSITY=%v BELL=%v SAFETY=%v EXACT=%v DELETED=%v\n",
+		c.Talk, c.Intensity, c.Bell, c.Safety, c.Exact, c.Deleted)
+	return nil
 }
 
 type listOpts struct {
