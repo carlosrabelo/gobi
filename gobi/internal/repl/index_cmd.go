@@ -106,7 +106,7 @@ func cmdINDEX(ctx *context.Context, cmd command.Command) error {
 		return fail(ctx, "%s", err.Error())
 	}
 	bindIndex(a, path)
-	return nil
+	return rebuildIndexOrder(ctx)
 }
 
 type indexKey struct {

@@ -113,15 +113,22 @@ func listRecords(ctx *context.Context, cmd command.Command, opts listOpts) error
 	printHeader(ctx, cols)
 
 	count := a.RecCount()
-	start := 1
-	// WHILE starts at the current record; plain LIST / FOR start at 1.
-	if whileExpr != nil || !opts.fromOne {
-		start = a.Cursor
-		if start < 1 {
-			start = 1
+	seq := make([]int, 0, count)
+	if opts.fromOne && len(a.IndexOrder) > 0 && whileExpr == nil {
+		seq = append(seq, a.IndexOrder...)
+	} else {
+		start := 1
+		if whileExpr != nil || !opts.fromOne {
+			start = a.Cursor
+			if start < 1 {
+				start = 1
+			}
+		}
+		for n := start; n <= count; n++ {
+			seq = append(seq, n)
 		}
 	}
-	if count == 0 || start > count {
+	if count == 0 || len(seq) == 0 {
 		if opts.leaveEOF {
 			a.Cursor = count + 1
 			a.BOF = false
@@ -132,7 +139,7 @@ func listRecords(ctx *context.Context, cmd command.Command, opts listOpts) error
 
 	printed := 0
 	lastPrinted := 0
-	for n := start; n <= count; n++ {
+	for _, n := range seq {
 		a.Cursor = n
 		a.BOF = false
 		if err := a.LoadCurrent(); err != nil {

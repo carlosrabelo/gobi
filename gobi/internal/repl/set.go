@@ -34,7 +34,6 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 	case "DEFAULT":
 		path := strings.TrimSpace(cmd.Clauses["TO"])
 		if path == "" {
-			// SET DEFAULT TO path when TO was not clause-scanned
 			if len(args) >= 3 && strings.EqualFold(args[1], "TO") {
 				path = strings.Join(args[2:], " ")
 			} else {
@@ -43,6 +42,12 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 		}
 		ctx.Config.Default = path
 		return nil
+	case "INDEX":
+		list := strings.TrimSpace(cmd.Clauses["TO"])
+		if list == "" && len(args) >= 2 && strings.EqualFold(args[1], "TO") {
+			list = strings.Join(args[2:], " ")
+		}
+		return cmdSETINDEX(ctx, list)
 	default:
 		return fail(ctx, "Unrecognized command: SET %s", name)
 	}
