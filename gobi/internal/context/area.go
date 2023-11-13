@@ -27,6 +27,10 @@ type Area struct {
 	BOF    bool
 	NDX    [7]string
 	Format bool // format file open in this area (stub until formats exist)
+
+	// IndexOrder is 1-based record numbers in controlling-index order (empty = physical).
+	IndexOrder []int
+	IndexPos   int // index into IndexOrder for current key position
 }
 
 // HasTable reports whether a DBF is open in the area.

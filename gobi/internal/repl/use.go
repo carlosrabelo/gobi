@@ -8,43 +8,24 @@ import (
 )
 
 func cmdUSE(ctx *context.Context, cmd command.Command) error {
-	name, alias, err := parseUseArgs(cmd.Args)
+	name, alias, indexes, err := parseUseIndexes(cmd.Args)
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
 	if err := ctx.Use(name, alias); err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
+	if len(indexes) > 0 {
+		if err := cmdSETINDEX(ctx, strings.Join(indexes, ",")); err != nil {
+			_ = ctx.CloseArea(ctx.ActiveArea)
+			return err
+		}
+	}
 	return nil
-}
-
-func parseUseArgs(args string) (name, alias string, err error) {
-	args = strings.TrimSpace(args)
-	if args == "" {
-		return "", "", nil
-	}
-	tokens := strings.Fields(args)
-	name = tokens[0]
-	for i := 1; i < len(tokens); i++ {
-		if strings.EqualFold(tokens[i], "ALIAS") {
-			if i+1 >= len(tokens) {
-				return "", "", errUseAliasMissing
-			}
-			alias = tokens[i+1]
-			i++
-			continue
-		}
-		if strings.EqualFold(tokens[i], "INDEX") {
-			return "", "", errUseIndex
-		}
-		return "", "", errUseExtra
-	}
-	return name, alias, nil
 }
 
 var (
 	errUseAliasMissing = errString("ALIAS requires a name")
-	errUseIndex        = errString("INDEX is not supported yet")
 	errUseExtra        = errString("invalid USE arguments")
 )
 
@@ -62,6 +43,7 @@ func cmdCLOSE(ctx *context.Context, cmd command.Command) error {
 		return nil
 	case "INDEX":
 		ctx.CloseIndexes()
+		ctx.Active().IndexOrder = nil
 		return nil
 	case "FORMAT":
 		ctx.CloseFormat()
