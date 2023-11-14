@@ -9,6 +9,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
+	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
 
 func TestSETTalkAndDefault(t *testing.T) {
@@ -54,6 +55,43 @@ func TestDIRAndHELP(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "USE") {
 		t.Fatalf("HELP: %q", out.String())
+	}
+}
+
+func TestSETExactAndDeleted(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 5},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "Smith"}}},
+		{Values: []dbf.Value{{Str: "Sm   "}}, Deleted: true},
+	})
+	ctx := testCtx(t, dir)
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE t"))
+	_ = mux.Dispatch(ctx, command.Split("SET EXACT ON"))
+	tree, errs := expr.Parse(`"Smith" = "Sm"`)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	v, err := expr.Eval(tree, newEnv(ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Log {
+		t.Fatal("EXACT ON should make Smith != Sm")
+	}
+	_ = mux.Dispatch(ctx, command.Split("SET DELETED ON"))
+	out.Reset()
+	_ = mux.Dispatch(ctx, command.Split("LIST"))
+	if strings.Contains(out.String(), "      2") {
+		t.Fatalf("DELETED ON should hide starred row: %q", out.String())
+	}
+	_ = mux.Dispatch(ctx, command.Split(`SET COLOR TO W/N`))
+	if !strings.Contains(ctx.Config.Color, "W/N") {
+		t.Fatalf("COLOR %q", ctx.Config.Color)
 	}
 }
 
