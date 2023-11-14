@@ -255,6 +255,9 @@ func parseColumns(ctx *context.Context, args string) ([]column, error) {
 }
 
 func printHeader(ctx *context.Context, cols []column) {
+	if !ctx.Config.Heading {
+		return
+	}
 	fmt.Fprint(ctx.Stdout, "Record#")
 	for _, c := range cols {
 		fmt.Fprintf(ctx.Stdout, " %s", c.title)

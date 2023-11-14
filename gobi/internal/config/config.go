@@ -16,25 +16,43 @@ const (
 
 // Config holds the session flags and sizes from the constitution defaults.
 type Config struct {
-	Talk       bool
-	Intensity  bool
-	Bell       bool
-	Heading    bool
-	Safety     bool
-	Help       bool
-	History    bool
-	Scoreboard bool
-	Menus      bool
-	Exact      bool
-	Deleted    bool
-	DoHistory  bool
-	Default    string
-	Path       string
-	HistoryTo  int
-	Typeahead  int
-	MemoWidth  int
-	Status     bool
-	Screen     ScreenMode
+	Talk        bool
+	Intensity   bool
+	Bell        bool
+	Heading     bool
+	Safety      bool
+	Help        bool
+	History     bool
+	Scoreboard  bool
+	Menus       bool
+	Exact       bool
+	Deleted     bool
+	DoHistory   bool
+	Echo        bool
+	Step        bool
+	Carry       bool
+	Confirm     bool
+	Delimiters  bool
+	DelimChars  string
+	Escape      bool
+	Console     bool
+	Alternate   bool
+	AlternateTo string
+	Debug       bool
+	Print       bool
+	Device      string // SCREEN or PRINT
+	Fixed       bool
+	Color       string
+	Format      string
+	Margin      int
+	Decimals    int
+	Default     string
+	Path        string
+	HistoryTo   int
+	Typeahead   int
+	MemoWidth   int
+	Status      bool
+	Screen      ScreenMode
 }
 
 // New returns the constitution defaults. Status is on when os.Stdout is a terminal.
@@ -52,6 +70,21 @@ func New() *Config {
 		Exact:      false,
 		Deleted:    false,
 		DoHistory:  false,
+		Echo:       false,
+		Step:       false,
+		Carry:      false,
+		Confirm:    false,
+		Delimiters: false,
+		DelimChars: ":",
+		Escape:     true,
+		Console:    true,
+		Alternate:  false,
+		Debug:      false,
+		Print:      false,
+		Device:     "SCREEN",
+		Fixed:      false,
+		Margin:     0,
+		Decimals:   0,
 		Default:    ".",
 		Path:       "",
 		HistoryTo:  20,
