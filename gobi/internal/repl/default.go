@@ -25,6 +25,10 @@ func resolveDBFFilePath(ctx *context.Context, filename string) string {
 	return resolveDataPath(ctx, filename, ".dbf")
 }
 
+func resolveTextImportPath(ctx *context.Context, filename string) string {
+	return resolveDataPath(ctx, filename, ".txt")
+}
+
 func resolveOutputPath(ctx *context.Context, filename string) string {
 	return resolveDataPath(ctx, filename, "")
 }

@@ -555,7 +555,7 @@ func skipRecords(ctx *context.Context, delta int) error {
 
 func handleAppend(ctx *context.Context, cmd Command) error {
 	if strings.TrimSpace(cmd.FromClause) != "" {
-		return fmt.Errorf("*** APPEND FROM: feature not yet implemented")
+		return handleAppendFrom(ctx, cmd)
 	}
 	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
 	if arg != "" {
