@@ -81,11 +81,25 @@ func evalBinary(n *BinaryNode, env Env) (Value, error) {
 		return evalArithmetic(n, env)
 	case "=", "<>", "#", "<", ">", "<=", ">=":
 		return evalCompare(n, env)
+	case "$":
+		return evalContain(n, env)
 	case ".AND.", ".OR.":
 		return evalLogic(n, env, op)
 	default:
 		return Value{}, fmt.Errorf("unsupported operator %s", n.Op)
 	}
+}
+
+func evalContain(n *BinaryNode, env Env) (Value, error) {
+	left, err := Eval(n.Left, env)
+	if err != nil {
+		return Value{}, err
+	}
+	right, err := Eval(n.Right, env)
+	if err != nil {
+		return Value{}, err
+	}
+	return LogicalVal(strings.Contains(right.String(), left.String())), nil
 }
 
 func evalLogic(n *BinaryNode, env Env, op string) (Value, error) {
@@ -184,22 +198,55 @@ func evalArithmetic(n *BinaryNode, env Env) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	a, err := asNumber(left)
-	if err != nil {
-		return Value{}, err
-	}
-	b, err := asNumber(right)
-	if err != nil {
-		return Value{}, err
-	}
 	switch n.Op {
 	case "+":
+		if left.Kind == KindString && right.Kind != KindNumber {
+			return StringVal(left.String() + right.String()), nil
+		}
+		if right.Kind == KindString && left.Kind != KindNumber {
+			return StringVal(left.String() + right.String()), nil
+		}
+		a, err := asNumber(left)
+		if err != nil {
+			return Value{}, err
+		}
+		b, err := asNumber(right)
+		if err != nil {
+			return Value{}, err
+		}
 		return NumberVal(a + b), nil
 	case "-":
+		if left.Kind == KindString && right.Kind == KindString {
+			return StringVal(stringMinus(left.Str, right.Str)), nil
+		}
+		a, err := asNumber(left)
+		if err != nil {
+			return Value{}, err
+		}
+		b, err := asNumber(right)
+		if err != nil {
+			return Value{}, err
+		}
 		return NumberVal(a - b), nil
 	case "*":
+		a, err := asNumber(left)
+		if err != nil {
+			return Value{}, err
+		}
+		b, err := asNumber(right)
+		if err != nil {
+			return Value{}, err
+		}
 		return NumberVal(a * b), nil
 	case "/":
+		a, err := asNumber(left)
+		if err != nil {
+			return Value{}, err
+		}
+		b, err := asNumber(right)
+		if err != nil {
+			return Value{}, err
+		}
 		if b == 0 {
 			return Value{}, fmt.Errorf("division by zero")
 		}
@@ -207,6 +254,13 @@ func evalArithmetic(n *BinaryNode, env Env) (Value, error) {
 	default:
 		return Value{}, fmt.Errorf("unsupported operator %s", n.Op)
 	}
+}
+
+// stringMinus concatenates and moves trailing spaces of the left string to the end.
+func stringMinus(left, right string) string {
+	trimmed := strings.TrimRight(left, " ")
+	spaces := left[len(trimmed):]
+	return trimmed + right + spaces
 }
 
 func asNumber(v Value) (float64, error) {

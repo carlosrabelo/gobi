@@ -172,6 +172,11 @@ func runProgram(ctx *context.Context, m *Mux) error {
 		if isCommentLine(line) {
 			continue
 		}
+		expanded, err := expandLineMacros(ctx, line)
+		if err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		line = expanded
 		cmd := command.Split(line)
 		switch cmd.Verb {
 		case "RETURN":

@@ -53,9 +53,13 @@ func (e *sessionEnv) Call(name string, args []expr.Value) (expr.Value, error) {
 		k := e.ctx.Keys.Inkey()
 		return expr.NumberVal(float64(k)), nil
 	}
-	return expr.CallBuiltin(name, args, e.ctx.ExprArea())
+	return expr.CallBuiltin(name, args, e.ctx.ExprArea(), e)
 }
 
 func (e *sessionEnv) Exact() (on bool, ok bool) {
 	return e.ctx.Config.Exact, true
+}
+
+func (e *sessionEnv) Default() (path string, ok bool) {
+	return e.ctx.Config.Default, true
 }
