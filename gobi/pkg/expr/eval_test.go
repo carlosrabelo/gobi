@@ -6,10 +6,12 @@ import (
 )
 
 type testEnv struct {
-	mem    map[string]Value
-	fields map[string]Value // key "ALIAS.NAME" or ".NAME" for active area
-	exact  *bool
-	area   Area
+	mem        map[string]Value
+	fields     map[string]Value // key "ALIAS.NAME" or ".NAME" for active area
+	exact      *bool
+	area       Area
+	default_   string
+	hasDefault bool
 }
 
 func (e *testEnv) Memory(name string) (Value, bool) {
@@ -24,7 +26,7 @@ func (e *testEnv) Field(alias, name string) (Value, bool) {
 }
 
 func (e *testEnv) Call(name string, args []Value) (Value, error) {
-	return CallBuiltin(name, args, e.area)
+	return CallBuiltin(name, args, e.area, e)
 }
 
 func (e *testEnv) Exact() (bool, bool) {
@@ -32,6 +34,13 @@ func (e *testEnv) Exact() (bool, bool) {
 		return false, false
 	}
 	return *e.exact, true
+}
+
+func (e *testEnv) Default() (string, bool) {
+	if e.hasDefault {
+		return e.default_, true
+	}
+	return ".", true
 }
 
 func TestEvalLiterals(t *testing.T) {

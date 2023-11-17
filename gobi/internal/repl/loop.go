@@ -43,6 +43,11 @@ func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 		if hist != nil {
 			hist.Add(line)
 		}
+		line, err = expandLineMacros(ctx, line)
+		if err != nil {
+			fmt.Fprintln(ctx.Stderr, "*** "+err.Error())
+			continue
+		}
 		cmd := command.Split(line)
 		err = mux.Dispatch(ctx, cmd)
 		if errors.Is(err, ErrQuit) {

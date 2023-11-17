@@ -10,4 +10,6 @@ type Env interface {
 	Call(name string, args []Value) (Value, error)
 	// Exact reports SET EXACT. ok is false when the environment does not report a mode.
 	Exact() (on bool, ok bool)
+	// Default returns SET DEFAULT. ok is false when the environment does not report a path.
+	Default() (path string, ok bool)
 }

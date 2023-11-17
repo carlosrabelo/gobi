@@ -3,6 +3,9 @@ package expr
 import (
 	"errors"
 	"fmt"
+	"math"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -11,7 +14,7 @@ import (
 var ErrUnknownFunction = errors.New("unknown function")
 
 // CallBuiltin evaluates a built-in by name. Names match without regard to case.
-func CallBuiltin(name string, args []Value, a Area) (Value, error) {
+func CallBuiltin(name string, args []Value, a Area, env Env) (Value, error) {
 	switch strings.ToUpper(name) {
 	case "EOF":
 		return builtinEOF(args, a)
@@ -23,7 +26,7 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinDELETED(args, a)
 	case "FOUND":
 		return builtinFOUND(args, a)
-	case "TRIM":
+	case "TRIM", "RTRIM":
 		return builtinTRIM(args)
 	case "UPPER":
 		return builtinUPPER(args)
@@ -39,6 +42,48 @@ func CallBuiltin(name string, args []Value, a Area) (Value, error) {
 		return builtinSTR(args)
 	case "CHR":
 		return builtinCHR(args)
+	case "ASC":
+		return builtinASC(args)
+	case "AT":
+		return builtinAT(args)
+	case "LEFT":
+		return builtinLEFT(args)
+	case "RIGHT":
+		return builtinRIGHT(args)
+	case "LTRIM":
+		return builtinLTRIM(args)
+	case "SPACE":
+		return builtinSPACE(args)
+	case "REPLICATE":
+		return builtinREPLICATE(args)
+	case "STUFF":
+		return builtinSTUFF(args)
+	case "FILE":
+		return builtinFILE(args, env)
+	case "INT":
+		return builtinINT(args)
+	case "ROUND":
+		return builtinROUND(args)
+	case "ABS":
+		return builtinABS(args)
+	case "MAX":
+		return builtinMAX(args)
+	case "MIN":
+		return builtinMIN(args)
+	case "MOD":
+		return builtinMOD(args)
+	case "SQRT":
+		return builtinSQRT(args)
+	case "LOG":
+		return builtinLOG(args)
+	case "EXP":
+		return builtinEXP(args)
+	case "TYPE":
+		return builtinTYPE(args, env)
+	case "IIF":
+		return builtinIIF(args)
+	case "DISKSPACE":
+		return builtinDISKSPACE(args, env)
 	case "RECCOUNT":
 		return builtinRECCOUNT(args, a)
 	case "RECSIZE":
@@ -239,6 +284,391 @@ func builtinCHR(args []Value) (Value, error) {
 		return Value{}, fmt.Errorf("CHR: out of range")
 	}
 	return StringVal(string(byte(i))), nil
+}
+
+func builtinASC(args []Value) (Value, error) {
+	if err := requireArity("ASC", args, 1); err != nil {
+		return Value{}, err
+	}
+	s := args[0].String()
+	if s == "" {
+		return Value{}, fmt.Errorf("ASC: empty string")
+	}
+	return NumberVal(float64(s[0])), nil
+}
+
+func builtinAT(args []Value) (Value, error) {
+	if err := requireArity("AT", args, 2); err != nil {
+		return Value{}, err
+	}
+	sub := args[0].String()
+	s := args[1].String()
+	if sub == "" {
+		return NumberVal(0), nil
+	}
+	i := strings.Index(s, sub)
+	if i < 0 {
+		return NumberVal(0), nil
+	}
+	return NumberVal(float64(i + 1)), nil
+}
+
+func builtinLEFT(args []Value) (Value, error) {
+	if err := requireArity("LEFT", args, 2); err != nil {
+		return Value{}, err
+	}
+	s := args[0].String()
+	nF, err := requireNumber("LEFT", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	n := int(nF)
+	if n < 1 {
+		return StringVal(""), nil
+	}
+	if n > len(s) {
+		n = len(s)
+	}
+	return StringVal(s[:n]), nil
+}
+
+func builtinRIGHT(args []Value) (Value, error) {
+	if err := requireArity("RIGHT", args, 2); err != nil {
+		return Value{}, err
+	}
+	s := args[0].String()
+	nF, err := requireNumber("RIGHT", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	n := int(nF)
+	if n < 1 {
+		return StringVal(""), nil
+	}
+	if n > len(s) {
+		n = len(s)
+	}
+	return StringVal(s[len(s)-n:]), nil
+}
+
+func builtinLTRIM(args []Value) (Value, error) {
+	if err := requireArity("LTRIM", args, 1); err != nil {
+		return Value{}, err
+	}
+	return StringVal(strings.TrimLeft(args[0].String(), " ")), nil
+}
+
+func builtinSPACE(args []Value) (Value, error) {
+	if err := requireArity("SPACE", args, 1); err != nil {
+		return Value{}, err
+	}
+	nF, err := requireNumber("SPACE", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	n := int(nF)
+	if n < 0 {
+		n = 0
+	}
+	if n > 254 {
+		n = 254
+	}
+	return StringVal(strings.Repeat(" ", n)), nil
+}
+
+func builtinREPLICATE(args []Value) (Value, error) {
+	if err := requireArity("REPLICATE", args, 2); err != nil {
+		return Value{}, err
+	}
+	s := args[0].String()
+	nF, err := requireNumber("REPLICATE", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	n := int(nF)
+	if n < 1 || s == "" {
+		return StringVal(""), nil
+	}
+	var b strings.Builder
+	for i := 0; i < n && b.Len() < 254; i++ {
+		remain := 254 - b.Len()
+		if remain >= len(s) {
+			b.WriteString(s)
+		} else {
+			b.WriteString(s[:remain])
+		}
+	}
+	return StringVal(b.String()), nil
+}
+
+func builtinSTUFF(args []Value) (Value, error) {
+	if err := requireArity("STUFF", args, 4); err != nil {
+		return Value{}, err
+	}
+	s := args[0].String()
+	startF, err := requireNumber("STUFF", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	nF, err := requireNumber("STUFF", args[2])
+	if err != nil {
+		return Value{}, err
+	}
+	rep := args[3].String()
+	start := int(startF)
+	n := int(nF)
+	if start < 1 {
+		start = 1
+	}
+	if n < 0 {
+		n = 0
+	}
+	i := start - 1
+	if i > len(s) {
+		i = len(s)
+	}
+	end := i + n
+	if end > len(s) {
+		end = len(s)
+	}
+	return StringVal(s[:i] + rep + s[end:]), nil
+}
+
+func builtinFILE(args []Value, env Env) (Value, error) {
+	if err := requireArity("FILE", args, 1); err != nil {
+		return Value{}, err
+	}
+	name := args[0].String()
+	base := "."
+	if env != nil {
+		if p, ok := env.Default(); ok && p != "" {
+			base = p
+		}
+	}
+	path := name
+	if !filepath.IsAbs(name) {
+		path = filepath.Join(base, name)
+	}
+	_, err := os.Stat(path)
+	return LogicalVal(err == nil), nil
+}
+
+func builtinINT(args []Value) (Value, error) {
+	if err := requireArity("INT", args, 1); err != nil {
+		return Value{}, err
+	}
+	n, err := requireNumber("INT", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return NumberVal(math.Trunc(n)), nil
+}
+
+func builtinROUND(args []Value) (Value, error) {
+	if err := requireArity("ROUND", args, 2); err != nil {
+		return Value{}, err
+	}
+	n, err := requireNumber("ROUND", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	dF, err := requireNumber("ROUND", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	d := int(dF)
+	pow := math.Pow(10, float64(d))
+	return NumberVal(math.Round(n*pow) / pow), nil
+}
+
+func builtinABS(args []Value) (Value, error) {
+	if err := requireArity("ABS", args, 1); err != nil {
+		return Value{}, err
+	}
+	n, err := requireNumber("ABS", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return NumberVal(math.Abs(n)), nil
+}
+
+func builtinMAX(args []Value) (Value, error) {
+	if err := requireArity("MAX", args, 2); err != nil {
+		return Value{}, err
+	}
+	return maxMin(args[0], args[1], true)
+}
+
+func builtinMIN(args []Value) (Value, error) {
+	if err := requireArity("MIN", args, 2); err != nil {
+		return Value{}, err
+	}
+	return maxMin(args[0], args[1], false)
+}
+
+func maxMin(a, b Value, wantMax bool) (Value, error) {
+	if a.Kind == KindNumber && b.Kind == KindNumber {
+		if wantMax {
+			if a.Num >= b.Num {
+				return a, nil
+			}
+			return b, nil
+		}
+		if a.Num <= b.Num {
+			return a, nil
+		}
+		return b, nil
+	}
+	// Dates compare as days when both are dates (KindDate added in 026).
+	if a.Kind == KindDate && b.Kind == KindDate {
+		cmp := compareDates(a, b)
+		if wantMax {
+			if cmp >= 0 {
+				return a, nil
+			}
+			return b, nil
+		}
+		if cmp <= 0 {
+			return a, nil
+		}
+		return b, nil
+	}
+	as := a.String()
+	bs := b.String()
+	if wantMax {
+		if as >= bs {
+			return a, nil
+		}
+		return b, nil
+	}
+	if as <= bs {
+		return a, nil
+	}
+	return b, nil
+}
+
+func builtinMOD(args []Value) (Value, error) {
+	if err := requireArity("MOD", args, 2); err != nil {
+		return Value{}, err
+	}
+	a, err := requireNumber("MOD", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	b, err := requireNumber("MOD", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	if b == 0 {
+		return Value{}, fmt.Errorf("MOD: division by zero")
+	}
+	return NumberVal(math.Mod(a, b)), nil
+}
+
+func builtinSQRT(args []Value) (Value, error) {
+	if err := requireArity("SQRT", args, 1); err != nil {
+		return Value{}, err
+	}
+	n, err := requireNumber("SQRT", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if n < 0 {
+		return Value{}, fmt.Errorf("SQRT: negative argument")
+	}
+	return NumberVal(math.Sqrt(n)), nil
+}
+
+func builtinLOG(args []Value) (Value, error) {
+	if err := requireArity("LOG", args, 1); err != nil {
+		return Value{}, err
+	}
+	n, err := requireNumber("LOG", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if n <= 0 {
+		return Value{}, fmt.Errorf("LOG: non-positive argument")
+	}
+	return NumberVal(math.Log(n)), nil
+}
+
+func builtinEXP(args []Value) (Value, error) {
+	if err := requireArity("EXP", args, 1); err != nil {
+		return Value{}, err
+	}
+	n, err := requireNumber("EXP", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return NumberVal(math.Exp(n)), nil
+}
+
+func builtinTYPE(args []Value, env Env) (Value, error) {
+	if err := requireArity("TYPE", args, 1); err != nil {
+		return Value{}, err
+	}
+	src := args[0].String()
+	tree, errs := Parse(src)
+	if len(errs) != 0 || tree == nil {
+		return StringVal("U"), nil
+	}
+	v, err := Eval(tree, env)
+	if err != nil {
+		return StringVal("U"), nil
+	}
+	switch v.Kind {
+	case KindString:
+		return StringVal("C"), nil
+	case KindNumber:
+		return StringVal("N"), nil
+	case KindLogical:
+		return StringVal("L"), nil
+	case KindDate:
+		return StringVal("D"), nil
+	case KindMemo:
+		return StringVal("M"), nil
+	default:
+		return StringVal("U"), nil
+	}
+}
+
+func builtinIIF(args []Value) (Value, error) {
+	if err := requireArity("IIF", args, 3); err != nil {
+		return Value{}, err
+	}
+	cond, err := asLogical(args[0])
+	if err != nil {
+		return Value{}, fmt.Errorf("IIF: wrong type")
+	}
+	if cond {
+		return args[1], nil
+	}
+	return args[2], nil
+}
+
+func builtinDISKSPACE(args []Value, env Env) (Value, error) {
+	if err := requireArity("DISKSPACE", args, 0); err != nil {
+		return Value{}, err
+	}
+	base := "."
+	if env != nil {
+		if p, ok := env.Default(); ok && p != "" {
+			base = p
+		}
+	}
+	var st os.FileInfo
+	var err error
+	st, err = os.Stat(base)
+	if err != nil {
+		return Value{}, fmt.Errorf("DISKSPACE: %w", err)
+	}
+	_ = st
+	free, err := diskFreeBytes(base)
+	if err != nil {
+		return Value{}, fmt.Errorf("DISKSPACE: %w", err)
+	}
+	return NumberVal(float64(free)), nil
 }
 
 func builtinRECCOUNT(args []Value, a Area) (Value, error) {
