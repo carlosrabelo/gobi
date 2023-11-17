@@ -2295,3 +2295,223 @@ func TestDispatchAppendFromForFalse(t *testing.T) {
 		t.Fatalf("expected 0 records for FOR .F., got %d", area.Table.Header.RecordCount)
 	}
 }
+func TestDispatchUpdateNoPrimaryDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "UPDATE", Args: "ON PARTNO ADD ONHAND"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchUpdateNoSecondaryDatabase(t *testing.T) {
+	tempDir := t.TempDir()
+	primaryPath := createInventoryDBF(t, tempDir, "primary.dbf", nil)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: primaryPath}); err != nil {
+		t.Fatalf("open primary: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "UPDATE", Args: "ON PARTNO ADD ONHAND REPLACE COST"})
+	if err == nil || !strings.Contains(err.Error(), "No secondary database file is in use") {
+		t.Fatalf("expected no secondary database error, got %v", err)
+	}
+}
+
+func TestDispatchUpdateFromSecondary(t *testing.T) {
+	tempDir := t.TempDir()
+	primaryPath := createInventoryDBF(t, tempDir, "primary.dbf", []inventoryRecord{
+		{partNo: "11528", onHand: "16", cost: "22.00"},
+		{partNo: "21828", onHand: "16", cost: "34.72"},
+		{partNo: "70296", onHand: "5", cost: "200.00"},
+		{partNo: "89793", onHand: "5", cost: "134999.00"},
+	})
+	secondaryPath := createInventoryDBF(t, tempDir, "secondary.dbf", []inventoryRecord{
+		{partNo: "21828", onHand: "77", cost: "35.88"},
+		{partNo: "70296", onHand: "0", cost: "250.00"},
+		{partNo: "89793", onHand: "2", cost: "134999.00"},
+	})
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: primaryPath}); err != nil {
+		t.Fatalf("open primary: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "SELECT", Args: "SECONDARY"}); err != nil {
+		t.Fatalf("select secondary: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: secondaryPath}); err != nil {
+		t.Fatalf("open secondary: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "SELECT", Args: "PRIMARY"}); err != nil {
+		t.Fatalf("select primary: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb: "UPDATE",
+		Args: "ON PARTNO ADD ONHAND REPLACE COST",
+	}); err != nil {
+		t.Fatalf("unexpected error on UPDATE: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	wseeker := area.Table.Underlying().(io.ReadSeeker)
+	_, onHandIdx := area.Table.FieldByName("ONHAND")
+	_, costIdx := area.Table.FieldByName("COST")
+
+	checkRecord := func(partNo string, wantOnHand float64, wantCost float64) {
+		t.Helper()
+		for i := 0; i < int(area.Table.Header.RecordCount); i++ {
+			rec, err := area.Table.ReadRecordAt(wseeker, i)
+			if err != nil {
+				t.Fatalf("read record %d: %v", i, err)
+			}
+			partVal, _ := rec.DecodeField(area.Table, 0)
+			if strings.TrimSpace(fmt.Sprintf("%v", partVal)) != partNo {
+				continue
+			}
+			onHand, _ := rec.DecodeField(area.Table, onHandIdx)
+			cost, _ := rec.DecodeField(area.Table, costIdx)
+			if onHand.(float64) != wantOnHand {
+				t.Fatalf("part %s onhand = %v, want %v", partNo, onHand, wantOnHand)
+			}
+			if cost.(float64) != wantCost {
+				t.Fatalf("part %s cost = %v, want %v", partNo, cost, wantCost)
+			}
+			return
+		}
+		t.Fatalf("record %s not found", partNo)
+	}
+
+	checkRecord("11528", 16, 22.00)
+	checkRecord("21828", 93, 35.88)
+	checkRecord("70296", 5, 250.00)
+	checkRecord("89793", 7, 134999.00)
+}
+
+func TestDispatchUpdateFromFile(t *testing.T) {
+	tempDir := t.TempDir()
+	primaryPath := createInventoryDBF(t, tempDir, "primary.dbf", []inventoryRecord{
+		{partNo: "21828", onHand: "16", cost: "34.72"},
+	})
+	secondaryPath := createInventoryDBF(t, tempDir, "updates.dbf", []inventoryRecord{
+		{partNo: "21828", onHand: "77", cost: "35.88"},
+	})
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: primaryPath}); err != nil {
+		t.Fatalf("open primary: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:       "UPDATE",
+		FromClause: secondaryPath,
+		Args:       "ON PARTNO ADD ONHAND REPLACE COST",
+	}); err != nil {
+		t.Fatalf("unexpected error on UPDATE FROM file: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	wseeker := area.Table.Underlying().(io.ReadSeeker)
+	rec, err := area.Table.ReadRecordAt(wseeker, 0)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	_, onHandIdx := area.Table.FieldByName("ONHAND")
+	_, costIdx := area.Table.FieldByName("COST")
+	onHand, _ := rec.DecodeField(area.Table, onHandIdx)
+	cost, _ := rec.DecodeField(area.Table, costIdx)
+	if onHand.(float64) != 93 || cost.(float64) != 35.88 {
+		t.Fatalf("unexpected updated values: onhand=%v cost=%v", onHand, cost)
+	}
+}
+
+func TestDispatchUpdateKeyLengthMismatch(t *testing.T) {
+	tempDir := t.TempDir()
+	primaryPath := createInventoryDBF(t, tempDir, "primary.dbf", []inventoryRecord{
+		{partNo: "21828", onHand: "16", cost: "34.72"},
+	})
+	secondaryPath := createInventoryDBFWithPartWidth(t, tempDir, "secondary.dbf", 6, []inventoryRecord{
+		{partNo: "21828", onHand: "77", cost: "35.88"},
+	})
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: primaryPath}); err != nil {
+		t.Fatalf("open primary: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "SELECT", Args: "SECONDARY"}); err != nil {
+		t.Fatalf("select secondary: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: secondaryPath}); err != nil {
+		t.Fatalf("open secondary: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "SELECT", Args: "PRIMARY"}); err != nil {
+		t.Fatalf("select primary: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "UPDATE", Args: "ON PARTNO ADD ONHAND REPLACE COST"})
+	if err == nil || !strings.Contains(err.Error(), "KEYS ARE NOT THE SAME LENGTH") {
+		t.Fatalf("expected key length error, got %v", err)
+	}
+}
+
+type inventoryRecord struct {
+	partNo string
+	onHand string
+	cost   string
+}
+
+func createInventoryDBF(t *testing.T, dir, name string, records []inventoryRecord) string {
+	return createInventoryDBFWithPartWidth(t, dir, name, 5, records)
+}
+
+func createInventoryDBFWithPartWidth(t *testing.T, dir, name string, partWidth byte, records []inventoryRecord) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+
+	fields := []dbf.FieldDescriptor{
+		{Name: "PARTNO", Type: dbf.FieldTypeChar, Length: partWidth},
+		{Name: "ONHAND", Type: dbf.FieldTypeNumeric, Length: 5, DecimalCount: 0},
+		{Name: "COST", Type: dbf.FieldTypeNumeric, Length: 10, DecimalCount: 2},
+	}
+
+	recordLen := 1 + int(partWidth) + 5 + 10
+	var buf []byte
+	buf = append(buf, 0x02)
+	buf = append(buf, byte(len(records)), byte(len(records)>>8))
+	buf = append(buf, 0x50, 0x06, 0x01)
+	buf = append(buf, byte(recordLen), byte(recordLen>>8))
+
+	for _, f := range fields {
+		fb := make([]byte, 16)
+		copy(fb, f.Name)
+		fb[10] = byte(f.Type)
+		fb[11] = f.Length
+		fb[14] = f.DecimalCount
+		buf = append(buf, fb...)
+	}
+	buf = append(buf, 0x0D)
+
+	for _, rec := range records {
+		row := make([]byte, recordLen)
+		row[0] = 0x20
+		copy(row[1:], fmt.Sprintf("%-*s", partWidth, rec.partNo))
+		copy(row[1+int(partWidth):], fmt.Sprintf("%5s", rec.onHand))
+		copy(row[1+int(partWidth)+5:], fmt.Sprintf("%10s", rec.cost))
+		buf = append(buf, row...)
+	}
+	buf = append(buf, 0x1A)
+
+	if err := os.WriteFile(path, buf, 0644); err != nil {
+		t.Fatalf("write inventory dbf: %v", err)
+	}
+	return path
+}
