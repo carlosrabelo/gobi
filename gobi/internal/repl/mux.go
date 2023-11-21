@@ -72,6 +72,8 @@ func NewMux() *Mux {
 	m.Register("JOIN", cmdJOIN)
 	m.Register("TOTAL", cmdTOTAL)
 	m.Register("MODIFY", cmdMODIFY)
+	m.Register("REPORT", cmdREPORT)
+	m.Register("EJECT", cmdEJECT)
 	m.Register("LOCATE", cmdLOCATE)
 	m.Register("CONTINUE", cmdCONTINUE)
 	m.Register("COUNT", cmdCOUNT)
