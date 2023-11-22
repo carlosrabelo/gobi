@@ -86,7 +86,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `COPY TO` exporting records/schema to a new DBF
 - [x] `APPEND FROM` importing records from another DBF or text file
 - [x] `UPDATE FROM` modifying active DBF records using secondary area data
-- [ ] `JOIN` combining active and secondary DBFs into a new table
+- [x] `JOIN` combining active and secondary DBFs into a new table
 - [ ] `TOTAL ON` summarizing numeric fields to a target DBF
 - [ ] `LOCATE` and `CONTINUE` sequential search matching condition
 - [ ] `COUNT` records matching conditional filter
