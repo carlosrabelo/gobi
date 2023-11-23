@@ -3,6 +3,7 @@ package repl
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
@@ -62,4 +63,22 @@ func (e *sessionEnv) Exact() (on bool, ok bool) {
 
 func (e *sessionEnv) Default() (path string, ok bool) {
 	return e.ctx.Config.Default, true
+}
+
+func (e *sessionEnv) DateSettings() (order string, century bool, ok bool) {
+	return e.ctx.Config.DateOrder, e.ctx.Config.Century, true
+}
+
+func (e *sessionEnv) Today() (time.Time, bool) {
+	return e.ctx.SessionDate, true
+}
+
+func (e *sessionEnv) LUpdate() expr.Value {
+	a := e.ctx.Active()
+	if !a.HasTable() {
+		return expr.EmptyDateVal()
+	}
+	h := a.Table.Header
+	t := time.Date(1900+int(h.Year), time.Month(h.Month), int(h.Day), 0, 0, 0, 0, time.Local)
+	return expr.DateVal(t)
 }

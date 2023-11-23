@@ -3,6 +3,7 @@ package expr
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 type testEnv struct {
@@ -12,6 +13,11 @@ type testEnv struct {
 	area       Area
 	default_   string
 	hasDefault bool
+	dateOrder  string
+	century    bool
+	today      time.Time
+	hasToday   bool
+	lupdate    Value
 }
 
 func (e *testEnv) Memory(name string) (Value, bool) {
@@ -41,6 +47,28 @@ func (e *testEnv) Default() (string, bool) {
 		return e.default_, true
 	}
 	return ".", true
+}
+
+func (e *testEnv) DateSettings() (string, bool, bool) {
+	order := e.dateOrder
+	if order == "" {
+		order = DateAmerican
+	}
+	return order, e.century, true
+}
+
+func (e *testEnv) Today() (time.Time, bool) {
+	if e.hasToday {
+		return e.today, true
+	}
+	return time.Time{}, false
+}
+
+func (e *testEnv) LUpdate() Value {
+	if e.lupdate.Kind == KindDate {
+		return e.lupdate
+	}
+	return EmptyDateVal()
 }
 
 func TestEvalLiterals(t *testing.T) {

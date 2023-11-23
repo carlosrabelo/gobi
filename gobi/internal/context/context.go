@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/config"
 	"github.com/carlosrabelo/gobi/gobi/internal/symbols"
@@ -46,19 +47,25 @@ type Context struct {
 
 	openFiles int
 
+	// SessionDate is DATE(); starts as the host local date.
+	SessionDate time.Time
+
 	stdinReader *bufio.Reader
 	stdinSource io.Reader
 }
 
 // New returns a session with areas 1–10, active area 1, and process streams.
 func New() *Context {
+	now := time.Now()
+	y, m, d := now.Date()
 	c := &Context{
-		Config:     config.New(),
-		Symbols:    symbols.New(),
-		ActiveArea: 1,
-		Stdin:      os.Stdin,
-		Stdout:     os.Stdout,
-		Stderr:     os.Stderr,
+		Config:      config.New(),
+		Symbols:     symbols.New(),
+		ActiveArea:  1,
+		Stdin:       os.Stdin,
+		Stdout:      os.Stdout,
+		Stderr:      os.Stderr,
+		SessionDate: time.Date(y, m, d, 0, 0, 0, 0, time.Local),
 	}
 	for i := 1; i <= AreaCount; i++ {
 		c.Areas[i] = &Area{}

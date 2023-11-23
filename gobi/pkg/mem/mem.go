@@ -19,7 +19,7 @@ type Entry struct {
 	Value expr.Value
 }
 
-// WriteAll writes entries to w in .mem format (types C, N, L only).
+// WriteAll writes entries to w in .mem format (types C, N, L, D).
 func WriteAll(w io.Writer, entries []Entry) error {
 	for _, e := range entries {
 		if err := writeEntry(w, e); err != nil {
@@ -36,7 +36,6 @@ func writeEntry(w io.Writer, e Entry) error {
 		return fmt.Errorf("name too long: %s", name)
 	}
 	copy(hdr[0:], name)
-	// NUL already at remaining bytes
 
 	switch e.Value.Kind {
 	case expr.KindString:
@@ -66,12 +65,17 @@ func writeEntry(w io.Writer, e Entry) error {
 		}
 		_, err := w.Write(hdr[:])
 		return err
+	case expr.KindDate:
+		hdr[11] = 'D'
+		copy(hdr[18:], e.Value.YYYYMMDD())
+		_, err := w.Write(hdr[:])
+		return err
 	default:
 		return fmt.Errorf("unsupported value kind")
 	}
 }
 
-// ReadAll reads every entry until EOF. A type D header returns an error.
+// ReadAll reads every entry until EOF.
 func ReadAll(r io.Reader) ([]Entry, error) {
 	var out []Entry
 	for {
@@ -123,7 +127,12 @@ func decodeHeader(hdr [headerSize]byte) (Entry, error) {
 	case 'L':
 		return Entry{Name: name, Value: expr.LogicalVal(hdr[18] != 0)}, nil
 	case 'D':
-		return Entry{}, fmt.Errorf("date memory variables are not supported yet")
+		raw := string(hdr[18:26])
+		v, err := expr.ParseYYYYMMDD(raw)
+		if err != nil {
+			v = expr.EmptyDateVal()
+		}
+		return Entry{Name: name, Value: v}, nil
 	default:
 		return Entry{}, fmt.Errorf("unknown .mem type %q", typ)
 	}

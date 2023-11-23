@@ -152,6 +152,8 @@ func evalCompare(n *BinaryNode, env Env) (Value, error) {
 		case left.Num > right.Num:
 			cmp = 1
 		}
+	} else if left.Kind == KindDate && right.Kind == KindDate {
+		cmp = compareDates(left, right)
 	} else {
 		ls := strings.ToUpper(strings.TrimSpace(left.String()))
 		rs := strings.ToUpper(strings.TrimSpace(right.String()))
@@ -200,6 +202,9 @@ func evalArithmetic(n *BinaryNode, env Env) (Value, error) {
 	}
 	switch n.Op {
 	case "+":
+		if left.Kind == KindDate || right.Kind == KindDate {
+			return dateAdd(left, right)
+		}
 		if left.Kind == KindString && right.Kind != KindNumber {
 			return StringVal(left.String() + right.String()), nil
 		}
@@ -218,6 +223,9 @@ func evalArithmetic(n *BinaryNode, env Env) (Value, error) {
 	case "-":
 		if left.Kind == KindString && right.Kind == KindString {
 			return StringVal(stringMinus(left.Str, right.Str)), nil
+		}
+		if left.Kind == KindDate || right.Kind == KindDate {
+			return dateSub(left, right)
 		}
 		a, err := asNumber(left)
 		if err != nil {
