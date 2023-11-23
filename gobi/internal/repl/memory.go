@@ -105,6 +105,10 @@ func typeLetter(v expr.Value) string {
 		return "N"
 	case expr.KindLogical:
 		return "L"
+	case expr.KindDate:
+		return "D"
+	case expr.KindMemo:
+		return "M"
 	default:
 		return "C"
 	}

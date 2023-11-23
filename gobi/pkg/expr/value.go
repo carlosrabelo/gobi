@@ -80,10 +80,7 @@ func (v Value) String() string {
 	case KindNumber:
 		return strconv.FormatFloat(v.Num, 'g', -1, 64)
 	case KindDate:
-		if v.EmptyDate {
-			return "  /  /  "
-		}
-		return v.Date.Format("01/02/06")
+		return FormatDate(v, DateAmerican, false)
 	case KindMemo:
 		return v.Str
 	default:

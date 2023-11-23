@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
@@ -37,14 +38,25 @@ func TestRoundTripCNL(t *testing.T) {
 	}
 }
 
-func TestRejectDateLeavesCaller(t *testing.T) {
-	var hdr [32]byte
-	copy(hdr[0:], "WHEN")
-	hdr[11] = 'D'
-	copy(hdr[18:], "20200101")
-	_, err := ReadAll(bytes.NewReader(hdr[:]))
-	if err == nil {
-		t.Fatal("expected D rejection")
+func TestRoundTripDate(t *testing.T) {
+	d := expr.DateVal(time.Date(1986, 7, 4, 0, 0, 0, 0, time.Local))
+	var buf bytes.Buffer
+	if err := WriteAll(&buf, []Entry{{Name: "WHEN", Value: d}}); err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.Bytes()
+	if raw[11] != 'D' {
+		t.Fatalf("type %c", raw[11])
+	}
+	if string(raw[18:26]) != "19860704" {
+		t.Fatalf("digits %q", raw[18:26])
+	}
+	got, err := ReadAll(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Value.Kind != expr.KindDate || got[0].Value.YYYYMMDD() != "19860704" {
+		t.Fatalf("%+v", got)
 	}
 }
 

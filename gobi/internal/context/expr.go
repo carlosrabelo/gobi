@@ -66,11 +66,20 @@ func dbfToExpr(f dbf.Field, v dbf.Value) expr.Value {
 		return expr.NumberVal(v.Num)
 	case 'L':
 		return expr.LogicalVal(v.Log)
-	case 'D', 'M':
-		if v.Empty {
-			return expr.StringVal("")
+	case 'D':
+		if v.Empty || strings.TrimSpace(v.Str) == "" {
+			return expr.EmptyDateVal()
 		}
-		return expr.StringVal(v.Str)
+		dv, err := expr.ParseYYYYMMDD(v.Str)
+		if err != nil {
+			return expr.EmptyDateVal()
+		}
+		return dv
+	case 'M':
+		if v.Empty {
+			return expr.MemoVal("")
+		}
+		return expr.MemoVal(v.Str)
 	default:
 		return expr.StringVal(v.Str)
 	}

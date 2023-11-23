@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ErrUnknownFunction means the name is not a built-in in this package.
@@ -84,6 +85,28 @@ func CallBuiltin(name string, args []Value, a Area, env Env) (Value, error) {
 		return builtinIIF(args)
 	case "DISKSPACE":
 		return builtinDISKSPACE(args, env)
+	case "DATE":
+		return builtinDATE(args, env)
+	case "CTOD":
+		return builtinCTOD(args, env)
+	case "DTOC":
+		return builtinDTOC(args, env)
+	case "DAY":
+		return builtinDAY(args)
+	case "MONTH":
+		return builtinMONTH(args)
+	case "YEAR":
+		return builtinYEAR(args)
+	case "CMONTH":
+		return builtinCMONTH(args)
+	case "CDOW":
+		return builtinCDOW(args)
+	case "DOW":
+		return builtinDOW(args)
+	case "TIME":
+		return builtinTIME(args)
+	case "LUPDATE":
+		return builtinLUPDATE(args, env)
 	case "RECCOUNT":
 		return builtinRECCOUNT(args, a)
 	case "RECSIZE":
@@ -729,4 +752,161 @@ func builtinNDX(args []Value, a Area) (Value, error) {
 		return StringVal(""), nil
 	}
 	return StringVal(a.NDX[i-1]), nil
+}
+
+func dateOrder(env Env) string {
+	if env != nil {
+		if o, _, ok := env.DateSettings(); ok && o != "" {
+			return o
+		}
+	}
+	return DateAmerican
+}
+
+func dateCentury(env Env) bool {
+	if env != nil {
+		if _, c, ok := env.DateSettings(); ok {
+			return c
+		}
+	}
+	return false
+}
+
+func requireDate(fn string, v Value) (Value, error) {
+	if v.Kind != KindDate {
+		return Value{}, fmt.Errorf("%s: wrong type", fn)
+	}
+	return v, nil
+}
+
+func builtinDATE(args []Value, env Env) (Value, error) {
+	if err := requireArity("DATE", args, 0); err != nil {
+		return Value{}, err
+	}
+	if env != nil {
+		if t, ok := env.Today(); ok {
+			return DateVal(t), nil
+		}
+	}
+	return DateVal(time.Now()), nil
+}
+
+func builtinCTOD(args []Value, env Env) (Value, error) {
+	if err := requireArity("CTOD", args, 1); err != nil {
+		return Value{}, err
+	}
+	return ParseDateString(args[0].String(), dateOrder(env)), nil
+}
+
+func builtinDTOC(args []Value, env Env) (Value, error) {
+	if err := requireArity("DTOC", args, 1); err != nil {
+		return Value{}, err
+	}
+	d, err := requireDate("DTOC", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return StringVal(FormatDate(d, dateOrder(env), dateCentury(env))), nil
+}
+
+func builtinDAY(args []Value) (Value, error) {
+	if err := requireArity("DAY", args, 1); err != nil {
+		return Value{}, err
+	}
+	d, err := requireDate("DAY", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if d.EmptyDate {
+		return NumberVal(0), nil
+	}
+	return NumberVal(float64(d.Date.Day())), nil
+}
+
+func builtinMONTH(args []Value) (Value, error) {
+	if err := requireArity("MONTH", args, 1); err != nil {
+		return Value{}, err
+	}
+	d, err := requireDate("MONTH", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if d.EmptyDate {
+		return NumberVal(0), nil
+	}
+	return NumberVal(float64(d.Date.Month())), nil
+}
+
+func builtinYEAR(args []Value) (Value, error) {
+	if err := requireArity("YEAR", args, 1); err != nil {
+		return Value{}, err
+	}
+	d, err := requireDate("YEAR", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if d.EmptyDate {
+		return NumberVal(0), nil
+	}
+	return NumberVal(float64(d.Date.Year())), nil
+}
+
+func builtinCMONTH(args []Value) (Value, error) {
+	if err := requireArity("CMONTH", args, 1); err != nil {
+		return Value{}, err
+	}
+	d, err := requireDate("CMONTH", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if d.EmptyDate {
+		return StringVal(""), nil
+	}
+	return StringVal(monthNames[int(d.Date.Month())]), nil
+}
+
+func builtinCDOW(args []Value) (Value, error) {
+	if err := requireArity("CDOW", args, 1); err != nil {
+		return Value{}, err
+	}
+	d, err := requireDate("CDOW", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if d.EmptyDate {
+		return StringVal(""), nil
+	}
+	return StringVal(dowNames[d.Date.Weekday()]), nil
+}
+
+func builtinDOW(args []Value) (Value, error) {
+	if err := requireArity("DOW", args, 1); err != nil {
+		return Value{}, err
+	}
+	d, err := requireDate("DOW", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if d.EmptyDate {
+		return NumberVal(0), nil
+	}
+	// Sunday = 1 … Saturday = 7
+	return NumberVal(float64(d.Date.Weekday()) + 1), nil
+}
+
+func builtinTIME(args []Value) (Value, error) {
+	if err := requireArity("TIME", args, 0); err != nil {
+		return Value{}, err
+	}
+	return StringVal(time.Now().Format("15:04:05")), nil
+}
+
+func builtinLUPDATE(args []Value, env Env) (Value, error) {
+	if err := requireArity("LUPDATE", args, 0); err != nil {
+		return Value{}, err
+	}
+	if env == nil {
+		return EmptyDateVal(), nil
+	}
+	return env.LUpdate(), nil
 }

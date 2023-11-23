@@ -117,6 +117,30 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 		ctx.Config.Color = text
 		return nil
 
+	case "DATE":
+		val := strings.ToUpper(to)
+		if val == "" && len(args) >= 2 {
+			val = strings.ToUpper(args[1])
+		}
+		switch val {
+		case "AMERICAN", "ANSI", "BRITISH", "ITALIAN", "FRENCH", "GERMAN":
+			ctx.Config.DateOrder = val
+			return nil
+		default:
+			return fail(ctx, "SET DATE requires AMERICAN, ANSI, BRITISH, ITALIAN, FRENCH, or GERMAN")
+		}
+
+	case "CENTURY":
+		if len(args) < 2 {
+			return fail(ctx, "SET CENTURY requires ON or OFF")
+		}
+		on, err := parseOnOff(args[1])
+		if err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		ctx.Config.Century = on
+		return nil
+
 	default:
 		return fail(ctx, "Unrecognized command: SET %s", name)
 	}

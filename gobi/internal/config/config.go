@@ -53,6 +53,8 @@ type Config struct {
 	MemoWidth   int
 	Status      bool
 	Screen      ScreenMode
+	DateOrder   string // AMERICAN, ANSI, …
+	Century     bool
 }
 
 // New returns the constitution defaults. Status is on when os.Stdout is a terminal.
@@ -92,6 +94,8 @@ func New() *Config {
 		MemoWidth:  50,
 		Status:     stdoutIsTerminal(),
 		Screen:     ScreenAuto,
+		DateOrder:  "AMERICAN",
+		Century:    false,
 	}
 }
 
