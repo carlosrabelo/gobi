@@ -20,6 +20,7 @@ type Area struct {
 	Path   string
 	Table  *dbf.Table
 	file   *os.File
+	memo   *os.File
 	Cursor int // 1-based; RecCount+1 at EOF; 0 when no table
 	Record dbf.Record
 	Landed bool // true when Cursor points at a physical record
@@ -88,15 +89,28 @@ func (c *Context) CloseArea(n int) error {
 		_ = a.Table.Close()
 		a.Table = nil
 	}
+	var first error
+	if a.memo != nil {
+		if err := a.memo.Close(); err != nil && first == nil {
+			first = err
+		}
+		a.memo = nil
+		if c.openFiles > 0 {
+			c.openFiles--
+		}
+	}
 	if a.file != nil {
 		err := a.file.Close()
 		a.file = nil
 		if c.openFiles > 0 {
 			c.openFiles--
 		}
-		return err
+		if first == nil {
+			first = err
+		}
+		return first
 	}
-	return nil
+	return first
 }
 
 // CloseIndexes clears index bindings in the active area.
@@ -186,8 +200,34 @@ func (c *Context) Use(name, alias string) error {
 		_ = f.Close()
 		return err
 	}
+	var memoFile *os.File
+	if tab.Header.HasMemo() {
+		dbt := strings.TrimSuffix(path, filepath.Ext(path)) + ".dbt"
+		if !fileExists(dbt) {
+			_ = f.Close()
+			return fmt.Errorf("memo file missing: %s", filepath.Base(dbt))
+		}
+		if c.openFiles+1 >= MaxOpenFiles {
+			_ = f.Close()
+			return fmt.Errorf("too many files open")
+		}
+		mf, err := os.OpenFile(dbt, os.O_RDWR, 0)
+		if err != nil {
+			_ = f.Close()
+			return fmt.Errorf("cannot open memo: %v", err)
+		}
+		memo, err := dbf.OpenMemo(mf)
+		if err != nil {
+			_ = mf.Close()
+			_ = f.Close()
+			return err
+		}
+		tab.Memo = memo
+		memoFile = mf
+	}
 	a := c.Active()
 	a.file = f
+	a.memo = memoFile
 	a.Table = tab
 	a.Path = path
 	if alias != "" {
@@ -198,6 +238,9 @@ func (c *Context) Use(name, alias string) error {
 	a.Found = false
 	a.BOF = false
 	c.openFiles++
+	if memoFile != nil {
+		c.openFiles++
+	}
 	count := a.RecCount()
 	if count >= 1 {
 		a.Cursor = 1

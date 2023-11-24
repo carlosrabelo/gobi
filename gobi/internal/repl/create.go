@@ -83,6 +83,25 @@ func cmdCREATE(ctx *context.Context, cmd command.Command) error {
 		_ = os.Remove(tmpName)
 		return fail(ctx, "%s", err.Error())
 	}
+	hasMemo := false
+	for _, f := range fields {
+		if f.Type == 'M' {
+			hasMemo = true
+			break
+		}
+	}
+	if hasMemo {
+		dbt := strings.TrimSuffix(path, filepath.Ext(path)) + ".dbt"
+		mf, err := os.Create(dbt)
+		if err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		if _, err := dbf.CreateMemo(mf); err != nil {
+			_ = mf.Close()
+			return fail(ctx, "%s", err.Error())
+		}
+		_ = mf.Close()
+	}
 	return nil
 }
 

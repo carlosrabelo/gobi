@@ -16,6 +16,7 @@ type Table struct {
 	Header Header
 	rw     io.ReadWriteSeeker
 	syncer syncer
+	Memo   *MemoFile
 }
 
 // Create writes a new empty table (header, terminator, end marker) at the start of rw.
@@ -171,7 +172,13 @@ func (t *Table) Zap() error {
 }
 
 // PackNonDeleted writes non-deleted records into w as a new table body after the header.
+// When dstMemo is non-nil and src has a Memo, memo fields are rewritten into dstMemo.
 func PackNonDeleted(src *Table, w io.Writer) (kept uint32, err error) {
+	return PackNonDeletedMemo(src, w, nil)
+}
+
+// PackNonDeletedMemo is PackNonDeleted with optional destination memo.
+func PackNonDeletedMemo(src *Table, w io.Writer, dstMemo *MemoFile) (kept uint32, err error) {
 	h := src.Header
 	h.RecordCount = 0
 	if err := WriteHeader(w, h); err != nil {
@@ -186,6 +193,27 @@ func PackNonDeleted(src *Table, w io.Writer) (kept uint32, err error) {
 		if rec.Deleted {
 			continue
 		}
+		if dstMemo != nil && src.Memo != nil {
+			for i, f := range src.Header.Fields {
+				if f.Type != 'M' {
+					continue
+				}
+				block, _ := ParseBlockDigits(rec.Values[i].Str)
+				if block == 0 || rec.Values[i].Empty {
+					rec.Values[i] = Value{Empty: true}
+					continue
+				}
+				text, err := src.Memo.ReadText(block)
+				if err != nil {
+					return kept, err
+				}
+				nb, err := dstMemo.AllocWrite(text)
+				if err != nil {
+					return kept, err
+				}
+				rec.Values[i] = Value{Str: FormatBlockDigits(nb)}
+			}
+		}
 		raw, err := EncodeRecord(src.Header.Fields, rec)
 		if err != nil {
 			return kept, err
@@ -198,7 +226,6 @@ func PackNonDeleted(src *Table, w io.Writer) (kept uint32, err error) {
 	if _, err := w.Write([]byte{endMarker}); err != nil {
 		return kept, err
 	}
-	// Patch count in the header we already wrote.
 	if ws, ok := w.(io.WriteSeeker); ok {
 		if _, err := ws.Seek(4, io.SeekStart); err != nil {
 			return kept, err

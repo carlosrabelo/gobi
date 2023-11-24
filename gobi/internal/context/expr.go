@@ -39,10 +39,31 @@ func (c *Context) FieldValue(alias, name string) (expr.Value, bool) {
 	want := strings.ToUpper(name)
 	for i, f := range a.Table.Header.Fields {
 		if f.Name == want {
+			if f.Type == 'M' {
+				return readMemoValue(a, a.Record.Values[i]), true
+			}
 			return dbfToExpr(f, a.Record.Values[i]), true
 		}
 	}
 	return expr.Value{}, false
+}
+
+func readMemoValue(a *Area, v dbf.Value) expr.Value {
+	if v.Empty || strings.TrimSpace(v.Str) == "" {
+		return expr.MemoVal("")
+	}
+	if a.Table == nil || a.Table.Memo == nil {
+		return expr.MemoVal("")
+	}
+	block, err := dbf.ParseBlockDigits(v.Str)
+	if err != nil || block == 0 {
+		return expr.MemoVal("")
+	}
+	text, err := a.Table.Memo.ReadText(block)
+	if err != nil {
+		return expr.MemoVal("")
+	}
+	return expr.MemoVal(text)
 }
 
 // AreaByAlias returns the work area with that alias, or the active area when alias is empty.
@@ -76,10 +97,7 @@ func dbfToExpr(f dbf.Field, v dbf.Value) expr.Value {
 		}
 		return dv
 	case 'M':
-		if v.Empty {
-			return expr.MemoVal("")
-		}
-		return expr.MemoVal(v.Str)
+		return expr.MemoVal("") // resolved via FieldValue when table has Memo
 	default:
 		return expr.StringVal(v.Str)
 	}

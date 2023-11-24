@@ -104,6 +104,23 @@ func replaceOne(ctx *context.Context, env expr.Env, tree expr.Expression, fi int
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
+	if f.Type == 'M' {
+		if a.Table.Memo == nil {
+			return fail(ctx, "no memo file")
+		}
+		text := v.String()
+		block, err := a.Table.Memo.AllocWrite(text)
+		if err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		rec := a.Record
+		rec.Values[fi] = dbf.Value{Str: dbf.FormatBlockDigits(block)}
+		if err := a.Table.Write(a.Cursor, rec); err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		a.Record = rec
+		return syncAllIndexes(ctx)
+	}
 	dv, err := exprToDBF(f, v)
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
