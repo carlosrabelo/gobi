@@ -118,24 +118,65 @@ func cmdPACK(ctx *context.Context, cmd command.Command) error {
 		return fail(ctx, "%s", err.Error())
 	}
 	tmpName := tmp.Name()
-	kept, err := dbf.PackNonDeleted(a.Table, tmp)
+	var memoTmp *os.File
+	var memoTmpName string
+	var dstMemo *dbf.MemoFile
+	if a.Table.Header.HasMemo() {
+		memoTmp, err = os.CreateTemp(dir, ".gobi-pack-dbt-*")
+		if err != nil {
+			_ = tmp.Close()
+			_ = os.Remove(tmpName)
+			return fail(ctx, "%s", err.Error())
+		}
+		memoTmpName = memoTmp.Name()
+		dstMemo, err = dbf.CreateMemo(memoTmp)
+		if err != nil {
+			_ = memoTmp.Close()
+			_ = os.Remove(memoTmpName)
+			_ = tmp.Close()
+			_ = os.Remove(tmpName)
+			return fail(ctx, "%s", err.Error())
+		}
+	}
+	kept, err := dbf.PackNonDeletedMemo(a.Table, tmp, dstMemo)
 	if err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmpName)
+		if memoTmp != nil {
+			_ = memoTmp.Close()
+			_ = os.Remove(memoTmpName)
+		}
 		return fail(ctx, "%s", err.Error())
 	}
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(tmpName)
 		return fail(ctx, "%s", err.Error())
 	}
+	if memoTmp != nil {
+		if err := memoTmp.Close(); err != nil {
+			_ = os.Remove(tmpName)
+			_ = os.Remove(memoTmpName)
+			return fail(ctx, "%s", err.Error())
+		}
+	}
 	alias := a.Alias
+	dbtPath := strings.TrimSuffix(path, filepath.Ext(path)) + ".dbt"
 	if err := ctx.CloseArea(ctx.ActiveArea); err != nil {
 		_ = os.Remove(tmpName)
+		if memoTmpName != "" {
+			_ = os.Remove(memoTmpName)
+		}
 		return fail(ctx, "%s", err.Error())
 	}
 	if err := os.Rename(tmpName, path); err != nil {
 		_ = os.Remove(tmpName)
 		return fail(ctx, "%s", err.Error())
+	}
+	if memoTmpName != "" {
+		_ = os.Remove(dbtPath)
+		if err := os.Rename(memoTmpName, dbtPath); err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
 	}
 	if err := ctx.Use(path, alias); err != nil {
 		return fail(ctx, "%s", err.Error())
