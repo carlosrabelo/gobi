@@ -2728,3 +2728,157 @@ func writeJoinDBF(t *testing.T, path string, fields []dbf.FieldDescriptor, recor
 	}
 	return path
 }
+func TestDispatchTotalNoToClause(t *testing.T) {
+	tempDir := t.TempDir()
+	srcPath := createTotalSalesDBF(t, tempDir, "sales.dbf", nil)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: srcPath}); err != nil {
+		t.Fatalf("open source: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "TOTAL", Args: "ON DEPTNUM FIELD SALARY"})
+	if err == nil || !strings.Contains(err.Error(), "TO") {
+		t.Fatalf("expected TO error, got %v", err)
+	}
+}
+
+func TestDispatchTotalSummarizeField(t *testing.T) {
+	tempDir := t.TempDir()
+	srcPath := createTotalSalesDBF(t, tempDir, "sales.dbf", []totalSalesRecord{
+		{dept: "16", salary: "25000.00", name: "Alice"},
+		{dept: "16", salary: "13625.00", name: "Bob"},
+		{dept: "54", salary: "61700.00", name: "John"},
+	})
+	outPath := filepath.Join(tempDir, "deptsals.dbf")
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: srcPath}); err != nil {
+		t.Fatalf("open source: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:     "TOTAL",
+		ToClause: outPath,
+		Args:     "ON DEPTNUM FIELD SALARY",
+	}); err != nil {
+		t.Fatalf("unexpected error on TOTAL: %v", err)
+	}
+
+	outCtx := testCtx()
+	outCtx.Stdout = &bytes.Buffer{}
+	if err := commandMux.Dispatch(outCtx, Command{Verb: "USE", Args: outPath}); err != nil {
+		t.Fatalf("open total output: %v", err)
+	}
+
+	area := outCtx.GetActiveArea()
+	if area.Table.Header.RecordCount != 2 {
+		t.Fatalf("expected 2 total records, got %d", area.Table.Header.RecordCount)
+	}
+	if len(area.Table.Fields) != 2 {
+		t.Fatalf("expected 2 fields in total output, got %d", len(area.Table.Fields))
+	}
+
+	var stdout bytes.Buffer
+	outCtx.Stdout = &stdout
+	if err := commandMux.Dispatch(outCtx, Command{Verb: "LIST", Args: "DEPTNUM, SALARY"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "38625") {
+		t.Fatalf("expected summed salary 38625 for dept 16, got: %q", output)
+	}
+	if !strings.Contains(output, "61700") {
+		t.Fatalf("expected salary 61700 for dept 54, got: %q", output)
+	}
+}
+
+func TestDispatchTotalForClause(t *testing.T) {
+	tempDir := t.TempDir()
+	srcPath := createTotalSalesDBF(t, tempDir, "sales.dbf", []totalSalesRecord{
+		{dept: "16", salary: "25000.00", name: "Alice"},
+		{dept: "16", salary: "13625.00", name: "Bob"},
+		{dept: "54", salary: "61700.00", name: "John"},
+	})
+	outPath := filepath.Join(tempDir, "deptsals.dbf")
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: srcPath}); err != nil {
+		t.Fatalf("open source: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:      "TOTAL",
+		ToClause:  outPath,
+		ForClause: "DEPTNUM = '16'",
+		Args:      "ON DEPTNUM FIELD SALARY",
+	}); err != nil {
+		t.Fatalf("unexpected error on TOTAL FOR: %v", err)
+	}
+
+	outCtx := testCtx()
+	outCtx.Stdout = &bytes.Buffer{}
+	if err := commandMux.Dispatch(outCtx, Command{Verb: "USE", Args: outPath}); err != nil {
+		t.Fatalf("open total output: %v", err)
+	}
+
+	area := outCtx.GetActiveArea()
+	if area.Table.Header.RecordCount != 1 {
+		t.Fatalf("expected 1 total record for FOR clause, got %d", area.Table.Header.RecordCount)
+	}
+}
+
+type totalSalesRecord struct {
+	dept   string
+	salary string
+	name   string
+}
+
+func createTotalSalesDBF(t *testing.T, dir, name string, records []totalSalesRecord) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+
+	fields := []dbf.FieldDescriptor{
+		{Name: "DEPTNUM", Type: dbf.FieldTypeChar, Length: 3},
+		{Name: "SALARY", Type: dbf.FieldTypeNumeric, Length: 8, DecimalCount: 2},
+		{Name: "NAME", Type: dbf.FieldTypeChar, Length: 10},
+	}
+	recordLen := 1 + 3 + 8 + 10
+
+	var buf []byte
+	buf = append(buf, 0x02)
+	buf = append(buf, byte(len(records)), byte(len(records)>>8))
+	buf = append(buf, 0x50, 0x06, 0x01)
+	buf = append(buf, byte(recordLen), byte(recordLen>>8))
+
+	for _, f := range fields {
+		fb := make([]byte, 16)
+		copy(fb, f.Name)
+		fb[10] = byte(f.Type)
+		fb[11] = f.Length
+		fb[14] = f.DecimalCount
+		buf = append(buf, fb...)
+	}
+	buf = append(buf, 0x0D)
+
+	for _, rec := range records {
+		row := make([]byte, recordLen)
+		row[0] = 0x20
+		copy(row[1:], fmt.Sprintf("%-3s", rec.dept))
+		copy(row[4:], fmt.Sprintf("%8s", rec.salary))
+		copy(row[12:], fmt.Sprintf("%-10s", rec.name))
+		buf = append(buf, row...)
+	}
+	buf = append(buf, 0x1A)
+
+	if err := os.WriteFile(path, buf, 0644); err != nil {
+		t.Fatalf("write total sales dbf: %v", err)
+	}
+	return path
+}
