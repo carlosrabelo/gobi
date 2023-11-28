@@ -88,7 +88,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `UPDATE FROM` modifying active DBF records using secondary area data
 - [x] `JOIN` combining active and secondary DBFs into a new table
 - [x] `TOTAL ON` summarizing numeric fields to a target DBF
-- [ ] `LOCATE` and `CONTINUE` sequential search matching condition
+- [x] `LOCATE` and `CONTINUE` sequential search matching condition
 - [ ] `COUNT` records matching conditional filter
 - [ ] `SUM` totaling numeric field values matching filter
 - [ ] `AVERAGE` calculating mean of numeric fields matching filter

@@ -91,6 +91,8 @@ func (m *CommandMux) registerAll() {
 	m.register("UPDATE", handleUpdate)
 	m.register("JOIN", handleJoin)
 	m.register("TOTAL", handleTotal)
+	m.register("LOCATE", handleLocate)
+	m.register("CONTINUE", handleContinue)
 }
 
 func stubHandler(verb string) HandlerFunc {

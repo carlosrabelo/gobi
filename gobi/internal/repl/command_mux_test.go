@@ -2882,3 +2882,121 @@ func createTotalSalesDBF(t *testing.T, dir, name string, records []totalSalesRec
 	}
 	return path
 }
+func TestDispatchLocateNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "LOCATE", ForClause: "AGE > 30"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchLocateNoForClause(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "LOCATE"})
+	if err == nil || !strings.Contains(err.Error(), "FOR") {
+		t.Fatalf("expected FOR error, got %v", err)
+	}
+}
+
+func TestDispatchContinueNoLocate(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "CONTINUE"})
+	if err == nil || !strings.Contains(err.Error(), "No active LOCATE") {
+		t.Fatalf("expected no active locate error, got %v", err)
+	}
+}
+
+func TestDispatchLocateAndContinue(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LOCATE", ForClause: "AGE >= 35"}); err != nil {
+		t.Fatalf("unexpected error on LOCATE: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if !area.Found || area.RecordNo != 1 {
+		t.Fatalf("expected first match at record 2, found=%v recordNo=%d", area.Found, area.RecordNo)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "CONTINUE"}); err != nil {
+		t.Fatalf("unexpected error on first CONTINUE: %v", err)
+	}
+	if !area.Found || area.RecordNo != 2 {
+		t.Fatalf("expected second match at record 3, found=%v recordNo=%d", area.Found, area.RecordNo)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "CONTINUE"}); err != nil {
+		t.Fatalf("unexpected error on second CONTINUE: %v", err)
+	}
+	if !area.Found || area.RecordNo != 3 {
+		t.Fatalf("expected third match at record 4, found=%v recordNo=%d", area.Found, area.RecordNo)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "CONTINUE"}); err != nil {
+		t.Fatalf("unexpected error on third CONTINUE: %v", err)
+	}
+	if area.Found || area.RecordNo != 4 || area.ActiveRecord != nil {
+		t.Fatalf("expected end of locate scope, found=%v recordNo=%d active=%v", area.Found, area.RecordNo, area.ActiveRecord)
+	}
+}
+
+func TestDispatchLocateNotFound(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LOCATE", ForClause: "AGE > 100"}); err != nil {
+		t.Fatalf("unexpected error on LOCATE: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.Found || area.ActiveRecord != nil {
+		t.Fatalf("expected no match, found=%v", area.Found)
+	}
+	if !strings.Contains(stdout.String(), "End of Locate scope") {
+		t.Fatalf("expected end-of-scope talk message, got %q", stdout.String())
+	}
+}
+
+func createLocateTestDBF(t *testing.T, tempDir string) string {
+	t.Helper()
+	rec1 := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x20}, append([]byte("Bob       "), []byte(" 35")...)...)
+	rec3 := append([]byte{0x20}, append([]byte("Charlie   "), []byte(" 45")...)...)
+	rec4 := append([]byte{0x20}, append([]byte("Dave      "), []byte(" 35")...)...)
+	return createTempDBFWithRecords(t, tempDir, "locatedb.dbf", [][]byte{rec1, rec2, rec3, rec4})
+}
