@@ -3000,3 +3000,108 @@ func createLocateTestDBF(t *testing.T, tempDir string) string {
 	rec4 := append([]byte{0x20}, append([]byte("Dave      "), []byte(" 35")...)...)
 	return createTempDBFWithRecords(t, tempDir, "locatedb.dbf", [][]byte{rec1, rec2, rec3, rec4})
 }
+func TestDispatchCountNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "COUNT", ForClause: "AGE > 30"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchCountAllRecords(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "COUNT"}); err != nil {
+		t.Fatalf("unexpected error on COUNT: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "COUNT = 00004") {
+		t.Fatalf("expected count of 4, got %q", stdout.String())
+	}
+}
+
+func TestDispatchCountForClause(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "COUNT", ForClause: "AGE >= 35"}); err != nil {
+		t.Fatalf("unexpected error on COUNT FOR: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "COUNT = 00003") {
+		t.Fatalf("expected count of 3, got %q", stdout.String())
+	}
+}
+
+func TestDispatchCountToVariable(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:      "COUNT",
+		ForClause: "AGE >= 35",
+		ToClause:  "adults",
+	}); err != nil {
+		t.Fatalf("unexpected error on COUNT TO: %v", err)
+	}
+
+	val, ok := ctx.Variables.Get("ADULTS")
+	if !ok {
+		t.Fatal("expected ADULTS memory variable")
+	}
+	if num, ok := val.(float64); !ok || num != 3 {
+		t.Fatalf("expected ADULTS=3, got %v", val)
+	}
+}
+
+func TestDispatchCountPreservesRecordPointer(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	area.RecordNo = 2
+	rseeker := area.Table.Underlying().(io.ReadSeeker)
+	rec, err := area.Table.ReadRecordAt(rseeker, 2)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	area.ActiveRecord = rec
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "COUNT", ForClause: "AGE >= 35"}); err != nil {
+		t.Fatalf("unexpected error on COUNT: %v", err)
+	}
+	if area.RecordNo != 2 || area.ActiveRecord != rec {
+		t.Fatalf("expected record pointer preserved at record 3")
+	}
+}
