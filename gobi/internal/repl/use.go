@@ -33,7 +33,7 @@ type errString string
 
 func (e errString) Error() string { return string(e) }
 
-func cmdCLOSE(ctx *context.Context, cmd command.Command) error {
+func (m *Mux) cmdCLOSE(ctx *context.Context, cmd command.Command) error {
 	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
 	switch arg {
 	case "DATABASES":
@@ -58,6 +58,8 @@ func cmdCLOSE(ctx *context.Context, cmd command.Command) error {
 			return fail(ctx, "%s", err.Error())
 		}
 		return nil
+	case "PROCEDURE":
+		return cmdCLOSEPROCEDURE(ctx, m)
 	case "":
 		return fail(ctx, "CLOSE requires an argument")
 	default:

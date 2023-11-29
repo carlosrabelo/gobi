@@ -13,9 +13,11 @@ import (
 
 // Frame is one running .prg on the call stack.
 type Frame struct {
-	Path  string
-	Lines []string // original text lines (0-based)
-	PC    int      // next line index to consider
+	Path        string
+	Lines       []string // lines being executed
+	SourceLines []string // full file for PROCEDURE lookup; nil = Lines
+	PC          int      // next line index to consider
+	onReturn    *localSnapshot
 }
 
 // Program holds the DO call stack.
@@ -29,32 +31,7 @@ func NewProgram() *Program {
 }
 
 func (m *Mux) cmdDO(ctx *context.Context, cmd command.Command) error {
-	if m.prog == nil {
-		m.prog = NewProgram()
-	}
-	name := strings.TrimSpace(cmd.Args)
-	if name == "" {
-		return fail(ctx, "DO requires a file name")
-	}
-	if i := strings.IndexAny(name, " \t"); i >= 0 {
-		name = name[:i]
-	}
-	path, err := prgPath(ctx, name)
-	if err != nil {
-		return fail(ctx, "%s", err.Error())
-	}
-	lines, err := loadPrg(path)
-	if err != nil {
-		return fail(ctx, "%s", err.Error())
-	}
-	if err := validateBlocks(lines); err != nil {
-		return fail(ctx, "%s", err.Error())
-	}
-	m.prog.Stack = append(m.prog.Stack, Frame{Path: path, Lines: lines, PC: 0})
-	if len(m.prog.Stack) == 1 {
-		return runProgram(ctx, m)
-	}
-	return nil
+	return m.resolveDO(ctx, cmd.Args)
 }
 
 func prgPath(ctx *context.Context, name string) (string, error) {
@@ -180,11 +157,19 @@ func runProgram(ctx *context.Context, m *Mux) error {
 		cmd := command.Split(line)
 		switch cmd.Verb {
 		case "RETURN":
-			m.prog.Stack = m.prog.Stack[:len(m.prog.Stack)-1]
+			toMaster := strings.Contains(strings.ToUpper(cmd.Args), "TO MASTER")
+			doReturn(ctx, m, toMaster)
 			continue
 		case "CANCEL":
 			m.prog.Stack = nil
+			ctx.Privates = nil
+			ctx.ParamLocals = nil
+			ctx.PendingArgs = nil
 			return nil
+		case "PROCEDURE":
+			// skip to next PROCEDURE or end when falling through main
+			fr.PC = procEnd(fr.Lines, fr.PC)
+			continue
 		case "IF", "ELSE", "ENDIF", "ENDDO", "LOOP", "EXIT", "CASE", "OTHERWISE", "ENDCASE", "TEXT", "ENDTEXT":
 			if err := runControl(ctx, m, fr, cmd); err != nil {
 				return err

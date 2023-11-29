@@ -12,6 +12,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/internal/config"
 	"github.com/carlosrabelo/gobi/gobi/internal/symbols"
+	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
@@ -34,7 +35,7 @@ type Context struct {
 	Stderr io.Writer
 
 	Alternate *os.File // SET ALTERNATE file; closed by CLOSE ALTERNATE / CLOSE ALL
-	Procedure bool     // procedure file open (stub until 029)
+	Procedure bool     // procedure file open
 
 	// Locate holds the last LOCATE FOR/WHILE text for CONTINUE (013).
 	LocateActive bool
@@ -44,6 +45,12 @@ type Context struct {
 	// PendingTO/PendingVals hold COUNT/SUM/AVERAGE TO until 014 stores them.
 	PendingTO   []string
 	PendingVals []float64
+
+	// Procedure / PUBLIC / PRIVATE state (029).
+	Publics     map[string]bool
+	Privates    map[string]bool
+	ParamLocals map[string]bool
+	PendingArgs []expr.Value
 
 	openFiles int
 
