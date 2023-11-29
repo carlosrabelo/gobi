@@ -146,6 +146,18 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 	}
 }
 
+func (m *Mux) cmdSET(ctx *context.Context, cmd command.Command) error {
+	args := strings.Fields(cmd.Args)
+	if len(args) >= 1 && strings.EqualFold(args[0], "PROCEDURE") {
+		to := strings.TrimSpace(cmd.Clauses["TO"])
+		if to == "" && len(args) >= 2 && strings.EqualFold(args[1], "TO") {
+			to = strings.Join(args[2:], " ")
+		}
+		return cmdSETPROCEDURE(ctx, m, to)
+	}
+	return cmdSET(ctx, cmd)
+}
+
 func setFlag(ctx *context.Context, name string, on bool) error {
 	c := ctx.Config
 	switch name {

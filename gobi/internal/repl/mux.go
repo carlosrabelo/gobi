@@ -17,9 +17,12 @@ type Handler func(ctx *context.Context, cmd command.Command) error
 
 // Mux maps upper-case verbs to handlers.
 type Mux struct {
-	handlers map[string]Handler
-	prog     *Program
-	gets     []PendingGET
+	handlers  map[string]Handler
+	prog      *Program
+	gets      []PendingGET
+	procLines []string
+	procPath  string
+	procFile  map[string][]string
 }
 
 // NewMux returns a mux with the built-in verbs registered.
@@ -31,7 +34,9 @@ func NewMux() *Mux {
 	m.Register("*", func(*context.Context, command.Command) error { return nil })
 	m.Register("NOTE", func(*context.Context, command.Command) error { return nil })
 	m.Register("USE", cmdUSE)
-	m.Register("CLOSE", cmdCLOSE)
+	m.Register("CLOSE", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdCLOSE(ctx, cmd)
+	})
 	m.Register("SELECT", cmdSELECT)
 	m.Register("GOTO", cmdGOTO)
 	m.Register("GO", cmdGO)
@@ -52,7 +57,9 @@ func NewMux() *Mux {
 	m.Register("BROWSE", cmdBROWSE)
 	m.Register("RUN", cmdRUN)
 	m.Register("!", cmdBang)
-	m.Register("SET", cmdSET)
+	m.Register("SET", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdSET(ctx, cmd)
+	})
 	m.Register("DIR", cmdDIR)
 	m.Register("RENAME", cmdRENAME)
 	m.Register("HELP", func(ctx *context.Context, cmd command.Command) error {
@@ -101,15 +108,23 @@ func NewMux() *Mux {
 		if m.prog == nil || len(m.prog.Stack) == 0 {
 			return fail(ctx, "RETURN outside a program")
 		}
-		m.prog.Stack = m.prog.Stack[:len(m.prog.Stack)-1]
+		toMaster := strings.Contains(strings.ToUpper(cmd.Args), "TO MASTER")
+		doReturn(ctx, m, toMaster)
 		return nil
 	})
 	m.Register("CANCEL", func(ctx *context.Context, cmd command.Command) error {
 		if m.prog != nil {
 			m.prog.Stack = nil
 		}
+		ctx.Privates = nil
+		ctx.ParamLocals = nil
+		ctx.PendingArgs = nil
 		return nil
 	})
+	m.Register("PUBLIC", cmdPUBLIC)
+	m.Register("PRIVATE", cmdPRIVATE)
+	m.Register("PARAMETERS", cmdPARAMETERS)
+	m.Register("PROCEDURE", func(*context.Context, command.Command) error { return nil })
 	return m
 }
 
