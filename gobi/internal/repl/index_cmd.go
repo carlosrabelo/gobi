@@ -19,7 +19,7 @@ func cmdINDEX(ctx *context.Context, cmd command.Command) error {
 	}
 	rest := strings.TrimSpace(args[3:])
 	to := strings.TrimSpace(cmd.Clauses["TO"])
-	unique := false
+	unique := ctx.Config.Unique
 	// UNIQUE may be in Args after ON expr, or as trailing token in TO clause.
 	if i := strings.LastIndex(strings.ToUpper(rest), " UNIQUE"); i >= 0 && strings.TrimSpace(rest[i+7:]) == "" {
 		unique = true

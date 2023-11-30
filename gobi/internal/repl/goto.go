@@ -42,12 +42,12 @@ func runGo(ctx *context.Context, args string) error {
 		if err := ctx.GoTop(); err != nil {
 			return fail(ctx, "%s", err.Error())
 		}
-		return nil
+		return hookAfterMove(ctx)
 	case "BOTTOM":
 		if err := ctx.GoBottom(); err != nil {
 			return fail(ctx, "%s", err.Error())
 		}
-		return nil
+		return hookAfterMove(ctx)
 	}
 	n, err := strconv.Atoi(word)
 	if err != nil {
@@ -56,7 +56,7 @@ func runGo(ctx *context.Context, args string) error {
 	if err := ctx.Goto(n); err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
-	return nil
+	return hookAfterMove(ctx)
 }
 
 func cmdSKIP(ctx *context.Context, cmd command.Command) error {
@@ -72,5 +72,5 @@ func cmdSKIP(ctx *context.Context, cmd command.Command) error {
 	if err := ctx.Skip(n); err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
-	return nil
+	return hookAfterMove(ctx)
 }

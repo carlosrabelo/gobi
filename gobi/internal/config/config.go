@@ -55,6 +55,8 @@ type Config struct {
 	Screen      ScreenMode
 	DateOrder   string // AMERICAN, ANSI, …
 	Century     bool
+	Unique      bool // SET UNIQUE for next INDEX ON
+	Fields      bool // SET FIELDS ON/OFF (session default mirrors areas)
 }
 
 // New returns the constitution defaults. Status is on when os.Stdout is a terminal.
