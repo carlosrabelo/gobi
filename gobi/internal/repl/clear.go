@@ -29,6 +29,8 @@ func (m *Mux) cmdCLEAR(ctx *context.Context, cmd command.Command) error {
 	case args == "GETS":
 		m.gets = nil
 		return nil
+	case args == "FIELDS":
+		return clearFields(ctx)
 	default:
 		return fail(ctx, "invalid CLEAR")
 	}

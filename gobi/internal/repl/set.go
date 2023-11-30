@@ -148,12 +148,57 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 
 func (m *Mux) cmdSET(ctx *context.Context, cmd command.Command) error {
 	args := strings.Fields(cmd.Args)
-	if len(args) >= 1 && strings.EqualFold(args[0], "PROCEDURE") {
-		to := strings.TrimSpace(cmd.Clauses["TO"])
+	if len(args) == 0 {
+		return cmdSET(ctx, cmd)
+	}
+	name := strings.ToUpper(args[0])
+	to := strings.TrimSpace(cmd.Clauses["TO"])
+	switch name {
+	case "PROCEDURE":
 		if to == "" && len(args) >= 2 && strings.EqualFold(args[1], "TO") {
 			to = strings.Join(args[2:], " ")
 		}
 		return cmdSETPROCEDURE(ctx, m, to)
+	case "RELATION":
+		rest := to
+		if rest == "" && len(args) >= 2 && strings.EqualFold(args[1], "TO") {
+			rest = strings.Join(args[2:], " ")
+		}
+		return setRelation(ctx, rest)
+	case "FILTER":
+		rest := to
+		if rest == "" && len(args) >= 2 && strings.EqualFold(args[1], "TO") {
+			rest = strings.Join(args[2:], " ")
+		}
+		return setFilter(ctx, rest)
+	case "FIELDS":
+		if len(args) >= 2 && (strings.EqualFold(args[1], "ON") || strings.EqualFold(args[1], "OFF")) {
+			on, err := parseOnOff(args[1])
+			if err != nil {
+				return fail(ctx, "%s", err.Error())
+			}
+			return setFieldsOnOff(ctx, on)
+		}
+		rest := to
+		if rest == "" && len(args) >= 2 && strings.EqualFold(args[1], "TO") {
+			rest = strings.Join(args[2:], " ")
+		}
+		return setFieldsList(ctx, rest)
+	case "ORDER":
+		n, err := parseOrderN(to, args)
+		if err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		return setOrder(ctx, n)
+	case "UNIQUE":
+		if len(args) < 2 {
+			return fail(ctx, "SET UNIQUE requires ON or OFF")
+		}
+		on, err := parseOnOff(args[1])
+		if err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		return setUnique(ctx, on)
 	}
 	return cmdSET(ctx, cmd)
 }

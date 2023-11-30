@@ -32,6 +32,12 @@ type Area struct {
 	// IndexOrder is 1-based record numbers in controlling-index order (empty = physical).
 	IndexOrder []int
 	IndexPos   int // index into IndexOrder for current key position
+
+	FilterExpr string // SET FILTER TO expr; empty = none
+	RelExpr    string // SET RELATION TO expr
+	RelAlias   string // INTO alias
+	FieldList  []string
+	FieldsOn   bool
 }
 
 // HasTable reports whether a DBF is open in the area.
@@ -85,6 +91,12 @@ func (c *Context) CloseArea(n int) error {
 	a.Landed = false
 	a.Found = false
 	a.BOF = false
+	a.IndexOrder = nil
+	a.FilterExpr = ""
+	a.RelExpr = ""
+	a.RelAlias = ""
+	a.FieldList = nil
+	a.FieldsOn = false
 	if a.Table != nil {
 		_ = a.Table.Close()
 		a.Table = nil

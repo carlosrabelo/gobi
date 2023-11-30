@@ -148,6 +148,11 @@ func listRecords(ctx *context.Context, cmd command.Command, opts listOpts) error
 		if ctx.Config.Deleted && a.Record.Deleted {
 			continue
 		}
+		if ok, err := recordPassesFilter(ctx, a); err != nil {
+			return fail(ctx, "%s", err.Error())
+		} else if !ok {
+			continue
+		}
 		if whileExpr != nil {
 			ok, err := evalLogic(whileExpr, env)
 			if err != nil {
@@ -166,7 +171,11 @@ func listRecords(ctx *context.Context, cmd command.Command, opts listOpts) error
 				continue
 			}
 		}
-		if err := printDataLine(ctx, env, cols, n); err != nil {
+		useCols := cols
+		if a.FieldsOn && len(a.FieldList) > 0 && len(cols) == 0 {
+			useCols = fieldListColumns(a)
+		}
+		if err := printDataLine(ctx, env, useCols, n); err != nil {
 			return fail(ctx, "%s", err.Error())
 		}
 		printed++
@@ -221,10 +230,26 @@ type column struct {
 	field int             // 0-based; -1 when expr set
 }
 
+func fieldListColumns(a *context.Area) []column {
+	var cols []column
+	for _, name := range a.FieldList {
+		for i, f := range a.Table.Header.Fields {
+			if strings.EqualFold(f.Name, name) {
+				cols = append(cols, column{title: f.Name, field: i})
+				break
+			}
+		}
+	}
+	return cols
+}
+
 func parseColumns(ctx *context.Context, args string) ([]column, error) {
 	args = strings.TrimSpace(args)
 	a := ctx.Active()
 	if args == "" {
+		if a.FieldsOn && len(a.FieldList) > 0 {
+			return fieldListColumns(a), nil
+		}
 		cols := make([]column, len(a.Table.Header.Fields))
 		for i, f := range a.Table.Header.Fields {
 			cols[i] = column{title: f.Name, field: i}
