@@ -3105,3 +3105,121 @@ func TestDispatchCountPreservesRecordPointer(t *testing.T) {
 		t.Fatalf("expected record pointer preserved at record 3")
 	}
 }
+func TestDispatchSumNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "SUM", Args: "AGE"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchSumNoExpression(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "SUM"})
+	if err == nil || !strings.Contains(err.Error(), "numeric expression") {
+		t.Fatalf("expected expression error, got %v", err)
+	}
+}
+
+func TestDispatchSumAllRecords(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "SUM", Args: "AGE"}); err != nil {
+		t.Fatalf("unexpected error on SUM: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "140.00") {
+		t.Fatalf("expected sum of 140.00, got %q", stdout.String())
+	}
+}
+
+func TestDispatchSumForClause(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "SUM", Args: "AGE", ForClause: "AGE >= 35"}); err != nil {
+		t.Fatalf("unexpected error on SUM FOR: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "115.00") {
+		t.Fatalf("expected sum of 115.00, got %q", stdout.String())
+	}
+}
+
+func TestDispatchSumToVariable(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:      "SUM",
+		Args:      "AGE",
+		ForClause: "AGE >= 35",
+		ToClause:  "adultage",
+	}); err != nil {
+		t.Fatalf("unexpected error on SUM TO: %v", err)
+	}
+
+	val, ok := ctx.Variables.Get("ADULTAGE")
+	if !ok {
+		t.Fatal("expected ADULTAGE memory variable")
+	}
+	if num, ok := val.(float64); !ok || num != 115 {
+		t.Fatalf("expected ADULTAGE=115, got %v", val)
+	}
+}
+
+func TestDispatchSumMultipleExpressions(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:     "SUM",
+		Args:     "AGE, AGE * 2",
+		ToClause: "TOTAL, DOUBLE",
+	}); err != nil {
+		t.Fatalf("unexpected error on SUM multiple: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "140.00") || !strings.Contains(stdout.String(), "280.00") {
+		t.Fatalf("expected both totals in output, got %q", stdout.String())
+	}
+}
