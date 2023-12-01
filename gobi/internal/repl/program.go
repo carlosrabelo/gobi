@@ -187,7 +187,7 @@ func runProgram(ctx *context.Context, m *Mux) error {
 			}
 			continue
 		}
-		if err := m.Dispatch(ctx, cmd); err != nil {
+		if err := m.dispatchLine(ctx, cmd, line); err != nil {
 			return err
 		}
 	}

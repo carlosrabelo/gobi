@@ -420,11 +420,15 @@ func doReturn(ctx *context.Context, m *Mux, toMaster bool) {
 			restoreLocals(ctx, fr.onReturn)
 			m.prog.Stack = m.prog.Stack[:len(m.prog.Stack)-1]
 		}
+		ctx.InHandler = false
 		return
 	}
 	fr := m.prog.Stack[len(m.prog.Stack)-1]
 	restoreLocals(ctx, fr.onReturn)
 	m.prog.Stack = m.prog.Stack[:len(m.prog.Stack)-1]
+	if ctx.InHandler && (m.prog == nil || len(m.prog.Stack) == 0) {
+		ctx.InHandler = false
+	}
 }
 
 // unused import guard

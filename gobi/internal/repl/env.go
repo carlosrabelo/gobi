@@ -53,6 +53,16 @@ func (e *sessionEnv) Call(name string, args []expr.Value) (expr.Value, error) {
 		}
 		k := e.ctx.Keys.Inkey()
 		return expr.NumberVal(float64(k)), nil
+	case "ERROR":
+		if len(args) != 0 {
+			return expr.Value{}, fmt.Errorf("ERROR: wrong number of arguments")
+		}
+		return expr.NumberVal(float64(e.ctx.LastError)), nil
+	case "MESSAGE":
+		if len(args) != 0 {
+			return expr.Value{}, fmt.Errorf("MESSAGE: wrong number of arguments")
+		}
+		return expr.StringVal(e.ctx.LastMessage), nil
 	}
 	return expr.CallBuiltin(name, args, e.ctx.ExprArea(), e)
 }

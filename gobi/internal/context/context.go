@@ -52,6 +52,15 @@ type Context struct {
 	ParamLocals map[string]bool
 	PendingArgs []expr.Value
 
+	// ON ERROR / ERROR() / MESSAGE() (031).
+	OnError     string
+	OnEscape    string
+	OnKey       string
+	LastError   int
+	LastMessage string
+	InHandler   bool
+	RetryLine   string
+
 	openFiles int
 
 	// SessionDate is DATE(); starts as the host local date.

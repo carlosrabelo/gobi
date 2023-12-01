@@ -7,6 +7,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
+	"github.com/carlosrabelo/gobi/gobi/pkg/help"
 )
 
 // ErrQuit is returned by QUIT and ends the prompt loop without failure.
@@ -125,6 +126,10 @@ func NewMux() *Mux {
 	m.Register("PRIVATE", cmdPRIVATE)
 	m.Register("PARAMETERS", cmdPARAMETERS)
 	m.Register("PROCEDURE", func(*context.Context, command.Command) error { return nil })
+	m.Register("ON", cmdON)
+	m.Register("RETRY", func(ctx *context.Context, cmd command.Command) error {
+		return cmdRETRY(ctx, m, cmd)
+	})
 	return m
 }
 
@@ -135,6 +140,10 @@ func (m *Mux) Register(verb string, h Handler) {
 
 // Dispatch runs the handler for cmd.Verb.
 func (m *Mux) Dispatch(ctx *context.Context, cmd command.Command) error {
+	return m.dispatchLine(ctx, cmd, "")
+}
+
+func (m *Mux) dispatchLine(ctx *context.Context, cmd command.Command, retryLine string) error {
 	if cmd.Verb == "" {
 		return nil
 	}
@@ -147,11 +156,58 @@ func (m *Mux) Dispatch(ctx *context.Context, cmd command.Command) error {
 	h, ok := m.handlers[cmd.Verb]
 	if !ok {
 		if handled, err := tryAssignment(ctx, cmd); handled {
-			return err
+			if err != nil {
+				return m.handleError(ctx, err, retryLine)
+			}
+			return nil
 		}
 		msg := "*** Unrecognized command: " + cmd.Verb
 		fmt.Fprintln(ctx.Stderr, msg)
-		return errors.New(msg)
+		err := errors.New(msg)
+		ctx.LastError = 36
+		ctx.LastMessage = strings.TrimPrefix(msg, "*** ")
+		if ctx.OnError != "" && !ctx.InHandler {
+			return m.handleError(ctx, err, retryLine)
+		}
+		if m.shouldAskHelp(ctx) {
+			askHelp(ctx, cmd.Verb)
+		}
+		return err
 	}
-	return h(ctx, cmd)
+	err := h(ctx, cmd)
+	if err != nil {
+		return m.handleError(ctx, err, retryLine)
+	}
+	if ctx.OnKey != "" && !ctx.InHandler && ctx.Keys != nil {
+		if k := ctx.Keys.Inkey(); k != 0 {
+			// put back conceptually by leaving in typeahead later; run handler once
+			_ = m.Dispatch(ctx, command.Split(ctx.OnKey))
+		}
+	}
+	return nil
+}
+
+func (m *Mux) shouldAskHelp(ctx *context.Context) bool {
+	if !ctx.Config.Help || ctx.OnError != "" {
+		return false
+	}
+	if m.prog != nil && len(m.prog.Stack) > 0 {
+		return false
+	}
+	return true
+}
+
+func askHelp(ctx *context.Context, verb string) {
+	fmt.Fprint(ctx.Stdout, "Do you want some help? (Y/N) ")
+	line, err := ctx.StdinReader().ReadString('\n')
+	if err != nil {
+		return
+	}
+	line = strings.TrimSpace(line)
+	if line != "" && (line[0] == 'Y' || line[0] == 'y') {
+		text, ok := help.Text(verb)
+		if ok {
+			fmt.Fprintln(ctx.Stdout, text)
+		}
+	}
 }
