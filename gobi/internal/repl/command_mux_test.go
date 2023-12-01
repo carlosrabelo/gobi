@@ -3223,3 +3223,101 @@ func TestDispatchSumMultipleExpressions(t *testing.T) {
 		t.Fatalf("expected both totals in output, got %q", stdout.String())
 	}
 }
+func TestDispatchAverageNoDatabase(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "AVERAGE", Args: "AGE"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchAverageAllRecords(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "AVERAGE", Args: "AGE"}); err != nil {
+		t.Fatalf("unexpected error on AVERAGE: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "35.00") {
+		t.Fatalf("expected average of 35.00, got %q", stdout.String())
+	}
+}
+
+func TestDispatchAverageForClause(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "AVERAGE", Args: "AGE", ForClause: "AGE >= 35"}); err != nil {
+		t.Fatalf("unexpected error on AVERAGE FOR: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "38.33") {
+		t.Fatalf("expected average of 38.33, got %q", stdout.String())
+	}
+}
+
+func TestDispatchAverageNoMatches(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "AVERAGE", Args: "AGE", ForClause: "AGE > 100"}); err != nil {
+		t.Fatalf("unexpected error on AVERAGE FOR: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "0.00") {
+		t.Fatalf("expected average of 0.00, got %q", stdout.String())
+	}
+}
+
+func TestDispatchAverageToVariable(t *testing.T) {
+	tempDir := t.TempDir()
+	dbfPath := createLocateTestDBF(t, tempDir)
+
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:      "AVERAGE",
+		Args:      "AGE",
+		ForClause: "AGE >= 35",
+		ToClause:  "avgage",
+	}); err != nil {
+		t.Fatalf("unexpected error on AVERAGE TO: %v", err)
+	}
+
+	val, ok := ctx.Variables.Get("AVGAGE")
+	if !ok {
+		t.Fatal("expected AVGAGE memory variable")
+	}
+	num, ok := val.(float64)
+	if !ok || num < 38.32 || num > 38.34 {
+		t.Fatalf("expected AVGAGE≈38.33, got %v", val)
+	}
+}

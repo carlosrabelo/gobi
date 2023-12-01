@@ -91,7 +91,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `LOCATE` and `CONTINUE` sequential search matching condition
 - [x] `COUNT` records matching conditional filter
 - [x] `SUM` totaling numeric field values matching filter
-- [ ] `AVERAGE` calculating mean of numeric fields matching filter
+- [x] `AVERAGE` calculating mean of numeric fields matching filter
 - [ ] `?` evaluate and display expression value with newline
 - [ ] `??` evaluate and display expression value without newline
 
