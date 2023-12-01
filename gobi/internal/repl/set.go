@@ -22,7 +22,7 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 	switch name {
 	case "TALK", "INTENSITY", "BELL", "EXACT", "DELETED", "ECHO", "STEP", "CARRY",
 		"CONFIRM", "ESCAPE", "CONSOLE", "DEBUG", "SAFETY", "PRINT", "FIXED", "HEADING",
-		"ALTERNATE", "DELIMITERS":
+		"ALTERNATE", "DELIMITERS", "HELP":
 		if name == "ALTERNATE" && (to != "" || (len(args) >= 2 && strings.EqualFold(args[1], "TO"))) {
 			return setAlternateTO(ctx, to, args)
 		}
@@ -242,6 +242,8 @@ func setFlag(ctx *context.Context, name string, on bool) error {
 		c.Fixed = on
 	case "HEADING":
 		c.Heading = on
+	case "HELP":
+		c.Help = on
 	}
 	return nil
 }
