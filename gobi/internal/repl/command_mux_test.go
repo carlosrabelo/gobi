@@ -3321,3 +3321,90 @@ func TestDispatchAverageToVariable(t *testing.T) {
 		t.Fatalf("expected AVGAGE≈38.33, got %v", val)
 	}
 }
+func TestDispatchQuestion(t *testing.T) {
+	var stdout bytes.Buffer
+	ctx := testCtx()
+	ctx.Stdout = &stdout
+
+	// 1. Number literal
+	err := commandMux.Dispatch(ctx, Command{Verb: "?", Args: "42"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stdout.String() != "42\n" {
+		t.Errorf("output = %q, want %q", stdout.String(), "42\n")
+	}
+	stdout.Reset()
+
+	// 2. String literal
+	err = commandMux.Dispatch(ctx, Command{Verb: "?", Args: `"hello"`})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stdout.String() != "hello\n" {
+		t.Errorf("output = %q, want %q", stdout.String(), "hello\n")
+	}
+	stdout.Reset()
+
+	// 3. Empty expression
+	err = commandMux.Dispatch(ctx, Command{Verb: "?", Args: ""})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stdout.String() != "\n" {
+		t.Errorf("output = %q, want %q", stdout.String(), "\n")
+	}
+	stdout.Reset()
+
+	// 4. Memory variable resolution
+	if err := ctx.Variables.Set("FOO", "bar"); err != nil {
+		t.Fatalf("set FOO: %v", err)
+	}
+	err = commandMux.Dispatch(ctx, Command{Verb: "?", Args: "foo"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stdout.String() != "bar\n" {
+		t.Errorf("output = %q, want %q", stdout.String(), "bar\n")
+	}
+}
+
+func TestDispatchDoubleQuestion(t *testing.T) {
+	var stdout bytes.Buffer
+	ctx := testCtx()
+	ctx.Stdout = &stdout
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "??", Args: `"no-newline"`})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stdout.String() != "no-newline" {
+		t.Errorf("output = %q, want %q", stdout.String(), "no-newline")
+	}
+	stdout.Reset()
+
+	// Empty double question does nothing
+	err = commandMux.Dispatch(ctx, Command{Verb: "??", Args: ""})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("output = %q, want empty", stdout.String())
+	}
+}
+
+func TestDispatchQuestionErrors(t *testing.T) {
+	ctx := testCtx()
+
+	// Syntax error
+	err := commandMux.Dispatch(ctx, Command{Verb: "?", Args: "1 +"})
+	if err == nil || !strings.Contains(err.Error(), "Syntax error") {
+		t.Errorf("expected Syntax error, got %v", err)
+	}
+
+	// Evaluation error (missing identifier)
+	err = commandMux.Dispatch(ctx, Command{Verb: "?", Args: "notfound"})
+	if err == nil || !strings.Contains(err.Error(), "Evaluation error") {
+		t.Errorf("expected Evaluation error, got %v", err)
+	}
+}

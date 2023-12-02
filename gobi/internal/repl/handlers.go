@@ -1355,3 +1355,34 @@ func parseCreateFieldDefinition(line string) (dbf.FieldDescriptor, error) {
 
 	return fd, nil
 }
+
+func handleQuestion(ctx *context.Context, cmd Command) error {
+	arg := strings.TrimSpace(cmd.Args)
+	if arg == "" {
+		if cmd.Verb == "?" {
+			fmt.Fprintln(ctx.Stdout)
+		}
+		return nil
+	}
+
+	lexer := expr.NewLexer(arg)
+	parser := expr.NewParser(lexer)
+	exp := parser.ParseExpression()
+	if len(parser.Errors()) > 0 {
+		return fmt.Errorf("*** Syntax error: %s", strings.Join(parser.Errors(), "; "))
+	}
+
+	env := newReplEnvironment(ctx)
+	obj, err := expr.Eval(exp, env)
+	if err != nil {
+		return fmt.Errorf("*** Evaluation error: %w", err)
+	}
+
+	if cmd.Verb == "?" {
+		fmt.Fprintln(ctx.Stdout, obj.String())
+	} else {
+		fmt.Fprint(ctx.Stdout, obj.String())
+	}
+
+	return nil
+}
