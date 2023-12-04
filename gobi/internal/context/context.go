@@ -61,6 +61,18 @@ type Context struct {
 	InHandler   bool
 	RetryLine   string
 
+	// Program functions (032).
+	PrintCol int
+	PrintRow int
+	ReadKey  int
+	Updated  bool
+	FuncKeys [13]string // 1..12
+
+	// Session chrome (033).
+	TypeaheadBuf []byte
+	Message      string
+	Suspended    bool
+
 	openFiles int
 
 	// SessionDate is DATE(); starts as the host local date.

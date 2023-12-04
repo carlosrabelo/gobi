@@ -107,6 +107,20 @@ func CallBuiltin(name string, args []Value, a Area, env Env) (Value, error) {
 		return builtinTIME(args)
 	case "LUPDATE":
 		return builtinLUPDATE(args, env)
+	case "ISALPHA":
+		return builtinISALPHA(args)
+	case "ISLOWER":
+		return builtinISLOWER(args)
+	case "ISUPPER":
+		return builtinISUPPER(args)
+	case "OS":
+		return builtinOS(args)
+	case "VERSION":
+		return builtinVERSION(args)
+	case "FKMAX":
+		return builtinFKMAX(args)
+	case "TRANSFORM":
+		return builtinTRANSFORM(args, env)
 	case "RECCOUNT":
 		return builtinRECCOUNT(args, a)
 	case "RECSIZE":
@@ -909,4 +923,61 @@ func builtinLUPDATE(args []Value, env Env) (Value, error) {
 		return EmptyDateVal(), nil
 	}
 	return env.LUpdate(), nil
+}
+
+func builtinISALPHA(args []Value) (Value, error) {
+	if err := requireArity("ISALPHA", args, 1); err != nil {
+		return Value{}, err
+	}
+	s := args[0].String()
+	if s == "" {
+		return LogicalVal(false), nil
+	}
+	c := s[0]
+	return LogicalVal((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')), nil
+}
+
+func builtinISLOWER(args []Value) (Value, error) {
+	if err := requireArity("ISLOWER", args, 1); err != nil {
+		return Value{}, err
+	}
+	s := args[0].String()
+	if s == "" {
+		return LogicalVal(false), nil
+	}
+	c := s[0]
+	return LogicalVal(c >= 'a' && c <= 'z'), nil
+}
+
+func builtinISUPPER(args []Value) (Value, error) {
+	if err := requireArity("ISUPPER", args, 1); err != nil {
+		return Value{}, err
+	}
+	s := args[0].String()
+	if s == "" {
+		return LogicalVal(false), nil
+	}
+	c := s[0]
+	return LogicalVal(c >= 'A' && c <= 'Z'), nil
+}
+
+func builtinOS(args []Value) (Value, error) {
+	if err := requireArity("OS", args, 0); err != nil {
+		return Value{}, err
+	}
+	return StringVal(strings.ToUpper(runtimeGOOS())), nil
+}
+
+func builtinVERSION(args []Value) (Value, error) {
+	if err := requireArity("VERSION", args, 0); err != nil {
+		return Value{}, err
+	}
+	return StringVal("GOBI 1.0"), nil
+}
+
+func builtinFKMAX(args []Value) (Value, error) {
+	if err := requireArity("FKMAX", args, 0); err != nil {
+		return Value{}, err
+	}
+	return NumberVal(12), nil
 }
