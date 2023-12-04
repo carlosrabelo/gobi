@@ -108,7 +108,7 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 
 	case "COLOR":
 		if len(args) >= 2 && (strings.EqualFold(args[1], "ON") || strings.EqualFold(args[1], "OFF")) {
-			return fail(ctx, "Unrecognized command: SET COLOR %s", strings.ToUpper(args[1]))
+			return failCode(ctx, 36, "SET COLOR %s is not available in Gobi", strings.ToUpper(args[1]))
 		}
 		text := to
 		if text == "" && len(args) >= 2 && strings.EqualFold(args[1], "TO") {
@@ -199,8 +199,37 @@ func (m *Mux) cmdSET(ctx *context.Context, cmd command.Command) error {
 			return fail(ctx, "%s", err.Error())
 		}
 		return setUnique(ctx, on)
+	case "FUNCTION":
+		return setFunction(ctx, args, to)
+	case "HISTORY", "DOHISTORY", "TYPEAHEAD", "STATUS", "SCOREBOARD", "MENUS", "MESSAGE", "MEMOWIDTH":
+		return setHistoryFlags(ctx, m, name, args, to)
+	case "CATALOG", "TITLE", "VIEW":
+		return failCode(ctx, 36, "SET %s is not available in Gobi", name)
+	case "PRINTER":
+		return failCode(ctx, 36, "SET PRINTER TO is not available in Gobi")
+	case "EXCLUSIVE", "ENCRYPTION":
+		return failCode(ctx, 36, "SET %s is not available in Gobi", name)
 	}
 	return cmdSET(ctx, cmd)
+}
+
+func setFunction(ctx *context.Context, args []string, to string) error {
+	// SET FUNCTION n TO text
+	if len(args) < 2 {
+		return fail(ctx, "SET FUNCTION requires a key number")
+	}
+	n, err := strconv.Atoi(args[1])
+	if err != nil || n < 1 || n > 12 {
+		return fail(ctx, "SET FUNCTION key out of range")
+	}
+	text := to
+	if text == "" && len(args) >= 3 && strings.EqualFold(args[2], "TO") {
+		text = strings.Join(args[3:], " ")
+	}
+	// strip quotes
+	text = strings.Trim(text, "\"'")
+	ctx.FuncKeys[n] = text
+	return nil
 }
 
 func setFlag(ctx *context.Context, name string, on bool) error {

@@ -2,6 +2,7 @@ package repl
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -63,6 +64,61 @@ func (e *sessionEnv) Call(name string, args []expr.Value) (expr.Value, error) {
 			return expr.Value{}, fmt.Errorf("MESSAGE: wrong number of arguments")
 		}
 		return expr.StringVal(e.ctx.LastMessage), nil
+	case "ALIAS":
+		if len(args) != 0 {
+			return expr.Value{}, fmt.Errorf("ALIAS: wrong number of arguments")
+		}
+		a := e.ctx.Active()
+		if !a.HasTable() {
+			return expr.StringVal(""), nil
+		}
+		return expr.StringVal(a.Alias), nil
+	case "SELECT":
+		if len(args) != 0 {
+			return expr.Value{}, fmt.Errorf("SELECT: wrong number of arguments")
+		}
+		return expr.NumberVal(float64(e.ctx.ActiveArea)), nil
+	case "ISCOLOR":
+		if len(args) != 0 {
+			return expr.Value{}, fmt.Errorf("ISCOLOR: wrong number of arguments")
+		}
+		return expr.LogicalVal(e.ctx.Config.Color != ""), nil
+	case "GETENV":
+		if len(args) != 1 {
+			return expr.Value{}, fmt.Errorf("GETENV: wrong number of arguments")
+		}
+		return expr.StringVal(os.Getenv(strings.ToUpper(args[0].String()))), nil
+	case "PCOL":
+		if len(args) != 0 {
+			return expr.Value{}, fmt.Errorf("PCOL: wrong number of arguments")
+		}
+		return expr.NumberVal(float64(e.ctx.PrintCol)), nil
+	case "PROW":
+		if len(args) != 0 {
+			return expr.Value{}, fmt.Errorf("PROW: wrong number of arguments")
+		}
+		return expr.NumberVal(float64(e.ctx.PrintRow)), nil
+	case "READKEY":
+		if len(args) != 0 {
+			return expr.Value{}, fmt.Errorf("READKEY: wrong number of arguments")
+		}
+		return expr.NumberVal(float64(e.ctx.ReadKey)), nil
+	case "UPDATED":
+		if len(args) != 0 {
+			return expr.Value{}, fmt.Errorf("UPDATED: wrong number of arguments")
+		}
+		return expr.LogicalVal(e.ctx.Updated), nil
+	case "FKLABEL":
+		if len(args) != 1 {
+			return expr.Value{}, fmt.Errorf("FKLABEL: wrong number of arguments")
+		}
+		n := int(args[0].Num)
+		if n < 1 || n > 12 {
+			return expr.StringVal(""), nil
+		}
+		return expr.StringVal(e.ctx.FuncKeys[n]), nil
+	case "FLOCK", "RLOCK", "LOCK":
+		return expr.Value{}, fmt.Errorf("%s is not available in Gobi", strings.ToUpper(name))
 	}
 	return expr.CallBuiltin(name, args, e.ctx.ExprArea(), e)
 }
