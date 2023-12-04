@@ -97,7 +97,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 
 ## Memory Variables
 
-- [ ] Global symbol registry mapping names to variable values
+- [x] Global symbol registry mapping names to variable values
 - [ ] `STORE` assignment parser and executor
 - [ ] `DISPLAY MEMORY` and `LIST MEMORY` tabular printer
 - [ ] `SAVE TO` binary serializer saving variables to .mem file
