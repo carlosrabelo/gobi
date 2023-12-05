@@ -3408,3 +3408,123 @@ func TestDispatchQuestionErrors(t *testing.T) {
 		t.Errorf("expected Evaluation error, got %v", err)
 	}
 }
+func TestDispatchStore(t *testing.T) {
+	var stdout bytes.Buffer
+	ctx := testCtx()
+	ctx.Stdout = &stdout
+
+	err := commandMux.Dispatch(ctx, Command{
+		Verb:     "STORE",
+		Args:     "42",
+		ToClause: "m_var",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	val, ok := ctx.Variables.Get("m_var")
+	if !ok {
+		t.Fatal("expected m_var to be set")
+	}
+	num, ok := val.(float64)
+	if !ok || num != 42 {
+		t.Fatalf("expected m_var=42, got %v", val)
+	}
+	if !strings.Contains(stdout.String(), "42") {
+		t.Fatalf("expected talk output with value 42, got %q", stdout.String())
+	}
+}
+
+func TestDispatchStoreExpression(t *testing.T) {
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := ctx.Variables.Set("NUMBER", float64(3)); err != nil {
+		t.Fatalf("set NUMBER: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{
+		Verb:     "STORE",
+		Args:     "NUMBER + 9",
+		ToClause: "NUMBER2",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	val, ok := ctx.Variables.Get("NUMBER2")
+	if !ok || val.(float64) != 12 {
+		t.Fatalf("expected NUMBER2=12, got %v", val)
+	}
+}
+
+func TestDispatchStoreStringLiteral(t *testing.T) {
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	err := commandMux.Dispatch(ctx, Command{
+		Verb:     "STORE",
+		Args:     "'HOWARD'",
+		ToClause: "NAME",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	val, ok := ctx.Variables.Get("NAME")
+	if !ok || val.(string) != "HOWARD" {
+		t.Fatalf("expected NAME=HOWARD, got %v", val)
+	}
+}
+
+func TestDispatchStoreMultipleMemvars(t *testing.T) {
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	err := commandMux.Dispatch(ctx, Command{
+		Verb:     "STORE",
+		Args:     "0",
+		ToClause: "i, j, k",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, name := range []string{"I", "J", "K"} {
+		val, ok := ctx.Variables.Get(name)
+		if !ok || val.(float64) != 0 {
+			t.Fatalf("expected %s=0, got %v ok=%v", name, val, ok)
+		}
+	}
+}
+
+func TestDispatchStoreInvalidExpression(t *testing.T) {
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	err := commandMux.Dispatch(ctx, Command{
+		Verb:     "STORE",
+		Args:     "NUMBER +",
+		ToClause: "x",
+	})
+	if err == nil || !strings.Contains(err.Error(), "Syntax error") {
+		t.Fatalf("expected syntax error, got %v", err)
+	}
+}
+
+func TestDispatchStoreNoTo(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "STORE", Args: "42"})
+	if err == nil {
+		t.Fatal("expected error for STORE without TO clause")
+	}
+}
+
+func TestDispatchStoreNoArgs(t *testing.T) {
+	ctx := testCtx()
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "STORE", ToClause: "x"})
+	if err == nil {
+		t.Fatal("expected error for STORE without expression")
+	}
+}
