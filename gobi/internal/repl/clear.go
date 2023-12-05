@@ -31,6 +31,9 @@ func (m *Mux) cmdCLEAR(ctx *context.Context, cmd command.Command) error {
 		return nil
 	case args == "FIELDS":
 		return clearFields(ctx)
+	case args == "TYPEAHEAD":
+		ctx.TypeaheadBuf = nil
+		return nil
 	default:
 		return fail(ctx, "invalid CLEAR")
 	}

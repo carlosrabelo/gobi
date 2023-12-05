@@ -30,6 +30,28 @@ func (h *History) Len() int {
 	return len(h.lines)
 }
 
+// Lines returns a copy of stored lines oldest-first.
+func (h *History) Lines() []string {
+	if h == nil {
+		return nil
+	}
+	out := make([]string, len(h.lines))
+	copy(out, h.lines)
+	return out
+}
+
+// SetCap updates the capacity and drops oldest lines past Cap.
+func (h *History) SetCap(n int) {
+	if h == nil {
+		return
+	}
+	h.Cap = n
+	if h.Cap > 0 && len(h.lines) > h.Cap {
+		h.lines = h.lines[len(h.lines)-h.Cap:]
+	}
+	h.pos = len(h.lines)
+}
+
 // Add stores line when non-empty and not equal to the newest entry.
 func (h *History) Add(line string) {
 	if h == nil || line == "" {

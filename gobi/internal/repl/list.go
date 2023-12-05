@@ -16,9 +16,12 @@ func cmdLIST(ctx *context.Context, cmd command.Command) error {
 	if strings.EqualFold(args, "STRUCTURE") {
 		return displayStructure(ctx)
 	}
-	if strings.HasPrefix(up, "FILES") || strings.HasPrefix(up, "STATUS") || strings.EqualFold(args, "MEMORY") {
+	if strings.HasPrefix(up, "FILES") || strings.HasPrefix(up, "STATUS") || strings.EqualFold(args, "MEMORY") || strings.HasPrefix(up, "HISTORY") {
 		if strings.EqualFold(args, "MEMORY") {
 			return printMemory(ctx)
+		}
+		if strings.HasPrefix(up, "HISTORY") {
+			return fail(ctx, "LIST HISTORY requires session history")
 		}
 		if strings.HasPrefix(up, "FILES") {
 			return cmdDIR(ctx, cmd)

@@ -130,6 +130,15 @@ func NewMux() *Mux {
 	m.Register("RETRY", func(ctx *context.Context, cmd command.Command) error {
 		return cmdRETRY(ctx, m, cmd)
 	})
+	m.Register("SUSPEND", func(ctx *context.Context, cmd command.Command) error {
+		return cmdSUSPEND(ctx, m, cmd)
+	})
+	m.Register("RESUME", func(ctx *context.Context, cmd command.Command) error {
+		return cmdRESUME(ctx, m, cmd)
+	})
+	m.Register("TYPE", cmdTYPE)
+	m.Register("LABEL", cmdLABEL)
+	registerRefused(m)
 	return m
 }
 
