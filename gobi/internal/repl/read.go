@@ -11,10 +11,11 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
-func (m *Mux) cmdREAD(ctx *context.Context, _ command.Command) error {
+func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 	if len(m.gets) == 0 {
 		return nil
 	}
+	keep := strings.Contains(strings.ToUpper(cmd.Args), "SAVE")
 	keys := term.NewReader(ctx.Stdin)
 	values := make([]string, len(m.gets))
 	for i, g := range m.gets {
@@ -39,12 +40,23 @@ func (m *Mux) cmdREAD(ctx *context.Context, _ command.Command) error {
 	}
 	_ = scr.Present(ctx.Stdout)
 
+	clearGets := func() {
+		if !keep {
+			m.gets = nil
+		}
+	}
 	save := func() error {
+		changed := false
 		for i, g := range m.gets {
+			old := strings.TrimRight(getValueText(ctx, g), " ")
+			if values[i] != old {
+				changed = true
+			}
 			if err := storeGET(ctx, g, values[i]); err != nil {
 				return err
 			}
 		}
+		ctx.Updated = changed
 		return nil
 	}
 
@@ -55,21 +67,30 @@ func (m *Mux) cmdREAD(ctx *context.Context, _ command.Command) error {
 				if err := save(); err != nil {
 					return err
 				}
-				m.gets = nil
+				ctx.ReadKey = 15
+				if ctx.Updated {
+					ctx.ReadKey = 271
+				}
+				clearGets()
 				return nil
 			}
 			return fail(ctx, "%s", err.Error())
 		}
 		switch k {
 		case term.KeyEsc:
-			m.gets = nil
+			ctx.ReadKey = 12
+			clearGets()
 			return nil
 		case term.KeyTab, term.KeyEnter:
 			if k == term.KeyEnter && cur == len(m.gets)-1 {
 				if err := save(); err != nil {
 					return err
 				}
-				m.gets = nil
+				ctx.ReadKey = 15
+				if ctx.Updated {
+					ctx.ReadKey = 271
+				}
+				clearGets()
 				return nil
 			}
 			drawGET(cur, false)

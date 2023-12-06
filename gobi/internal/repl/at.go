@@ -41,9 +41,64 @@ func (m *Mux) cmdAt(ctx *context.Context, cmd command.Command) error {
 		return atSAY(ctx, row, col, strings.TrimSpace(rest[4:]))
 	case strings.HasPrefix(up, "GET "):
 		return m.atGET(ctx, row, col, strings.TrimSpace(rest[4:]))
+	case strings.HasPrefix(up, "CLEAR"):
+		return atClear(ctx, row, col, strings.TrimSpace(rest[5:]))
+	case strings.Contains(up, " TO "):
+		return atBox(ctx, row, col, rest)
 	default:
 		return fail(ctx, "@ requires SAY or GET")
 	}
+}
+
+func atClear(ctx *context.Context, row, col int, rest string) error {
+	scr := ensureScreen(ctx)
+	r2, c2 := scr.Rows-1, scr.Cols-1
+	up := strings.ToUpper(rest)
+	if strings.HasPrefix(up, "TO ") {
+		var err error
+		r2, c2, _, err = parseAtCoord(strings.TrimSpace(rest[3:]))
+		if err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+	}
+	for r := row; r <= r2 && r < scr.Rows; r++ {
+		for c := col; c <= c2 && c < scr.Cols; c++ {
+			scr.WriteString(r, c, " ", false)
+		}
+	}
+	return scr.Present(ctx.Stdout)
+}
+
+func atBox(ctx *context.Context, row, col int, rest string) error {
+	up := strings.ToUpper(rest)
+	double := strings.Contains(up, "DOUBLE")
+	i := strings.Index(up, " TO ")
+	if i < 0 {
+		return fail(ctx, "@ TO required")
+	}
+	r2, c2, _, err := parseAtCoord(strings.TrimSpace(rest[i+4:]))
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	scr := ensureScreen(ctx)
+	h, v, corner := byte('-'), byte('|'), byte('+')
+	if double {
+		h, v = '=', '|'
+	}
+	_ = corner
+	for c := col; c <= c2 && c < scr.Cols; c++ {
+		scr.WriteString(row, c, string(h), false)
+		scr.WriteString(r2, c, string(h), false)
+	}
+	for r := row; r <= r2 && r < scr.Rows; r++ {
+		scr.WriteString(r, col, string(v), false)
+		scr.WriteString(r, c2, string(v), false)
+	}
+	scr.WriteString(row, col, "+", false)
+	scr.WriteString(row, c2, "+", false)
+	scr.WriteString(r2, col, "+", false)
+	scr.WriteString(r2, c2, "+", false)
+	return scr.Present(ctx.Stdout)
 }
 
 func parseAtCoord(args string) (row, col int, rest string, err error) {
