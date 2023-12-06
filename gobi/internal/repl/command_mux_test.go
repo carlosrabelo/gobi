@@ -3528,3 +3528,46 @@ func TestDispatchStoreNoArgs(t *testing.T) {
 		t.Fatal("expected error for STORE without expression")
 	}
 }
+func TestDispatchDisplayMemory(t *testing.T) {
+	var stdout bytes.Buffer
+	ctx := testCtx()
+	ctx.Stdout = &stdout
+	if err := ctx.Variables.Set("test_var", "hello"); err != nil {
+		t.Fatalf("set test_var: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "DISPLAY", Args: "MEMORY"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "TEST_VAR") || !strings.Contains(output, "(C)") {
+		t.Fatalf("expected tabular memory output, got %q", output)
+	}
+	if !strings.Contains(output, "** TOTAL ** 01 VARIABLES USED") {
+		t.Fatalf("expected memory total footer, got %q", output)
+	}
+}
+
+func TestDispatchListMemory(t *testing.T) {
+	var stdout bytes.Buffer
+	ctx := testCtx()
+	ctx.Stdout = &stdout
+	if err := ctx.Variables.Set("x", 1); err != nil {
+		t.Fatalf("set x: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "MEMORY"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := stdout.String()
+	if !strings.Contains(output, "X") || !strings.Contains(output, "(N)") {
+		t.Fatalf("expected tabular memory output, got %q", output)
+	}
+	if !strings.Contains(output, "** TOTAL ** 01 VARIABLES USED") {
+		t.Fatalf("expected memory total footer, got %q", output)
+	}
+}

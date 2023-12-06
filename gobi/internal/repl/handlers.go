@@ -90,6 +90,8 @@ func handleClose(ctx *context.Context, cmd Command) error {
 func handleDisplay(ctx *context.Context, cmd Command) error {
 	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
 	switch arg {
+	case "MEMORY":
+		return outputMemory(ctx)
 	case "STRUCTURE":
 		return displayStructure(ctx)
 	default:
@@ -130,6 +132,10 @@ type outputRecordsOpts struct {
 
 func handleList(ctx *context.Context, cmd Command) error {
 	argUpper := strings.ToUpper(strings.TrimSpace(cmd.Args))
+	if argUpper == "MEMORY" {
+		return outputMemory(ctx)
+	}
+
 	if argUpper == "STRUCTURE" {
 		return displayStructure(ctx)
 	}
