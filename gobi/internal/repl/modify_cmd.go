@@ -16,6 +16,9 @@ func init() {
 }
 
 func cmdMODIFY(ctx *context.Context, cmd command.Command) error {
+	if err := refuseCreateModify(ctx, cmd, "MODIFY"); err != nil {
+		return err
+	}
 	args := strings.Fields(cmd.Args)
 	if len(args) == 0 {
 		return fail(ctx, "MODIFY STRUCTURE or MODIFY COMMAND required")

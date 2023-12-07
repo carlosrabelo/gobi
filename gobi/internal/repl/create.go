@@ -13,6 +13,9 @@ import (
 )
 
 func cmdCREATE(ctx *context.Context, cmd command.Command) error {
+	if err := refuseCreateModify(ctx, cmd, "CREATE"); err != nil {
+		return err
+	}
 	args := strings.TrimSpace(cmd.Args)
 	from := strings.TrimSpace(cmd.Clauses["FROM"])
 	if from != "" {
