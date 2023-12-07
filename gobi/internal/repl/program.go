@@ -2,6 +2,7 @@ package repl
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -154,6 +155,9 @@ func runProgram(ctx *context.Context, m *Mux) error {
 			return fail(ctx, "%s", err.Error())
 		}
 		line = expanded
+		if ctx.Config.Echo {
+			echoProgramLine(ctx, line)
+		}
 		cmd := command.Split(line)
 		switch cmd.Verb {
 		case "RETURN":
@@ -195,4 +199,10 @@ func runProgram(ctx *context.Context, m *Mux) error {
 		}
 	}
 	return nil
+}
+
+// echoProgramLine prints a command-file line when SET ECHO is on (023.3).
+// SET DEBUG (023.12) will redirect this to the print sink.
+func echoProgramLine(ctx *context.Context, line string) {
+	fmt.Fprintln(ctx.Stdout, line)
 }

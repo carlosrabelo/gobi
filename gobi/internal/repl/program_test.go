@@ -177,3 +177,38 @@ func TestDOWHILELoopExit(t *testing.T) {
 		t.Fatalf("L=%v want 2 (LOOP/EXIT)", v)
 	}
 }
+
+func TestSETEchoPrintsCommandLines(t *testing.T) {
+	dir := t.TempDir()
+	prg := filepath.Join(dir, "echo.prg")
+	body := "STORE 1 TO A\nSTORE 2 TO B\n"
+	if err := os.WriteFile(prg, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := testCtx(t, dir)
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("SET ECHO ON")); err != nil {
+		t.Fatal(err)
+	}
+	if !ctx.Config.Echo {
+		t.Fatal("ECHO still off")
+	}
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("DO echo")); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "STORE 1 TO A") || !strings.Contains(got, "STORE 2 TO B") {
+		t.Fatalf("ECHO did not print lines: %q", got)
+	}
+	_ = mux.Dispatch(ctx, command.Split("SET ECHO OFF"))
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("DO echo")); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "STORE") {
+		t.Fatalf("ECHO OFF still printed: %q", out.String())
+	}
+}
