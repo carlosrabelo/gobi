@@ -184,9 +184,39 @@ func (m *Mux) atGET(ctx *context.Context, row, col int, rest string) error {
 		text += " "
 	}
 	scr := ensureScreen(ctx)
-	scr.WriteString(row, col, text, ctx.Config.Intensity)
+	left, right := fieldDelims(ctx)
+	writeDelimitedField(scr, row, col, text, ctx.Config.Intensity, left, right)
 	_ = scr.Present(ctx.Stdout)
 	return nil
+}
+
+// fieldDelims returns the left/right characters around a full-screen field when
+// SET DELIMITERS is on (023.7). One stored character is used on both sides.
+func fieldDelims(ctx *context.Context) (left, right string) {
+	if !ctx.Config.Delimiters {
+		return "", ""
+	}
+	d := ctx.Config.DelimChars
+	if d == "" {
+		d = ":"
+	}
+	if len(d) >= 2 {
+		return string(d[0]), string(d[1])
+	}
+	return d, d
+}
+
+func writeDelimitedField(scr *term.Screen, row, col int, text string, rev bool, left, right string) {
+	c := col
+	if left != "" {
+		scr.WriteString(row, c, left, false)
+		c++
+	}
+	scr.WriteString(row, c, text, rev)
+	c += len(text)
+	if right != "" {
+		scr.WriteString(row, c, right, false)
+	}
 }
 
 func splitPicture(rest string) (exprSrc, picture string) {

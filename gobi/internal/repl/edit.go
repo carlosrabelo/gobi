@@ -69,6 +69,7 @@ func editForm(ctx *context.Context, appendMode bool) error {
 				title = fmt.Sprintf("RECORD #%5d", a.Cursor)
 			}
 			scr.WriteString(0, 0, title, false)
+			dLeft, dRight := fieldDelims(ctx)
 			for i, f := range fields {
 				label := f.Name + ": "
 				scr.WriteString(i+1, 0, label, false)
@@ -80,7 +81,7 @@ func editForm(ctx *context.Context, appendMode bool) error {
 				for len(text) < w {
 					text += " "
 				}
-				scr.WriteString(i+1, len(label), text, i == cur && ctx.Config.Intensity)
+				writeDelimitedField(scr, i+1, len(label), text, i == cur && ctx.Config.Intensity, dLeft, dRight)
 			}
 			_ = scr.PresentClear(ctx.Stdout)
 		}
