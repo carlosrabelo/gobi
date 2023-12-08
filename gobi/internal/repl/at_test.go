@@ -61,6 +61,38 @@ func TestREADStoresField(t *testing.T) {
 	}
 }
 
+func TestSETDelimitersDrawAroundGET(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split(`STORE "AB" TO V`))
+	_ = mux.Dispatch(ctx, command.Split("SET DELIMITERS ON"))
+	if !ctx.Config.Delimiters {
+		t.Fatal("DELIMITERS still off")
+	}
+	if err := mux.Dispatch(ctx, command.Split("@ 0, 0 GET V")); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Screen.CellAt(0, 0).Ch != ':' {
+		t.Fatalf("left delim %q", ctx.Screen.CellAt(0, 0).Ch)
+	}
+	if ctx.Screen.CellAt(0, 1).Ch != 'A' {
+		t.Fatalf("field start %q", ctx.Screen.CellAt(0, 1).Ch)
+	}
+	// default width 10 for memory var → right delim at col 11
+	if ctx.Screen.CellAt(0, 11).Ch != ':' {
+		t.Fatalf("right delim %q", ctx.Screen.CellAt(0, 11).Ch)
+	}
+	_ = mux.Dispatch(ctx, command.Split("SET DELIMITERS OFF"))
+	mux.gets = nil
+	if err := mux.Dispatch(ctx, command.Split("@ 1, 0 GET V")); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Screen.CellAt(1, 0).Ch == ':' {
+		t.Fatal("DELIMITERS OFF still drew colon")
+	}
+}
+
 func TestSETConfirmWaitsOnFullField(t *testing.T) {
 	dir := t.TempDir()
 	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{

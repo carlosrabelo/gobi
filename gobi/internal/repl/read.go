@@ -23,6 +23,7 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 	}
 	cur := 0
 	scr := ensureScreen(ctx)
+	left, right := fieldDelims(ctx)
 	drawGET := func(i int, active bool) {
 		g := m.gets[i]
 		text := values[i]
@@ -33,7 +34,7 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 			text += " "
 		}
 		rev := active && ctx.Config.Intensity
-		scr.WriteString(g.Row, g.Col, text, rev)
+		writeDelimitedField(scr, g.Row, g.Col, text, rev, left, right)
 	}
 	for i := range m.gets {
 		drawGET(i, i == cur)
