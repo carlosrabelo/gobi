@@ -61,6 +61,46 @@ func TestREADStoresField(t *testing.T) {
 	}
 }
 
+func TestSETConfirmWaitsOnFullField(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 3},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "   "}}},
+	})
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE t"))
+
+	// CONFIRM OFF (default): filling the only GET ends READ.
+	ctx.Stdin = strings.NewReader("ABC")
+	_ = mux.Dispatch(ctx, command.Split("@ 0, 0 GET NAME"))
+	if err := mux.Dispatch(ctx, command.Split("READ")); err != nil {
+		t.Fatal(err)
+	}
+	_ = ctx.Active().LoadCurrent()
+	if strings.TrimSpace(ctx.Active().Record.Values[0].Str) != "ABC" {
+		t.Fatalf("CONFIRM OFF: %q", ctx.Active().Record.Values[0].Str)
+	}
+
+	// CONFIRM ON: full field stays until Enter.
+	_ = mux.Dispatch(ctx, command.Split("SET CONFIRM ON"))
+	if !ctx.Config.Confirm {
+		t.Fatal("CONFIRM still off")
+	}
+	_ = mux.Dispatch(ctx, command.Split("REPLACE NAME WITH [   ]"))
+	ctx.Stdin = strings.NewReader("XYZ\r")
+	_ = mux.Dispatch(ctx, command.Split("@ 0, 0 GET NAME"))
+	if err := mux.Dispatch(ctx, command.Split("READ")); err != nil {
+		t.Fatal(err)
+	}
+	_ = ctx.Active().LoadCurrent()
+	if strings.TrimSpace(ctx.Active().Record.Values[0].Str) != "XYZ" {
+		t.Fatalf("CONFIRM ON: %q", ctx.Active().Record.Values[0].Str)
+	}
+}
+
 func TestAtGETLimit(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	mux := NewMux()

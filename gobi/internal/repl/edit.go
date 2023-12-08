@@ -182,9 +182,15 @@ func editForm(ctx *context.Context, appendMode bool) error {
 				}
 			default:
 				if k >= 32 && k < 127 {
-					if len(values[cur]) < int(fields[cur].Length) {
+					w := int(fields[cur].Length)
+					if len(values[cur]) < w {
 						values[cur] += string(byte(k))
 						redraw()
+						// SET CONFIRM OFF: leaving a full field advances without Enter (023.6).
+						if !ctx.Config.Confirm && len(values[cur]) >= w {
+							cur = (cur + 1) % len(fields)
+							redraw()
+						}
 					}
 				}
 			}
