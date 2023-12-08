@@ -212,3 +212,56 @@ func TestSETEchoPrintsCommandLines(t *testing.T) {
 		t.Fatalf("ECHO OFF still printed: %q", out.String())
 	}
 }
+
+func TestSETStepWaitsAndEscCancels(t *testing.T) {
+	dir := t.TempDir()
+	prg := filepath.Join(dir, "step.prg")
+	body := "STORE 1 TO A\nSTORE 2 TO B\n"
+	if err := os.WriteFile(prg, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := testCtx(t, dir)
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("SET STEP ON"))
+	if !ctx.Config.Step {
+		t.Fatal("STEP still off")
+	}
+	// two ordinary keys: both lines run
+	ctx.Stdin = strings.NewReader("xx")
+	ctx.Keys = nil
+	if err := mux.Dispatch(ctx, command.Split("DO step")); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := ctx.Symbols.Get("A"); !ok || v.Num != 1 {
+		t.Fatalf("A: %v %v", ok, v)
+	}
+	if v, ok := ctx.Symbols.Get("B"); !ok || v.Num != 2 {
+		t.Fatalf("B: %v %v", ok, v)
+	}
+
+	// Esc with ESCAPE on cancels before second line
+	ctx.Symbols.ReleaseAll()
+	ctx.Stdin = strings.NewReader("x\x1b")
+	ctx.Keys = nil
+	if err := mux.Dispatch(ctx, command.Split("DO step")); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := ctx.Symbols.Get("A"); !ok || v.Num != 1 {
+		t.Fatalf("A after Esc: %v %v", ok, v)
+	}
+	if _, ok := ctx.Symbols.Get("B"); ok {
+		t.Fatal("B should not be set after Esc CANCEL")
+	}
+
+	// Esc with ESCAPE off is just another key
+	ctx.Symbols.ReleaseAll()
+	_ = mux.Dispatch(ctx, command.Split("SET ESCAPE OFF"))
+	ctx.Stdin = strings.NewReader("\x1b\x1b")
+	ctx.Keys = nil
+	if err := mux.Dispatch(ctx, command.Split("DO step")); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := ctx.Symbols.Get("B"); !ok || v.Num != 2 {
+		t.Fatalf("B with ESCAPE OFF: %v %v", ok, v)
+	}
+}

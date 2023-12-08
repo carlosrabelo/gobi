@@ -10,6 +10,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
+	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
 // Frame is one running .prg on the call stack.
@@ -158,6 +159,11 @@ func runProgram(ctx *context.Context, m *Mux) error {
 		if ctx.Config.Echo {
 			echoProgramLine(ctx, line)
 		}
+		if stop, err := stepProgramLine(ctx, m); err != nil {
+			return err
+		} else if stop {
+			return nil
+		}
 		cmd := command.Split(line)
 		switch cmd.Verb {
 		case "RETURN":
@@ -205,4 +211,30 @@ func runProgram(ctx *context.Context, m *Mux) error {
 // SET DEBUG (023.12) will redirect this to the print sink.
 func echoProgramLine(ctx *context.Context, line string) {
 	fmt.Fprintln(ctx.Stdout, line)
+}
+
+// stepProgramLine waits for a key when SET STEP is on (023.4).
+// Esc with SET ESCAPE on cancels the command file like CANCEL.
+// stop is true when the stack was cleared.
+func stepProgramLine(ctx *context.Context, m *Mux) (stop bool, err error) {
+	if !ctx.Config.Step {
+		return false, nil
+	}
+	keys := ctx.Keys
+	if keys == nil {
+		keys = term.NewReader(ctx.Stdin)
+		ctx.Keys = keys
+	}
+	k, err := keys.ReadKey()
+	if err != nil {
+		return false, fail(ctx, "%s", err.Error())
+	}
+	if k == term.KeyEsc && ctx.Config.Escape {
+		m.prog.Stack = nil
+		ctx.Privates = nil
+		ctx.ParamLocals = nil
+		ctx.PendingArgs = nil
+		return true, nil
+	}
+	return false, nil
 }
