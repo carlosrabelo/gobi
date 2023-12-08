@@ -44,9 +44,21 @@ func editForm(ctx *context.Context, appendMode bool) error {
 			return fail(ctx, "record count limit exceeded")
 		}
 		values := make([]string, len(fields))
-		if !appendMode {
+		switch {
+		case !appendMode:
 			for i, f := range fields {
 				values[i] = strings.TrimRight(fieldDisplay(a.Record.Values[i], f), " ")
+			}
+		case ctx.Config.Carry && a.RecCount() > 0:
+			// SET CARRY ON: seed the new APPEND form from the previous record (023.5).
+			rec := a.Record
+			if !a.Landed {
+				if r, err := a.Table.Read(a.RecCount()); err == nil {
+					rec = r
+				}
+			}
+			for i, f := range fields {
+				values[i] = strings.TrimRight(fieldDisplay(rec.Values[i], f), " ")
 			}
 		}
 		cur := 0
