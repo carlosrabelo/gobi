@@ -120,6 +120,24 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 					values[cur] += string(ch)
 					drawGET(cur, true)
 					_ = scr.Present(ctx.Stdout)
+					// SET CONFIRM OFF: a full GET advances without Enter (023.6).
+					if !ctx.Config.Confirm && len(values[cur]) >= g.Width {
+						if cur == len(m.gets)-1 {
+							if err := save(); err != nil {
+								return err
+							}
+							ctx.ReadKey = 15
+							if ctx.Updated {
+								ctx.ReadKey = 271
+							}
+							clearGets()
+							return nil
+						}
+						drawGET(cur, false)
+						cur++
+						drawGET(cur, true)
+						_ = scr.Present(ctx.Stdout)
+					}
 				}
 			}
 		}
