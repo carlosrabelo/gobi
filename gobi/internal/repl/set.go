@@ -23,10 +23,11 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 	case "TALK", "INTENSITY", "BELL", "EXACT", "DELETED", "ECHO", "STEP", "CARRY",
 		"CONFIRM", "ESCAPE", "CONSOLE", "DEBUG", "SAFETY", "PRINT", "FIXED", "HEADING",
 		"ALTERNATE", "DELIMITERS", "HELP":
-		if name == "ALTERNATE" && (to != "" || (len(args) >= 2 && strings.EqualFold(args[1], "TO"))) {
+		_, hasTO := cmd.Clauses["TO"]
+		if name == "ALTERNATE" && (hasTO || (len(args) >= 2 && strings.EqualFold(args[1], "TO"))) {
 			return setAlternateTO(ctx, to, args)
 		}
-		if name == "DELIMITERS" && (to != "" || (len(args) >= 2 && strings.EqualFold(args[1], "TO"))) {
+		if name == "DELIMITERS" && (hasTO || (len(args) >= 2 && strings.EqualFold(args[1], "TO"))) {
 			return setDelimitersTO(ctx, to, args)
 		}
 		if len(args) < 2 {
