@@ -61,6 +61,33 @@ func TestREADStoresField(t *testing.T) {
 	}
 }
 
+func TestSETEscapeOffIgnoresEscOnREAD(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 4},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "ANN "}}},
+	})
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE t"))
+	_ = mux.Dispatch(ctx, command.Split("SET ESCAPE OFF"))
+	if ctx.Config.Escape {
+		t.Fatal("ESCAPE still on")
+	}
+	// Esc ignored, then replace with BOB and Enter.
+	ctx.Stdin = strings.NewReader("\x1b\x7f\x7f\x7f\x7fBOB\r")
+	_ = mux.Dispatch(ctx, command.Split("@ 0, 0 GET NAME"))
+	if err := mux.Dispatch(ctx, command.Split("READ")); err != nil {
+		t.Fatal(err)
+	}
+	_ = ctx.Active().LoadCurrent()
+	if strings.TrimSpace(ctx.Active().Record.Values[0].Str) != "BOB" {
+		t.Fatalf("got %q", ctx.Active().Record.Values[0].Str)
+	}
+}
+
 func TestSETDelimitersTOChars(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	ctx.Stdout = &bytes.Buffer{}

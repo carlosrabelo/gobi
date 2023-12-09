@@ -79,6 +79,9 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 		}
 		switch k {
 		case term.KeyEsc:
+			if !ctx.Config.Escape {
+				continue // SET ESCAPE OFF: Esc does not cancel READ (023.9)
+			}
 			ctx.ReadKey = 12
 			clearGets()
 			return nil

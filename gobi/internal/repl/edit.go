@@ -126,7 +126,12 @@ func editForm(ctx *context.Context, appendMode bool) error {
 				return fail(ctx, "%s", err.Error())
 			}
 			switch k {
-			case term.KeyEsc, term.KeyCtrlQ:
+			case term.KeyEsc:
+				if !ctx.Config.Escape {
+					continue // SET ESCAPE OFF: Esc does not leave the form (023.9)
+				}
+				return nil
+			case term.KeyCtrlQ:
 				return nil
 			case term.KeyCtrlW:
 				if err := saveRecord(); err != nil {
