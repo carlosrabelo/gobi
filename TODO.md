@@ -101,7 +101,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `STORE` assignment parser and executor
 - [x] `DISPLAY MEMORY` and `LIST MEMORY` tabular printer
 - [x] `SAVE TO` binary serializer saving variables to .mem file
-- [ ] `RESTORE FROM` deserializer loading variables
+- [x] `RESTORE FROM` deserializer loading variables
 - [ ] `RELEASE` cleaning symbols from registry
 
 ## Programming & Scripting

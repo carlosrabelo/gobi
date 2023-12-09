@@ -100,6 +100,7 @@ func (m *CommandMux) registerAll() {
 	m.register("??", handleQuestion)
 	m.register("STORE", handleStore)
 	m.register("SAVE", handleSave)
+	m.register("RESTORE", handleRestore)
 }
 
 func stubHandler(verb string) HandlerFunc {
