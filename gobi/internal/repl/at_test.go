@@ -61,6 +61,39 @@ func TestREADStoresField(t *testing.T) {
 	}
 }
 
+func TestSETDelimitersTOChars(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split(`SET DELIMITERS TO "[]"`)); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Config.DelimChars != "[]" {
+		t.Fatalf("DelimChars %q", ctx.Config.DelimChars)
+	}
+	_ = mux.Dispatch(ctx, command.Split("SET DELIMITERS ON"))
+	_ = mux.Dispatch(ctx, command.Split(`STORE "AB" TO V`))
+	if err := mux.Dispatch(ctx, command.Split("@ 0, 0 GET V")); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Screen.CellAt(0, 0).Ch != '[' || ctx.Screen.CellAt(0, 11).Ch != ']' {
+		t.Fatalf("pair delims %q %q", ctx.Screen.CellAt(0, 0).Ch, ctx.Screen.CellAt(0, 11).Ch)
+	}
+	err := mux.Dispatch(ctx, command.Split(`SET DELIMITERS TO "abc"`))
+	if err == nil {
+		t.Fatal("expected error for three characters")
+	}
+	if ctx.Config.DelimChars != "[]" {
+		t.Fatalf("chars changed after error: %q", ctx.Config.DelimChars)
+	}
+	if err := mux.Dispatch(ctx, command.Split("SET DELIMITERS TO")); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Config.DelimChars != ":" {
+		t.Fatalf("empty TO should reset to colon: %q", ctx.Config.DelimChars)
+	}
+}
+
 func TestSETDelimitersDrawAroundGET(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	ctx.Stdout = &bytes.Buffer{}
