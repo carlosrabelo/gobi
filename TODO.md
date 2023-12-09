@@ -102,7 +102,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `DISPLAY MEMORY` and `LIST MEMORY` tabular printer
 - [x] `SAVE TO` binary serializer saving variables to .mem file
 - [x] `RESTORE FROM` deserializer loading variables
-- [ ] `RELEASE` cleaning symbols from registry
+- [x] `RELEASE` cleaning symbols from registry
 
 ## Programming & Scripting
 
