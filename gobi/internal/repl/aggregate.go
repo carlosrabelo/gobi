@@ -25,7 +25,7 @@ func cmdCOUNT(ctx *context.Context, cmd command.Command) error {
 		return err
 	}
 	if ctx.Config.Talk {
-		fmt.Fprintln(ctx.Stdout, n)
+		fmt.Fprintln(ctx.Out(), n)
 	}
 	return nil
 }
@@ -77,11 +77,11 @@ func sumOrAvg(ctx *context.Context, cmd command.Command, average bool) error {
 	if ctx.Config.Talk {
 		for i, v := range vals {
 			if i > 0 {
-				fmt.Fprint(ctx.Stdout, " ")
+				fmt.Fprint(ctx.Out(), " ")
 			}
-			fmt.Fprint(ctx.Stdout, expr.NumberVal(v).String())
+			fmt.Fprint(ctx.Out(), expr.NumberVal(v).String())
 		}
-		fmt.Fprintln(ctx.Stdout)
+		fmt.Fprintln(ctx.Out())
 	}
 	return nil
 }

@@ -21,7 +21,7 @@ func printExprs(ctx *context.Context, args string, newline bool) error {
 	parts := splitCommaExprs(strings.TrimSpace(args))
 	if len(parts) == 0 || (len(parts) == 1 && parts[0] == "") {
 		if newline {
-			fmt.Fprintln(ctx.Stdout)
+			fmt.Fprintln(ctx.Out())
 		}
 		return nil
 	}
@@ -48,9 +48,9 @@ func printExprs(ctx *context.Context, args string, newline bool) error {
 	}
 	text := strings.Join(out, " ")
 	if newline {
-		fmt.Fprintln(ctx.Stdout, text)
+		fmt.Fprintln(ctx.Out(), text)
 	} else {
-		fmt.Fprint(ctx.Stdout, text)
+		fmt.Fprint(ctx.Out(), text)
 	}
 	return nil
 }

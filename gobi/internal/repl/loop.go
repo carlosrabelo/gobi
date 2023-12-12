@@ -20,7 +20,7 @@ func Run(ctx *context.Context, mux *Mux) error {
 // RunWithHistory is Run with optional command history.
 func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 	for {
-		fmt.Fprint(ctx.Stdout, ". ")
+		fmt.Fprint(ctx.Out(), ". ")
 		line, err := ctx.StdinReader().ReadString('\n')
 		if errors.Is(err, io.EOF) {
 			if len(line) == 0 {

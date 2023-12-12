@@ -64,7 +64,7 @@ func runTEXT(ctx *context.Context, fr *Frame) error {
 		if c.Verb == "ENDTEXT" {
 			return nil
 		}
-		fmt.Fprintln(ctx.Stdout, line)
+		fmt.Fprintln(ctx.Out(), line)
 	}
 	return fail(ctx, "TEXT without ENDTEXT")
 }

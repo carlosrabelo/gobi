@@ -74,7 +74,7 @@ func cmdREPORT(ctx *context.Context, cmd command.Command) error {
 	}
 
 	var file *os.File
-	var out io.Writer = ctx.Stdout
+	var out io.Writer = ctx.Out()
 	if opts.toFile != "" {
 		fp := opts.toFile
 		if filepath.Ext(fp) == "" {
@@ -252,7 +252,7 @@ func writePrintLine(ctx *context.Context, w io.Writer, s string) {
 }
 
 func printSink(ctx *context.Context) io.Writer {
-	return ctx.Stdout
+	return ctx.Out()
 }
 
 func cmdEJECT(ctx *context.Context, _ command.Command) error {

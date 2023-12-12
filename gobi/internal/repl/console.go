@@ -16,7 +16,7 @@ func cmdACCEPT(ctx *context.Context, cmd command.Command) error {
 		return fail(ctx, "%s", err.Error())
 	}
 	if prompt != "" {
-		fmt.Fprint(ctx.Stdout, prompt)
+		fmt.Fprint(ctx.Out(), prompt)
 	}
 	line, err := ctx.StdinReader().ReadString('\n')
 	if err != nil && err != io.EOF {
@@ -35,7 +35,7 @@ func cmdINPUT(ctx *context.Context, cmd command.Command) error {
 		return fail(ctx, "%s", err.Error())
 	}
 	if prompt != "" {
-		fmt.Fprint(ctx.Stdout, prompt)
+		fmt.Fprint(ctx.Out(), prompt)
 	}
 	line, err := ctx.StdinReader().ReadString('\n')
 	if err != nil && err != io.EOF {
@@ -67,7 +67,7 @@ func cmdWAIT(ctx *context.Context, cmd command.Command) error {
 	if args != "" {
 		prompt = strings.Trim(args, `"'`)
 	}
-	fmt.Fprint(ctx.Stdout, prompt)
+	fmt.Fprint(ctx.Out(), prompt)
 	b, err := ctx.StdinReader().ReadByte()
 	if err != nil && err != io.EOF {
 		return fail(ctx, "%s", err.Error())
@@ -86,7 +86,7 @@ func cmdWAIT(ctx *context.Context, cmd command.Command) error {
 }
 
 func cmdREMARK(ctx *context.Context, cmd command.Command) error {
-	fmt.Fprintln(ctx.Stdout, cmd.Args)
+	fmt.Fprintln(ctx.Out(), cmd.Args)
 	return nil
 }
 

@@ -45,7 +45,7 @@ func cmdDIR(ctx *context.Context, cmd command.Command) error {
 			}
 			f.Close()
 		}
-		fmt.Fprintf(ctx.Stdout, "%s  %d  %d\n", name, info.Size(), recs)
+		fmt.Fprintf(ctx.Out(), "%s  %d  %d\n", name, info.Size(), recs)
 	}
 	return nil
 }

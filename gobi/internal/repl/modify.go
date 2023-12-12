@@ -17,9 +17,9 @@ func cmdModifyStructure(ctx *context.Context, cmd command.Command) error {
 	if !a.HasTable() {
 		return fail(ctx, "no database in use")
 	}
-	fmt.Fprintln(ctx.Stdout, "Current structure:")
+	fmt.Fprintln(ctx.Out(), "Current structure:")
 	for _, f := range a.Table.Header.Fields {
-		fmt.Fprintf(ctx.Stdout, "%-10s %c %3d %3d\n", f.Name, f.Type, f.Length, f.Decimals)
+		fmt.Fprintf(ctx.Out(), "%-10s %c %3d %3d\n", f.Name, f.Type, f.Length, f.Decimals)
 	}
 	newFields, err := promptFields(ctx)
 	if err != nil {

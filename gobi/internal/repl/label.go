@@ -52,7 +52,7 @@ func cmdLABEL(ctx *context.Context, cmd command.Command) error {
 		for row := 0; row < form.Height; row++ {
 			fmt.Fprintln(&out, strings.Repeat("X", form.Width))
 		}
-		fmt.Fprint(ctx.Stdout, out.String())
+		fmt.Fprint(ctx.Out(), out.String())
 		return nil
 	}
 	a := ctx.Active()
@@ -95,7 +95,7 @@ func cmdLABEL(ctx *context.Context, cmd command.Command) error {
 		writeLabelRow(&out, form, batch)
 	}
 	text := out.String()
-	fmt.Fprint(ctx.Stdout, text)
+	fmt.Fprint(ctx.Out(), text)
 	to := strings.TrimSpace(cmd.Clauses["TO"])
 	up := strings.ToUpper(to)
 	if strings.HasPrefix(up, "FILE") {

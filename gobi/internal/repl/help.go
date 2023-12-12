@@ -27,7 +27,7 @@ func (m *Mux) cmdHELP(ctx *context.Context, cmd command.Command) error {
 			}
 		}
 		for _, v := range verbs {
-			fmt.Fprintln(ctx.Stdout, v)
+			fmt.Fprintln(ctx.Out(), v)
 		}
 		return nil
 	}
@@ -36,6 +36,6 @@ func (m *Mux) cmdHELP(ctx *context.Context, cmd command.Command) error {
 	if !ok {
 		return fail(ctx, "no help for %s", strings.ToUpper(verb))
 	}
-	fmt.Fprintln(ctx.Stdout, text)
+	fmt.Fprintln(ctx.Out(), text)
 	return nil
 }
