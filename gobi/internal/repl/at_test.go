@@ -26,6 +26,27 @@ func TestAtSAY(t *testing.T) {
 	}
 }
 
+func TestSETDevicePrintSAY(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("SET DEVICE TO PRINT"))
+	if !strings.EqualFold(ctx.Config.Device, "PRINT") {
+		t.Fatalf("device %q", ctx.Config.Device)
+	}
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split(`@ 0, 0 SAY "Hi"`)); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "Hi" {
+		t.Fatalf("print SAY: %q", out.String())
+	}
+	if ctx.Screen != nil && ctx.Screen.CellAt(0, 0).Ch == 'H' {
+		t.Fatal("SAY wrote screen while DEVICE PRINT")
+	}
+}
+
 func TestREADStoresField(t *testing.T) {
 	dir := t.TempDir()
 	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{
