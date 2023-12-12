@@ -158,6 +158,8 @@ func runProgram(ctx *context.Context, m *Mux) error {
 		line = expanded
 		if ctx.Config.Echo {
 			echoProgramLine(ctx, line)
+		} else if ctx.Config.Step && ctx.Config.Debug {
+			fmt.Fprintln(printSink(ctx), line)
 		}
 		if stop, err := stepProgramLine(ctx, m); err != nil {
 			return err
@@ -208,9 +210,13 @@ func runProgram(ctx *context.Context, m *Mux) error {
 }
 
 // echoProgramLine prints a command-file line when SET ECHO is on (023.3).
-// SET DEBUG (023.12) will redirect this to the print sink.
+// SET DEBUG ON sends ECHO/STEP lines to the print sink (023.12).
 func echoProgramLine(ctx *context.Context, line string) {
-	fmt.Fprintln(ctx.Out(), line)
+	w := ctx.Out()
+	if ctx.Config.Debug {
+		w = printSink(ctx)
+	}
+	fmt.Fprintln(w, line)
 }
 
 // stepProgramLine waits for a key when SET STEP is on (023.4).
