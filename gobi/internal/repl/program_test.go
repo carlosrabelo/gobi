@@ -213,6 +213,32 @@ func TestSETEchoPrintsCommandLines(t *testing.T) {
 	}
 }
 
+func TestSETDebugEchoGoesToPrintSink(t *testing.T) {
+	dir := t.TempDir()
+	prg := filepath.Join(dir, "d.prg")
+	if err := os.WriteFile(prg, []byte("STORE 1 TO A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := testCtx(t, dir)
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("SET ECHO ON"))
+	_ = mux.Dispatch(ctx, command.Split("SET CONSOLE OFF"))
+	_ = mux.Dispatch(ctx, command.Split("SET DEBUG ON"))
+	if !ctx.Config.Debug {
+		t.Fatal("DEBUG still off")
+	}
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("DO d")); err != nil {
+		t.Fatal(err)
+	}
+	// CONSOLE OFF would hide ECHO on Out(), but DEBUG sends it to the print sink (Stdout).
+	if !strings.Contains(out.String(), "STORE 1 TO A") {
+		t.Fatalf("DEBUG ECHO missing: %q", out.String())
+	}
+}
+
 func TestSETStepWaitsAndEscCancels(t *testing.T) {
 	dir := t.TempDir()
 	prg := filepath.Join(dir, "step.prg")

@@ -252,7 +252,8 @@ func writePrintLine(ctx *context.Context, w io.Writer, s string) {
 }
 
 func printSink(ctx *context.Context) io.Writer {
-	return ctx.Out()
+	// Print sink is the process stdout (constitution); it is not gated by SET CONSOLE.
+	return ctx.Stdout
 }
 
 func cmdEJECT(ctx *context.Context, _ command.Command) error {
