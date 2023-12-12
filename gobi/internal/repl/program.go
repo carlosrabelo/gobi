@@ -210,7 +210,7 @@ func runProgram(ctx *context.Context, m *Mux) error {
 // echoProgramLine prints a command-file line when SET ECHO is on (023.3).
 // SET DEBUG (023.12) will redirect this to the print sink.
 func echoProgramLine(ctx *context.Context, line string) {
-	fmt.Fprintln(ctx.Stdout, line)
+	fmt.Fprintln(ctx.Out(), line)
 }
 
 // stepProgramLine waits for a key when SET STEP is on (023.4).

@@ -124,7 +124,7 @@ func cmdDisplayHistory(ctx *context.Context, hist *History, cmd command.Command)
 			}
 		}
 	}
-	w := ctx.Stdout
+	w := ctx.Out()
 	if strings.Contains(args, "TO PRINT") || strings.EqualFold(strings.TrimSpace(cmd.Clauses["TO"]), "PRINT") {
 		w = printSink(ctx)
 	}
@@ -164,10 +164,10 @@ func cmdTYPE(ctx *context.Context, cmd command.Command) error {
 		return fail(ctx, "%s", err.Error())
 	}
 	if strings.ContainsRune(string(data), 0) {
-		fmt.Fprint(ctx.Stdout, string(data))
+		fmt.Fprint(ctx.Out(), string(data))
 		return fail(ctx, "binary file")
 	}
-	fmt.Fprint(ctx.Stdout, string(data))
+	fmt.Fprint(ctx.Out(), string(data))
 	to := strings.TrimSpace(cmd.Clauses["TO"])
 	if strings.EqualFold(to, "PRINT") {
 		fmt.Fprint(printSink(ctx), string(data))

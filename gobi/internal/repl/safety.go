@@ -12,7 +12,7 @@ import (
 // confirmSafety prints question and returns true only when the next line starts with Y/y.
 // Any other line, including EOF, cancels with a *** line.
 func confirmSafety(ctx *context.Context, question string) (bool, error) {
-	fmt.Fprintln(ctx.Stdout, question)
+	fmt.Fprintln(ctx.Out(), question)
 	line, err := ctx.StdinReader().ReadString('\n')
 	if err != nil && err != io.EOF {
 		return false, err
@@ -31,7 +31,7 @@ func confirmSafety(ctx *context.Context, question string) (bool, error) {
 }
 
 func readPromptLine(ctx *context.Context, prompt string) (string, error) {
-	fmt.Fprint(ctx.Stdout, prompt)
+	fmt.Fprint(ctx.Out(), prompt)
 	line, err := ctx.StdinReader().ReadString('\n')
 	if err != nil && err != io.EOF {
 		return "", err

@@ -14,7 +14,7 @@ func cmdRUN(ctx *context.Context, cmd command.Command) error {
 		return fail(ctx, "RUN requires a command")
 	}
 	c := exec.Command("sh", "-c", text)
-	c.Stdout = ctx.Stdout
+	c.Stdout = ctx.Out()
 	c.Stderr = ctx.Stderr
 	c.Stdin = ctx.Stdin
 	err := c.Run()

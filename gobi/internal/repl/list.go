@@ -57,22 +57,22 @@ func cmdDISPLAY(ctx *context.Context, cmd command.Command) error {
 }
 
 func displayStatus(ctx *context.Context) error {
-	fmt.Fprintf(ctx.Stdout, "Area: %d\n", ctx.ActiveArea)
+	fmt.Fprintf(ctx.Out(), "Area: %d\n", ctx.ActiveArea)
 	for i := 1; i <= context.AreaCount; i++ {
 		a := ctx.Areas[i]
 		if !a.HasTable() {
 			continue
 		}
-		fmt.Fprintf(ctx.Stdout, "  %d: %s", i, a.Path)
+		fmt.Fprintf(ctx.Out(), "  %d: %s", i, a.Path)
 		for _, n := range a.NDX {
 			if n != "" {
-				fmt.Fprintf(ctx.Stdout, " %s", n)
+				fmt.Fprintf(ctx.Out(), " %s", n)
 			}
 		}
-		fmt.Fprintln(ctx.Stdout)
+		fmt.Fprintln(ctx.Out())
 	}
 	c := ctx.Config
-	fmt.Fprintf(ctx.Stdout, "TALK=%v INTENSITY=%v BELL=%v SAFETY=%v EXACT=%v DELETED=%v\n",
+	fmt.Fprintf(ctx.Out(), "TALK=%v INTENSITY=%v BELL=%v SAFETY=%v EXACT=%v DELETED=%v\n",
 		c.Talk, c.Intensity, c.Bell, c.Safety, c.Exact, c.Deleted)
 	return nil
 }
@@ -286,15 +286,15 @@ func printHeader(ctx *context.Context, cols []column) {
 	if !ctx.Config.Heading {
 		return
 	}
-	fmt.Fprint(ctx.Stdout, "Record#")
+	fmt.Fprint(ctx.Out(), "Record#")
 	for _, c := range cols {
-		fmt.Fprintf(ctx.Stdout, " %s", c.title)
+		fmt.Fprintf(ctx.Out(), " %s", c.title)
 	}
-	fmt.Fprintln(ctx.Stdout)
+	fmt.Fprintln(ctx.Out())
 }
 
 func printDataLine(ctx *context.Context, env expr.Env, cols []column, recNo int) error {
-	fmt.Fprintf(ctx.Stdout, "%7d", recNo)
+	fmt.Fprintf(ctx.Out(), "%7d", recNo)
 	a := ctx.Active()
 	for _, c := range cols {
 		var s string
@@ -308,9 +308,9 @@ func printDataLine(ctx *context.Context, env expr.Env, cols []column, recNo int)
 			f := a.Table.Header.Fields[c.field]
 			s = fieldString(f, a.Record.Values[c.field])
 		}
-		fmt.Fprintf(ctx.Stdout, " %s", s)
+		fmt.Fprintf(ctx.Out(), " %s", s)
 	}
-	fmt.Fprintln(ctx.Stdout)
+	fmt.Fprintln(ctx.Out())
 	return nil
 }
 

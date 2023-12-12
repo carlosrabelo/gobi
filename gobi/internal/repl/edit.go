@@ -83,7 +83,7 @@ func editForm(ctx *context.Context, appendMode bool) error {
 				}
 				writeDelimitedField(scr, i+1, len(label), text, i == cur && ctx.Config.Intensity, dLeft, dRight)
 			}
-			_ = scr.PresentClear(ctx.Stdout)
+			_ = scr.PresentClear(ctx.Out())
 		}
 		redraw()
 

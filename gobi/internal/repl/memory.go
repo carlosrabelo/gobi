@@ -94,7 +94,7 @@ func cmdDisplayMemory(ctx *context.Context, _ command.Command) error {
 func printMemory(ctx *context.Context) error {
 	for _, name := range ctx.Symbols.Names() {
 		v, _ := ctx.Symbols.Get(name)
-		fmt.Fprintf(ctx.Stdout, "%s  %s  %s\n", name, typeLetter(v), v.String())
+		fmt.Fprintf(ctx.Out(), "%s  %s  %s\n", name, typeLetter(v), v.String())
 	}
 	return nil
 }

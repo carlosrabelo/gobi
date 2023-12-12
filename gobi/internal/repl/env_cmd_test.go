@@ -12,6 +12,33 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
 
+func TestSETConsoleOffDiscardsOutput(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split(`STORE 1 TO A`))
+	_ = mux.Dispatch(ctx, command.Split("SET CONSOLE OFF"))
+	if ctx.Config.Console {
+		t.Fatal("CONSOLE still on")
+	}
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("? A")); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("CONSOLE OFF leaked: %q", out.String())
+	}
+	_ = mux.Dispatch(ctx, command.Split("SET CONSOLE ON"))
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("? A")); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "1") {
+		t.Fatalf("CONSOLE ON: %q", out.String())
+	}
+}
+
 func TestSETTalkAndDefault(t *testing.T) {
 	dir := t.TempDir()
 	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{

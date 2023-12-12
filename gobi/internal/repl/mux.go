@@ -207,7 +207,7 @@ func (m *Mux) shouldAskHelp(ctx *context.Context) bool {
 }
 
 func askHelp(ctx *context.Context, verb string) {
-	fmt.Fprint(ctx.Stdout, "Do you want some help? (Y/N) ")
+	fmt.Fprint(ctx.Out(), "Do you want some help? (Y/N) ")
 	line, err := ctx.StdinReader().ReadString('\n')
 	if err != nil {
 		return
@@ -216,7 +216,7 @@ func askHelp(ctx *context.Context, verb string) {
 	if line != "" && (line[0] == 'Y' || line[0] == 'y') {
 		text, ok := help.Text(verb)
 		if ok {
-			fmt.Fprintln(ctx.Stdout, text)
+			fmt.Fprintln(ctx.Out(), text)
 		}
 	}
 }

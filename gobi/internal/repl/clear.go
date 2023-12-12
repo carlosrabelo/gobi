@@ -15,7 +15,7 @@ func (m *Mux) cmdCLEAR(ctx *context.Context, cmd command.Command) error {
 	case args == "" || args == "SCREEN":
 		scr := ensureScreen(ctx)
 		scr.Clear()
-		_ = scr.PresentClear(ctx.Stdout)
+		_ = scr.PresentClear(ctx.Out())
 		return nil
 	case args == "ALL":
 		_ = ctx.CloseAll()
@@ -79,8 +79,8 @@ func cmdCHANGE(ctx *context.Context, cmd command.Command) error {
 		}
 		f := a.Table.Header.Fields[fi]
 		cur := fieldDisplay(a.Record.Values[fi], f)
-		fmt.Fprintln(ctx.Stdout, cur)
-		fmt.Fprint(ctx.Stdout, "CHANGE? ")
+		fmt.Fprintln(ctx.Out(), cur)
+		fmt.Fprint(ctx.Out(), "CHANGE? ")
 		from, err := ctx.StdinReader().ReadString('\n')
 		if err != nil {
 			return fail(ctx, "%s", err.Error())
@@ -89,7 +89,7 @@ func cmdCHANGE(ctx *context.Context, cmd command.Command) error {
 		if from == "" {
 			continue
 		}
-		fmt.Fprint(ctx.Stdout, "TO? ")
+		fmt.Fprint(ctx.Out(), "TO? ")
 		to, err := ctx.StdinReader().ReadString('\n')
 		if err != nil {
 			return fail(ctx, "%s", err.Error())

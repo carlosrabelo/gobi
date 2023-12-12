@@ -101,6 +101,15 @@ func New() *Context {
 	return c
 }
 
+// Out returns the writer for screen command output. When SET CONSOLE is off,
+// writes are discarded; stderr is unchanged (023.10).
+func (c *Context) Out() io.Writer {
+	if c.Config != nil && !c.Config.Console {
+		return io.Discard
+	}
+	return c.Stdout
+}
+
 // Active returns the active work area.
 func (c *Context) Active() *Area {
 	return c.Areas[c.ActiveArea]
