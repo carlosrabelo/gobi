@@ -2,10 +2,31 @@ package repl
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 )
+
+func TestSETPrintAppliesMargin(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split(`STORE 1 TO A`))
+	_ = mux.Dispatch(ctx, command.Split("SET MARGIN TO 2"))
+	_ = mux.Dispatch(ctx, command.Split("SET PRINT ON"))
+	if !ctx.Config.Print {
+		t.Fatal("PRINT still off")
+	}
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("? A")); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(out.String(), "  1") {
+		t.Fatalf("margin missing: %q", out.String())
+	}
+}
 
 func TestQuestionAndDouble(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())

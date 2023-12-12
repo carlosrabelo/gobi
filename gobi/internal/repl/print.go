@@ -21,7 +21,7 @@ func printExprs(ctx *context.Context, args string, newline bool) error {
 	parts := splitCommaExprs(strings.TrimSpace(args))
 	if len(parts) == 0 || (len(parts) == 1 && parts[0] == "") {
 		if newline {
-			fmt.Fprintln(ctx.Out())
+			writeScreenLine(ctx, "", true)
 		}
 		return nil
 	}
@@ -46,11 +46,24 @@ func printExprs(ctx *context.Context, args string, newline bool) error {
 		}
 		out = append(out, v.String())
 	}
-	text := strings.Join(out, " ")
-	if newline {
-		fmt.Fprintln(ctx.Out(), text)
-	} else {
-		fmt.Fprint(ctx.Out(), text)
-	}
+	writeScreenLine(ctx, strings.Join(out, " "), newline)
 	return nil
+}
+
+// writeScreenLine writes non-fullscreen text. SET PRINT ON sends it to the print
+// sink once (with MARGIN) instead of doubling on stdout (023.14).
+func writeScreenLine(ctx *context.Context, s string, newline bool) {
+	w := ctx.Out()
+	if ctx.Config.Print {
+		w = printSink(ctx)
+	}
+	margin := ""
+	if ctx.Config.Print && ctx.Config.Margin > 0 {
+		margin = strings.Repeat(" ", ctx.Config.Margin)
+	}
+	if newline {
+		fmt.Fprintln(w, margin+s)
+	} else {
+		fmt.Fprint(w, margin+s)
+	}
 }
