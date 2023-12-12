@@ -286,15 +286,18 @@ func printHeader(ctx *context.Context, cols []column) {
 	if !ctx.Config.Heading {
 		return
 	}
-	fmt.Fprint(ctx.Out(), "Record#")
+	var b strings.Builder
+	b.WriteString("Record#")
 	for _, c := range cols {
-		fmt.Fprintf(ctx.Out(), " %s", c.title)
+		b.WriteByte(' ')
+		b.WriteString(c.title)
 	}
-	fmt.Fprintln(ctx.Out())
+	writeScreenLine(ctx, b.String(), true)
 }
 
 func printDataLine(ctx *context.Context, env expr.Env, cols []column, recNo int) error {
-	fmt.Fprintf(ctx.Out(), "%7d", recNo)
+	var b strings.Builder
+	fmt.Fprintf(&b, "%7d", recNo)
 	a := ctx.Active()
 	for _, c := range cols {
 		var s string
@@ -308,9 +311,10 @@ func printDataLine(ctx *context.Context, env expr.Env, cols []column, recNo int)
 			f := a.Table.Header.Fields[c.field]
 			s = fieldString(f, a.Record.Values[c.field])
 		}
-		fmt.Fprintf(ctx.Out(), " %s", s)
+		b.WriteByte(' ')
+		b.WriteString(s)
 	}
-	fmt.Fprintln(ctx.Out())
+	writeScreenLine(ctx, b.String(), true)
 	return nil
 }
 
