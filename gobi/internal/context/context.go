@@ -102,12 +102,20 @@ func New() *Context {
 }
 
 // Out returns the writer for screen command output. When SET CONSOLE is off,
-// writes are discarded; stderr is unchanged (023.10).
+// writes are discarded; stderr is unchanged (023.10). When SET ALTERNATE is on
+// and a file is open, screen output is also copied there (023.11).
 func (c *Context) Out() io.Writer {
+	var w io.Writer = c.Stdout
 	if c.Config != nil && !c.Config.Console {
-		return io.Discard
+		w = io.Discard
 	}
-	return c.Stdout
+	if c.Config != nil && c.Config.Alternate && c.Alternate != nil {
+		if w == io.Discard {
+			return c.Alternate
+		}
+		return io.MultiWriter(w, c.Alternate)
+	}
+	return w
 }
 
 // Active returns the active work area.
