@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -149,6 +150,11 @@ func atSAY(ctx *context.Context, row, col int, rest string) error {
 	text := v.String()
 	if pic != "" {
 		text = applyPicture(text, pic)
+	}
+	if strings.EqualFold(ctx.Config.Device, "PRINT") {
+		// SET DEVICE TO PRINT: @ SAY goes to the print sink (023.15).
+		fmt.Fprint(printSink(ctx), text)
+		return nil
 	}
 	scr := ensureScreen(ctx)
 	scr.WriteString(row, col, text, false)
