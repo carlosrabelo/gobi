@@ -12,6 +12,39 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
 
+func TestSETAlternateCopiesOutput(t *testing.T) {
+	dir := t.TempDir()
+	ctx := testCtx(t, dir)
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split(`STORE 42 TO N`))
+	if err := mux.Dispatch(ctx, command.Split("SET ALTERNATE TO alt")); err != nil {
+		t.Fatal(err)
+	}
+	altPath := filepath.Join(dir, "alt.txt")
+	if _, err := os.Stat(altPath); err != nil {
+		t.Fatalf("alternate file: %v", err)
+	}
+	_ = mux.Dispatch(ctx, command.Split("SET ALTERNATE ON"))
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("? N")); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "42") {
+		t.Fatalf("screen: %q", out.String())
+	}
+	raw, err := os.ReadFile(altPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "42") {
+		t.Fatalf("alternate file: %q", raw)
+	}
+	_ = mux.Dispatch(ctx, command.Split("SET ALTERNATE OFF"))
+	_ = mux.Dispatch(ctx, command.Split("SET ALTERNATE TO"))
+}
+
 func TestSETConsoleOffDiscardsOutput(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	var out bytes.Buffer
