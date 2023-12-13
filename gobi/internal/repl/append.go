@@ -14,7 +14,7 @@ import (
 
 const maxRecords = 4294967295
 
-func cmdAPPEND(ctx *context.Context, cmd command.Command) error {
+func (m *Mux) cmdAPPEND(ctx *context.Context, cmd command.Command) error {
 	a := ctx.Active()
 	if !a.HasTable() {
 		return fail(ctx, "no database in use")
@@ -24,6 +24,9 @@ func cmdAPPEND(ctx *context.Context, cmd command.Command) error {
 	}
 	if strings.EqualFold(strings.TrimSpace(cmd.Args), "BLANK") {
 		return appendBlank(ctx)
+	}
+	if len(ctx.FormatLines) > 0 {
+		return m.formatForm(ctx, true)
 	}
 	return editForm(ctx, true)
 }

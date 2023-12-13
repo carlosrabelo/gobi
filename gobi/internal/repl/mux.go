@@ -44,7 +44,9 @@ func NewMux() *Mux {
 	m.Register("SKIP", cmdSKIP)
 	m.Register("DISPLAY", cmdDISPLAY)
 	m.Register("LIST", cmdLIST)
-	m.Register("INSERT", cmdINSERT)
+	m.Register("INSERT", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdINSERT(ctx, cmd)
+	})
 	m.Register("CLEAR", func(ctx *context.Context, cmd command.Command) error {
 		return m.cmdCLEAR(ctx, cmd)
 	})
@@ -53,8 +55,15 @@ func NewMux() *Mux {
 	m.Register("?", cmdQuestion)
 	m.Register("??", cmdQuestionQuestion)
 	m.Register("CREATE", cmdCREATE)
-	m.Register("APPEND", cmdAPPEND)
-	m.Register("EDIT", cmdEDIT)
+	m.Register("APPEND", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdAPPEND(ctx, cmd)
+	})
+	m.Register("EDIT", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdEDIT(ctx, cmd)
+	})
+	m.Register("READ", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdREADWithFormat(ctx, cmd)
+	})
 	m.Register("BROWSE", cmdBROWSE)
 	m.Register("RUN", cmdRUN)
 	m.Register("!", cmdBang)
@@ -98,9 +107,6 @@ func NewMux() *Mux {
 	m.Register("SORT", cmdSORT)
 	m.Register("@", func(ctx *context.Context, cmd command.Command) error {
 		return m.cmdAt(ctx, cmd)
-	})
-	m.Register("READ", func(ctx *context.Context, cmd command.Command) error {
-		return m.cmdREAD(ctx, cmd)
 	})
 	m.Register("DO", func(ctx *context.Context, cmd command.Command) error {
 		return m.cmdDO(ctx, cmd)
