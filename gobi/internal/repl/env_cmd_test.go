@@ -12,6 +12,30 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
 
+func TestSETDecimalsTO(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("SET DECIMALS TO 4")); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Config.Decimals != 4 {
+		t.Fatalf("decimals %d", ctx.Config.Decimals)
+	}
+	err := mux.Dispatch(ctx, command.Split("SET DECIMALS TO 16"))
+	if err == nil {
+		t.Fatal("expected range error")
+	}
+	if ctx.Config.Decimals != 4 {
+		t.Fatalf("decimals changed after error: %d", ctx.Config.Decimals)
+	}
+	if err := mux.Dispatch(ctx, command.Split("SET DECIMALS TO 0")); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Config.Decimals != 0 {
+		t.Fatalf("decimals %d", ctx.Config.Decimals)
+	}
+}
+
 func TestSETAlternateCopiesOutput(t *testing.T) {
 	dir := t.TempDir()
 	ctx := testCtx(t, dir)
