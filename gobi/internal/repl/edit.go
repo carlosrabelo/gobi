@@ -12,7 +12,7 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
-func cmdEDIT(ctx *context.Context, cmd command.Command) error {
+func (m *Mux) cmdEDIT(ctx *context.Context, cmd command.Command) error {
 	a := ctx.Active()
 	if !a.HasTable() {
 		return fail(ctx, "no database in use")
@@ -30,7 +30,65 @@ func cmdEDIT(ctx *context.Context, cmd command.Command) error {
 	if !a.Landed {
 		return fail(ctx, "no current record")
 	}
+	if len(ctx.FormatLines) > 0 {
+		return m.formatForm(ctx, false)
+	}
 	return editForm(ctx, false)
+}
+
+// formatForm runs SET FORMAT TO @ lines then READ (023.17).
+func (m *Mux) formatForm(ctx *context.Context, appendMode bool) error {
+	for {
+		if appendMode {
+			if err := appendBlank(ctx); err != nil {
+				return err
+			}
+		}
+		m.gets = nil
+		scr := ensureScreen(ctx)
+		scr.Clear()
+		_ = scr.PresentClear(ctx.Out())
+		for _, line := range ctx.FormatLines {
+			if isCommentLine(line) {
+				continue
+			}
+			trim := strings.TrimSpace(line)
+			cmd := command.Split(trim)
+			if cmd.Verb != "@" {
+				continue
+			}
+			if err := m.cmdAt(ctx, cmd); err != nil {
+				return err
+			}
+		}
+		if err := m.cmdREAD(ctx, command.Command{Verb: "READ"}); err != nil {
+			return err
+		}
+		if !appendMode {
+			return nil
+		}
+		if ctx.ReadKey == 12 || ctx.ReadKey == 268 {
+			return nil
+		}
+	}
+}
+
+func (m *Mux) cmdREADWithFormat(ctx *context.Context, cmd command.Command) error {
+	if len(ctx.FormatLines) > 0 && len(m.gets) == 0 {
+		for _, line := range ctx.FormatLines {
+			if isCommentLine(line) {
+				continue
+			}
+			c := command.Split(strings.TrimSpace(line))
+			if c.Verb != "@" {
+				continue
+			}
+			if err := m.cmdAt(ctx, c); err != nil {
+				return err
+			}
+		}
+	}
+	return m.cmdREAD(ctx, cmd)
 }
 
 func editForm(ctx *context.Context, appendMode bool) error {

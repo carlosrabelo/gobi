@@ -73,6 +73,9 @@ type Context struct {
 	Message      string
 	Suspended    bool
 
+	// FormatLines are the loaded SET FORMAT TO .fmt lines (023.17).
+	FormatLines []string
+
 	openFiles int
 
 	// SessionDate is DATE(); starts as the host local date.

@@ -103,9 +103,7 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 		if name == "" && len(args) >= 2 && strings.EqualFold(args[1], "TO") {
 			name = strings.Join(args[2:], " ")
 		}
-		ctx.Config.Format = name
-		ctx.Active().Format = name != ""
-		return nil
+		return setFormatTO(ctx, name)
 
 	case "COLOR":
 		if len(args) >= 2 && (strings.EqualFold(args[1], "ON") || strings.EqualFold(args[1], "OFF")) {
@@ -302,6 +300,31 @@ func setAlternateTO(ctx *context.Context, to string, args []string) error {
 	_ = ctx.CloseAlternate()
 	ctx.Alternate = f
 	ctx.Config.AlternateTo = path
+	return nil
+}
+
+func setFormatTO(ctx *context.Context, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		ctx.Config.Format = ""
+		ctx.FormatLines = nil
+		ctx.Active().Format = false
+		return nil
+	}
+	if filepath.Ext(name) == "" {
+		name += ".fmt"
+	}
+	path, err := resolveAny(ctx, name)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	lines, err := loadPrg(path) // same line reader as .prg
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	ctx.Config.Format = path
+	ctx.FormatLines = lines
+	ctx.Active().Format = true
 	return nil
 }
 

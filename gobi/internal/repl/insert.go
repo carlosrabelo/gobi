@@ -10,7 +10,7 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
 )
 
-func cmdINSERT(ctx *context.Context, cmd command.Command) error {
+func (m *Mux) cmdINSERT(ctx *context.Context, cmd command.Command) error {
 	a := ctx.Active()
 	if !a.HasTable() {
 		return fail(ctx, "no database in use")
@@ -44,7 +44,13 @@ func cmdINSERT(ctx *context.Context, cmd command.Command) error {
 	}
 	a.Cursor = pos
 	a.BOF = false
-	return a.LoadCurrent()
+	if err := a.LoadCurrent(); err != nil {
+		return err
+	}
+	if len(ctx.FormatLines) > 0 && !blank {
+		return m.formatForm(ctx, false)
+	}
+	return nil
 }
 
 func insertAt(ctx *context.Context, pos int, rec dbf.Record) error {

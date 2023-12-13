@@ -2,6 +2,7 @@ package repl
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,6 +32,41 @@ func TestAPPENDLineMode(t *testing.T) {
 	a := ctx.Active()
 	if a.RecCount() != 2 {
 		t.Fatalf("count %d", a.RecCount())
+	}
+}
+
+func TestSETFormatTODrivesEDIT(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 4},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "ANN "}}},
+	})
+	fmtPath := filepath.Join(dir, "f.fmt")
+	if err := os.WriteFile(fmtPath, []byte("@ 0,0 SAY \"N\"\n@ 0,2 GET NAME\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE t"))
+	if err := mux.Dispatch(ctx, command.Split("SET FORMAT TO f")); err != nil {
+		t.Fatal(err)
+	}
+	if len(ctx.FormatLines) == 0 || !ctx.Active().Format {
+		t.Fatal("format not loaded")
+	}
+	ctx.Stdin = strings.NewReader("\x7f\x7f\x7f\x7fBOB\r")
+	if err := mux.Dispatch(ctx, command.Split("EDIT")); err != nil {
+		t.Fatal(err)
+	}
+	_ = ctx.Active().LoadCurrent()
+	if strings.TrimSpace(ctx.Active().Record.Values[0].Str) != "BOB" {
+		t.Fatalf("format EDIT: %q", ctx.Active().Record.Values[0].Str)
+	}
+	_ = mux.Dispatch(ctx, command.Split("SET FORMAT TO"))
+	if ctx.Config.Format != "" || len(ctx.FormatLines) != 0 {
+		t.Fatal("format not closed")
 	}
 }
 
