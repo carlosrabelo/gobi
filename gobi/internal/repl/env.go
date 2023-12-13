@@ -127,6 +127,10 @@ func (e *sessionEnv) Exact() (on bool, ok bool) {
 	return e.ctx.Config.Exact, true
 }
 
+func (e *sessionEnv) Fixed() (on bool, decimals int, ok bool) {
+	return e.ctx.Config.Fixed, e.ctx.Config.Decimals, true
+}
+
 func (e *sessionEnv) Default() (path string, ok bool) {
 	return e.ctx.Config.Default, true
 }

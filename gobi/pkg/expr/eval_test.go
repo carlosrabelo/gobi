@@ -42,6 +42,10 @@ func (e *testEnv) Exact() (bool, bool) {
 	return *e.exact, true
 }
 
+func (e *testEnv) Fixed() (on bool, decimals int, ok bool) {
+	return false, 0, false
+}
+
 func (e *testEnv) Default() (string, bool) {
 	if e.hasDefault {
 		return e.default_, true

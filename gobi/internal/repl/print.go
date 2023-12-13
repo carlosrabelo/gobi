@@ -2,6 +2,7 @@ package repl
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
@@ -44,10 +45,17 @@ func printExprs(ctx *context.Context, args string, newline bool) error {
 		if err != nil {
 			return fail(ctx, "%s", err.Error())
 		}
-		out = append(out, v.String())
+		out = append(out, formatDisplayValue(ctx, v))
 	}
 	writeScreenLine(ctx, strings.Join(out, " "), newline)
 	return nil
+}
+
+func formatDisplayValue(ctx *context.Context, v expr.Value) string {
+	if v.Kind == expr.KindNumber && ctx.Config.Fixed {
+		return strconv.FormatFloat(v.Num, 'f', ctx.Config.Decimals, 64)
+	}
+	return v.String()
 }
 
 // writeScreenLine writes non-fullscreen text. SET PRINT ON sends it to the print

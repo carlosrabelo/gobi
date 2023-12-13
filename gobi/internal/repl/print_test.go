@@ -8,6 +8,33 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 )
 
+func TestSETFixedDecimalsOnQuestionAndSTR(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("SET DECIMALS TO 2"))
+	_ = mux.Dispatch(ctx, command.Split("SET FIXED ON"))
+	if !ctx.Config.Fixed {
+		t.Fatal("FIXED still off")
+	}
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("? 1.5")); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "1.50\n" {
+		t.Fatalf("?: %q", out.String())
+	}
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("? STR(1.5)")); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(out.String())
+	if !strings.Contains(got, "1.50") {
+		t.Fatalf("STR: %q", got)
+	}
+}
+
 func TestSETPrintAppliesMargin(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	var out bytes.Buffer

@@ -40,7 +40,7 @@ func CallBuiltin(name string, args []Value, a Area, env Env) (Value, error) {
 	case "VAL":
 		return builtinVAL(args)
 	case "STR":
-		return builtinSTR(args)
+		return builtinSTR(args, env)
 	case "CHR":
 		return builtinCHR(args)
 	case "ASC":
@@ -274,7 +274,7 @@ func builtinVAL(args []Value) (Value, error) {
 	return NumberVal(n), nil
 }
 
-func builtinSTR(args []Value) (Value, error) {
+func builtinSTR(args []Value, env Env) (Value, error) {
 	if len(args) < 1 || len(args) > 3 {
 		return Value{}, fmt.Errorf("STR: wrong number of arguments")
 	}
@@ -297,6 +297,10 @@ func builtinSTR(args []Value) (Value, error) {
 			return Value{}, err
 		}
 		decimals = int(d)
+	} else if len(args) == 1 {
+		if on, d, ok := env.Fixed(); ok && on {
+			decimals = d
+		}
 	}
 	if width < 1 {
 		return Value{}, fmt.Errorf("STR: wrong type")
