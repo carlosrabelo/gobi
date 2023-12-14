@@ -11,6 +11,7 @@ import (
 )
 
 func cmdACCEPT(ctx *context.Context, cmd command.Command) error {
+	ctx.KeyRead = true
 	prompt, name, err := parsePromptTO(cmd)
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
@@ -30,6 +31,7 @@ func cmdACCEPT(ctx *context.Context, cmd command.Command) error {
 }
 
 func cmdINPUT(ctx *context.Context, cmd command.Command) error {
+	ctx.KeyRead = true
 	prompt, name, err := parsePromptTO(cmd)
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
@@ -61,6 +63,7 @@ func cmdINPUT(ctx *context.Context, cmd command.Command) error {
 }
 
 func cmdWAIT(ctx *context.Context, cmd command.Command) error {
+	ctx.KeyRead = true
 	prompt := "WAITING"
 	to := strings.TrimSpace(cmd.Clauses["TO"])
 	args := strings.TrimSpace(cmd.Args)

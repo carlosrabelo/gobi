@@ -60,6 +60,7 @@ type Context struct {
 	LastMessage string
 	InHandler   bool
 	RetryLine   string
+	KeyRead     bool // last command read the keyboard (skip ON KEY)
 
 	// Program functions (032).
 	PrintCol int

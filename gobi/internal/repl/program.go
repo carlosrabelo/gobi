@@ -204,10 +204,14 @@ func runProgram(ctx *context.Context, m *Mux) error {
 			}
 			continue
 		}
+		ctx.KeyRead = false
 		if err := m.dispatchLine(ctx, cmd, line); err != nil {
 			if err == errSuspend {
 				return nil
 			}
+			return err
+		}
+		if err := maybeOnKey(ctx, m); err != nil {
 			return err
 		}
 	}

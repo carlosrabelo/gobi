@@ -12,6 +12,7 @@ import (
 )
 
 func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
+	ctx.KeyRead = true
 	if len(m.gets) == 0 {
 		return nil
 	}

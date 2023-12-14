@@ -10,6 +10,30 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 )
 
+func TestOnKeyRunsWhenKeyWaiting(t *testing.T) {
+	dir := t.TempDir()
+	prg := filepath.Join(dir, "k.prg")
+	body := "ON KEY STORE 1 TO HIT\nSTORE 0 TO HIT\nSTORE 2 TO A\n"
+	if err := os.WriteFile(prg, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	// After first STORE 0, key "Z" is waiting → ON KEY; key stays in typeahead.
+	ctx.Stdin = strings.NewReader("Z")
+	ctx.Keys = nil
+	if err := mux.Dispatch(ctx, command.Split("DO k")); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := ctx.Symbols.Get("HIT"); !ok || v.Num != 1 {
+		t.Fatalf("ON KEY: %v %v", ok, v)
+	}
+	if len(ctx.TypeaheadBuf) == 0 || ctx.TypeaheadBuf[0] != 'Z' {
+		t.Fatalf("key should remain in typeahead: %v", ctx.TypeaheadBuf)
+	}
+}
+
 func TestOnEscapeRunsHandler(t *testing.T) {
 	dir := t.TempDir()
 	prg := filepath.Join(dir, "e.prg")

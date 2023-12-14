@@ -12,6 +12,7 @@ import (
 )
 
 func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
+	ctx.KeyRead = true
 	a := ctx.Active()
 	if !a.HasTable() {
 		return fail(ctx, "no database in use")
