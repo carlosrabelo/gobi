@@ -117,7 +117,7 @@ func (e *sessionEnv) Call(name string, args []expr.Value) (expr.Value, error) {
 		if n < 1 || n > 12 {
 			return expr.StringVal(""), nil
 		}
-		return expr.StringVal(e.ctx.FuncKeys[n]), nil
+		return expr.StringVal(fmt.Sprintf("F%d", n)), nil
 	case "FLOCK", "RLOCK", "LOCK":
 		return expr.Value{}, fmt.Errorf("%s is not available in Gobi", strings.ToUpper(name))
 	}

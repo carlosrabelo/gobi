@@ -8,6 +8,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
+	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
 const maxLine = 254
@@ -21,7 +22,7 @@ func Run(ctx *context.Context, mux *Mux) error {
 func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 	for {
 		fmt.Fprint(ctx.Out(), ". ")
-		line, err := ctx.StdinReader().ReadString('\n')
+		line, err := readDotLine(ctx)
 		if errors.Is(err, io.EOF) {
 			if len(line) == 0 {
 				if hist != nil {
@@ -32,7 +33,6 @@ func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 		} else if err != nil {
 			return err
 		}
-		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
 			continue
 		}
@@ -58,6 +58,37 @@ func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 		}
 		if err != nil {
 			continue
+		}
+	}
+}
+
+// readDotLine builds one dot-prompt line, expanding SET FUNCTION keys (032.6).
+func readDotLine(ctx *context.Context) (string, error) {
+	keys := term.NewReader(ctx.Stdin)
+	ctx.Keys = keys
+	var b strings.Builder
+	for {
+		k, err := keys.ReadKey()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return b.String(), io.EOF
+			}
+			return "", err
+		}
+		switch {
+		case k == term.KeyEnter:
+			return b.String(), nil
+		case k >= term.KeyF1 && k <= term.KeyF12:
+			n := k - term.KeyF1 + 1
+			b.WriteString(ctx.FuncKeys[n])
+		case k == term.KeyBackspace:
+			s := b.String()
+			if len(s) > 0 {
+				b.Reset()
+				b.WriteString(s[:len(s)-1])
+			}
+		case k >= 32 && k < 127:
+			b.WriteByte(byte(k))
 		}
 	}
 }

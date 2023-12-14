@@ -20,6 +20,8 @@ const (
 	KeyDown      = 24
 	KeyLeft      = 19
 	KeyRight     = 4
+	KeyF1        = 315
+	KeyF12       = 326
 )
 
 // Reader reads keys from a byte stream (tests inject bytes; terminals use raw mode).
@@ -48,9 +50,19 @@ func (kr *Reader) ReadKey() (int, error) {
 			return int(b), nil
 		}
 	}
-	// ESC [ A/B/C/D arrows
 	b2, err := kr.readByte()
 	if err != nil {
+		return KeyEsc, nil
+	}
+	if b2 == 'O' {
+		// ESC O P–S = F1–F4
+		b3, err := kr.readByte()
+		if err != nil {
+			return KeyEsc, nil
+		}
+		if b3 >= 'P' && b3 <= 'S' {
+			return KeyF1 + int(b3-'P'), nil
+		}
 		return KeyEsc, nil
 	}
 	if b2 != '[' {
@@ -71,7 +83,41 @@ func (kr *Reader) ReadKey() (int, error) {
 	case 'D':
 		return KeyLeft, nil
 	default:
+		// ESC [ 1 1 ~ … ESC [ 2 4 ~ = F1–F12
+		if b3 >= '0' && b3 <= '9' {
+			num := int(b3 - '0')
+			for {
+				bn, err := kr.readByte()
+				if err != nil {
+					return KeyEsc, nil
+				}
+				if bn >= '0' && bn <= '9' {
+					num = num*10 + int(bn-'0')
+					continue
+				}
+				if bn == '~' {
+					if n, ok := fkeyFromCSI(num); ok {
+						return n, nil
+					}
+				}
+				return KeyEsc, nil
+			}
+		}
 		return KeyEsc, nil
+	}
+}
+
+func fkeyFromCSI(n int) (int, bool) {
+	// xterm: 11–15 F1–F5, 17–21 F6–F10, 23–24 F11–F12
+	switch n {
+	case 11, 12, 13, 14, 15:
+		return KeyF1 + (n - 11), true
+	case 17, 18, 19, 20, 21:
+		return KeyF1 + (n - 17 + 5), true
+	case 23, 24:
+		return KeyF1 + (n - 23 + 10), true
+	default:
+		return 0, false
 	}
 }
 
