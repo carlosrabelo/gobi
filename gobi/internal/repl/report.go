@@ -251,9 +251,32 @@ func writePrintLine(ctx *context.Context, w io.Writer, s string) {
 	fmt.Fprintln(w, margin+s)
 }
 
+type printTracker struct {
+	ctx *context.Context
+	w   io.Writer
+}
+
+func (p *printTracker) Write(b []byte) (int, error) {
+	n, err := p.w.Write(b)
+	for _, c := range b[:n] {
+		switch c {
+		case '\x0c':
+			p.ctx.PrintRow = 0
+			p.ctx.PrintCol = 0
+		case '\n':
+			p.ctx.PrintRow++
+			p.ctx.PrintCol = 0
+		default:
+			p.ctx.PrintCol++
+		}
+	}
+	return n, err
+}
+
 func printSink(ctx *context.Context) io.Writer {
 	// Print sink is the process stdout (constitution); it is not gated by SET CONSOLE.
-	return ctx.Stdout
+	// Writes advance PCOL()/PROW() (032.4).
+	return &printTracker{ctx: ctx, w: ctx.Stdout}
 }
 
 func cmdEJECT(ctx *context.Context, _ command.Command) error {
