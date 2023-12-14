@@ -22,6 +22,10 @@ func cmdON(ctx *context.Context, cmd command.Command) error {
 	}
 	kind := strings.ToUpper(args[0])
 	rest := strings.TrimSpace(cmd.Args[len(args[0]):])
+	// Split pulls TO into Clauses; put it back so handlers like STORE … TO x work.
+	if to, ok := cmd.Clauses["TO"]; ok {
+		rest = strings.TrimSpace(rest + " TO " + to)
+	}
 	switch kind {
 	case "ERROR":
 		ctx.OnError = rest

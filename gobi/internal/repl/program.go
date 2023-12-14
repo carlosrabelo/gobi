@@ -141,6 +141,11 @@ func validateBlocks(lines []string) error {
 
 func runProgram(ctx *context.Context, m *Mux) error {
 	for len(m.prog.Stack) > 0 {
+		if stop, err := checkProgramEscape(ctx, m); err != nil {
+			return err
+		} else if stop {
+			return nil
+		}
 		fr := &m.prog.Stack[len(m.prog.Stack)-1]
 		if fr.PC >= len(fr.Lines) {
 			m.prog.Stack = m.prog.Stack[:len(m.prog.Stack)-1]
@@ -220,8 +225,7 @@ func echoProgramLine(ctx *context.Context, line string) {
 }
 
 // stepProgramLine waits for a key when SET STEP is on (023.4).
-// Esc with SET ESCAPE on cancels the command file like CANCEL.
-// stop is true when the stack was cleared.
+// Esc with SET ESCAPE on runs ON ESCAPE or cancels like CANCEL (031.3).
 func stepProgramLine(ctx *context.Context, m *Mux) (stop bool, err error) {
 	if !ctx.Config.Step {
 		return false, nil
@@ -236,11 +240,49 @@ func stepProgramLine(ctx *context.Context, m *Mux) (stop bool, err error) {
 		return false, fail(ctx, "%s", err.Error())
 	}
 	if k == term.KeyEsc && ctx.Config.Escape {
-		m.prog.Stack = nil
-		ctx.Privates = nil
-		ctx.ParamLocals = nil
-		ctx.PendingArgs = nil
-		return true, nil
+		return handleProgramEscape(ctx, m)
 	}
 	return false, nil
+}
+
+// checkProgramEscape looks for a waiting Esc between command-file lines (031.3).
+// When SET STEP is on, Esc is handled only in stepProgramLine.
+func checkProgramEscape(ctx *context.Context, m *Mux) (stop bool, err error) {
+	if !ctx.Config.Escape || ctx.Config.Step || m.prog == nil || len(m.prog.Stack) == 0 {
+		return false, nil
+	}
+	keys := ctx.Keys
+	if keys == nil {
+		keys = term.NewReader(ctx.Stdin)
+		ctx.Keys = keys
+	}
+	k := keys.Inkey()
+	if k == 0 {
+		return false, nil
+	}
+	if k == term.KeyEsc {
+		return handleProgramEscape(ctx, m)
+	}
+	// Non-Esc key stays available for ON KEY / typeahead (031.4 / 033).
+	if k > 0 && k < 256 {
+		ctx.TypeaheadBuf = append(ctx.TypeaheadBuf, byte(k))
+	}
+	return false, nil
+}
+
+func handleProgramEscape(ctx *context.Context, m *Mux) (stop bool, err error) {
+	if ctx.OnEscape != "" {
+		ctx.InHandler = true
+		herr := m.Dispatch(ctx, command.Split(ctx.OnEscape))
+		ctx.InHandler = false
+		if herr != nil {
+			return false, herr
+		}
+		return false, nil
+	}
+	m.prog.Stack = nil
+	ctx.Privates = nil
+	ctx.ParamLocals = nil
+	ctx.PendingArgs = nil
+	return true, nil
 }
