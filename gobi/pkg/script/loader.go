@@ -12,9 +12,10 @@ import (
 // ErrNotFound indicates the command file does not exist.
 var ErrNotFound = errors.New("command file not found")
 
-// Program represents a located command file.
+// Program represents a located and parsed command file.
 type Program struct {
-	Path string
+	Path  string
+	Lines []Line
 }
 
 // ResolvePath returns the filesystem path for a command file name.
@@ -31,7 +32,7 @@ func ResolvePath(defaultDir, filename string) string {
 	return filename
 }
 
-// Load locates filename and verifies it exists.
+// Load locates filename, verifies it exists, and parses the command file.
 func Load(defaultDir, filename string) (*Program, error) {
 	path := ResolvePath(defaultDir, filename)
 
@@ -46,5 +47,5 @@ func Load(defaultDir, filename string) (*Program, error) {
 		return nil, fmt.Errorf("not a command file")
 	}
 
-	return &Program{Path: path}, nil
+	return Read(path)
 }

@@ -54,6 +54,9 @@ func TestLoadExistingFile(t *testing.T) {
 	if prog.Path != path {
 		t.Fatalf("expected path %q, got %q", path, prog.Path)
 	}
+	if len(prog.Commands()) != 1 || prog.Commands()[0].Command.Verb != "STORE" {
+		t.Fatalf("unexpected parsed commands: %#v", prog.Commands())
+	}
 }
 
 func TestLoadBakExtension(t *testing.T) {
