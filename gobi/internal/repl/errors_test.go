@@ -10,6 +10,31 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 )
 
+func TestOnEscapeRunsHandler(t *testing.T) {
+	dir := t.TempDir()
+	prg := filepath.Join(dir, "e.prg")
+	body := "ON ESCAPE STORE 1 TO HIT\nSTORE 0 TO HIT\nSTORE 2 TO A\nSTORE 3 TO B\n"
+	if err := os.WriteFile(prg, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("SET STEP ON"))
+	// Keys for lines 1–2, Esc before line 3 (runs ON ESCAPE), then keys for lines 3–4.
+	ctx.Stdin = strings.NewReader("xx\x1bxx")
+	ctx.Keys = nil
+	if err := mux.Dispatch(ctx, command.Split("DO e")); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := ctx.Symbols.Get("HIT"); !ok || v.Num != 1 {
+		t.Fatalf("ON ESCAPE handler: %v %v", ok, v)
+	}
+	if v, ok := ctx.Symbols.Get("A"); !ok || v.Num != 2 {
+		t.Fatalf("program should continue after handler: A=%v %v", ok, v)
+	}
+}
+
 func TestOnErrorRetryAndHelp(t *testing.T) {
 	dir := t.TempDir()
 	prg := "" +
