@@ -8,6 +8,7 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 	"github.com/carlosrabelo/gobi/gobi/pkg/help"
+	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
 func init() {
@@ -109,6 +110,33 @@ func (m *Mux) handleError(ctx *context.Context, err error, retryLine string) err
 		return herr
 	}
 	return nil // swallow original
+}
+
+// maybeOnKey runs ON KEY once when a key is waiting after a non-keyboard command (031.4).
+func maybeOnKey(ctx *context.Context, m *Mux) error {
+	if ctx.OnKey == "" || ctx.InHandler || ctx.KeyRead {
+		return nil
+	}
+	if len(ctx.TypeaheadBuf) == 0 {
+		keys := ctx.Keys
+		if keys == nil {
+			keys = term.NewReader(ctx.Stdin)
+			ctx.Keys = keys
+		}
+		k := keys.Inkey()
+		if k == 0 {
+			return nil
+		}
+		if k > 0 && k < 256 {
+			ctx.TypeaheadBuf = append(ctx.TypeaheadBuf, byte(k))
+		} else {
+			return nil
+		}
+	}
+	ctx.InHandler = true
+	err := m.Dispatch(ctx, command.Split(ctx.OnKey))
+	ctx.InHandler = false
+	return err
 }
 
 func failCode(ctx *context.Context, code int, format string, args ...any) error {

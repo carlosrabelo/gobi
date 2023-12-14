@@ -49,6 +49,7 @@ func (e *sessionEnv) Call(name string, args []expr.Value) (expr.Value, error) {
 		if len(args) != 0 {
 			return expr.Value{}, fmt.Errorf("INKEY: wrong number of arguments")
 		}
+		e.ctx.KeyRead = true
 		if e.ctx.Keys == nil {
 			e.ctx.Keys = term.NewReader(e.ctx.Stdin)
 		}

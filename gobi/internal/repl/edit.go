@@ -38,6 +38,7 @@ func (m *Mux) cmdEDIT(ctx *context.Context, cmd command.Command) error {
 
 // formatForm runs SET FORMAT TO @ lines then READ (023.17).
 func (m *Mux) formatForm(ctx *context.Context, appendMode bool) error {
+	ctx.KeyRead = true
 	for {
 		if appendMode {
 			if err := appendBlank(ctx); err != nil {
@@ -92,6 +93,7 @@ func (m *Mux) cmdREADWithFormat(ctx *context.Context, cmd command.Command) error
 }
 
 func editForm(ctx *context.Context, appendMode bool) error {
+	ctx.KeyRead = true
 	a := ctx.Active()
 	fields := a.Table.Header.Fields
 	scr := ensureScreen(ctx)
