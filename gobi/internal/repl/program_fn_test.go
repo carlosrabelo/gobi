@@ -2,11 +2,34 @@ package repl
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
+
+func TestSETFunctionExpandsAtPrompt(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split(`SET FUNCTION 2 TO "DIR;"`))
+	if ctx.FuncKeys[2] != "DIR;" {
+		t.Fatalf("FuncKeys[2]=%q", ctx.FuncKeys[2])
+	}
+	env := newEnv(ctx)
+	lab, err := expr.Eval(mustParse(t, "FKLABEL(2)"), env)
+	if err != nil || lab.Str != "F2" {
+		t.Fatalf("FKLABEL: %v %v", lab, err)
+	}
+	// F2 as CSI \x1b[12~ then Enter → expands to DIR;
+	ctx.Stdin = strings.NewReader("\x1b[12~\nQUIT\n")
+	ctx.Keys = nil
+	if err := Run(ctx, mux); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestPCOLPROWAdvanceOnPrint(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
