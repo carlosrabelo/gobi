@@ -17,13 +17,30 @@ func TestHistoryTypeSuspendTYPE(t *testing.T) {
 	mux := NewMux()
 	hist := NewHistory(dir)
 	hist.Cap = 20
+	mux.hist = hist
 	_ = mux.Dispatch(ctx, command.Split("SET HISTORY TO 2"))
-	hist.SetCap(ctx.Config.HistoryTo)
+	if hist.Cap != 2 {
+		t.Fatalf("cap %d", hist.Cap)
+	}
 	hist.Add("A")
 	hist.Add("B")
 	hist.Add("C")
 	if hist.Len() != 2 {
 		t.Fatalf("len %d", hist.Len())
+	}
+	_ = mux.Dispatch(ctx, command.Split("SET DOHISTORY ON"))
+	_ = os.WriteFile(filepath.Join(dir, "h.prg"), []byte("STORE 1 TO Z\n"), 0o644)
+	if err := mux.Dispatch(ctx, command.Split("DO h")); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, l := range hist.Lines() {
+		if l == "STORE 1 TO Z" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("DOHISTORY missing line: %v", hist.Lines())
 	}
 
 	_ = mux.Dispatch(ctx, command.Split("CLEAR TYPEAHEAD"))

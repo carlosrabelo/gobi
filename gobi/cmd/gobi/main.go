@@ -45,7 +45,11 @@ func run(args []string) int {
 		}
 		return 0
 	}
-	if err := repl.Run(ctx, mux); err != nil {
+	home, _ := os.UserHomeDir()
+	hist := repl.NewHistory(home)
+	hist.SetCap(ctx.Config.HistoryTo)
+	_ = hist.Load()
+	if err := repl.RunWithHistory(ctx, mux, hist); err != nil {
 		fmt.Fprintln(os.Stderr, "***", err.Error())
 		return 1
 	}

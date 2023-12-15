@@ -29,6 +29,9 @@ func setHistoryFlags(ctx *context.Context, m *Mux, name string, args []string, t
 				return fail(ctx, "SET HISTORY TO out of range")
 			}
 			ctx.Config.HistoryTo = n
+			if m.hist != nil {
+				m.hist.SetCap(n)
+			}
 			return nil
 		}
 		if len(args) < 2 {

@@ -204,6 +204,9 @@ func runProgram(ctx *context.Context, m *Mux) error {
 			}
 			continue
 		}
+		if m.hist != nil && ctx.Config.DoHistory {
+			m.hist.Add(line)
+		}
 		ctx.KeyRead = false
 		if err := m.dispatchLine(ctx, cmd, line); err != nil {
 			if err == errSuspend {
