@@ -113,7 +113,7 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 			}
 		}
 		status()
-		_ = scr.PresentClear(ctx.Out())
+		_ = flushScreenClear(ctx)
 	}
 
 	redraw()

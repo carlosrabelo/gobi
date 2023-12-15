@@ -48,7 +48,7 @@ func (m *Mux) formatForm(ctx *context.Context, appendMode bool) error {
 		m.gets = nil
 		scr := ensureScreen(ctx)
 		scr.Clear()
-		_ = scr.PresentClear(ctx.Out())
+		_ = flushScreenClear(ctx)
 		for _, line := range ctx.FormatLines {
 			if isCommentLine(line) {
 				continue
@@ -129,6 +129,9 @@ func editForm(ctx *context.Context, appendMode bool) error {
 				title = fmt.Sprintf("RECORD #%5d", a.Cursor)
 			}
 			scr.WriteString(0, 0, title, false)
+			if rem := menuReminder(ctx); rem != "" && scr.Rows > 2 {
+				scr.WriteString(scr.Rows-2, 0, rem, false)
+			}
 			dLeft, dRight := fieldDelims(ctx)
 			for i, f := range fields {
 				label := f.Name + ": "
@@ -143,7 +146,7 @@ func editForm(ctx *context.Context, appendMode bool) error {
 				}
 				writeDelimitedField(scr, i+1, len(label), text, i == cur && ctx.Config.Intensity, dLeft, dRight)
 			}
-			_ = scr.PresentClear(ctx.Out())
+			_ = flushScreenClear(ctx)
 		}
 		redraw()
 

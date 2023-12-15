@@ -73,6 +73,7 @@ type Context struct {
 	TypeaheadBuf []byte
 	Message      string
 	Suspended    bool
+	InsertMode   bool
 
 	// FormatLines are the loaded SET FORMAT TO .fmt lines (023.17).
 	FormatLines []string

@@ -40,7 +40,7 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 	for i := range m.gets {
 		drawGET(i, i == cur)
 	}
-	_ = scr.Present(ctx.Out())
+	_ = flushScreen(ctx)
 
 	clearGets := func() {
 		if !keep {
@@ -104,12 +104,12 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 				cur = 0
 			}
 			drawGET(cur, true)
-			_ = scr.Present(ctx.Out())
+			_ = flushScreen(ctx)
 		case term.KeyBackspace:
 			if len(values[cur]) > 0 {
 				values[cur] = values[cur][:len(values[cur])-1]
 				drawGET(cur, true)
-				_ = scr.Present(ctx.Out())
+				_ = flushScreen(ctx)
 			}
 		default:
 			if k >= 32 && k < 127 {
@@ -124,7 +124,7 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 				if len(values[cur]) < g.Width {
 					values[cur] += string(ch)
 					drawGET(cur, true)
-					_ = scr.Present(ctx.Out())
+					_ = flushScreen(ctx)
 					// SET CONFIRM OFF: a full GET advances without Enter (023.6).
 					if !ctx.Config.Confirm && len(values[cur]) >= g.Width {
 						if cur == len(m.gets)-1 {
@@ -141,7 +141,7 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 						drawGET(cur, false)
 						cur++
 						drawGET(cur, true)
-						_ = scr.Present(ctx.Out())
+						_ = flushScreen(ctx)
 					}
 				}
 			}

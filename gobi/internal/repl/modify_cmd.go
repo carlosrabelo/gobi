@@ -77,7 +77,7 @@ func modifyCommand(ctx *context.Context, name string) error {
 			}
 			scr.WriteString(i+1, 0, ln, i == cur)
 		}
-		_ = scr.Present(ctx.Out())
+		_ = flushScreen(ctx)
 	}
 
 	for {

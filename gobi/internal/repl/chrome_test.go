@@ -8,8 +8,47 @@ import (
 	"testing"
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
+	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
+
+func TestSETStatusDrawsAlias(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{
+		{Name: "N", Type: 'C', Length: 1},
+	}, []dbf.Record{{Values: []dbf.Value{{Str: "A"}}}})
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE t"))
+	_ = mux.Dispatch(ctx, command.Split("SET STATUS ON"))
+	_ = mux.Dispatch(ctx, command.Split(`SET MESSAGE TO "Hello"`))
+	_ = mux.Dispatch(ctx, command.Split(`@ 0, 0 SAY "x"`))
+	scr := ctx.Screen
+	bottom := ""
+	for c := 0; c < scr.Cols; c++ {
+		ch := scr.CellAt(scr.Rows-1, c).Ch
+		if ch != 0 && ch != ' ' {
+			bottom += string(ch)
+		} else if bottom != "" {
+			bottom += " "
+		}
+	}
+	bottom = strings.TrimSpace(bottom)
+	if !strings.Contains(bottom, "T") || !strings.Contains(bottom, "Rec:") {
+		t.Fatalf("status line %q", bottom)
+	}
+	msg := ""
+	for c := 0; c < scr.Cols; c++ {
+		ch := scr.CellAt(scr.Rows-2, c).Ch
+		if ch != 0 {
+			msg += string(ch)
+		}
+	}
+	if !strings.Contains(msg, "Hello") {
+		t.Fatalf("message %q", msg)
+	}
+}
 
 func TestHistoryTypeSuspendTYPE(t *testing.T) {
 	dir := t.TempDir()
