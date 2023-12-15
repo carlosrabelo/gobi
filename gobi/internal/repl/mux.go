@@ -24,6 +24,7 @@ type Mux struct {
 	procLines []string
 	procPath  string
 	procFile  map[string][]string
+	hist      *History
 }
 
 // NewMux returns a mux with the built-in verbs registered.

@@ -20,6 +20,10 @@ func Run(ctx *context.Context, mux *Mux) error {
 
 // RunWithHistory is Run with optional command history.
 func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
+	mux.hist = hist
+	if hist != nil {
+		hist.SetCap(ctx.Config.HistoryTo)
+	}
 	for {
 		fmt.Fprint(ctx.Out(), ". ")
 		line, err := readDotLine(ctx)
@@ -40,7 +44,7 @@ func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 			fmt.Fprintln(ctx.Stderr, "*** Line too long")
 			continue
 		}
-		if hist != nil {
+		if hist != nil && ctx.Config.History {
 			hist.Add(line)
 		}
 		line, err = expandLineMacros(ctx, line)
