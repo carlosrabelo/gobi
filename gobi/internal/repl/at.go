@@ -67,7 +67,7 @@ func atClear(ctx *context.Context, row, col int, rest string) error {
 			scr.WriteString(r, c, " ", false)
 		}
 	}
-	return scr.Present(ctx.Out())
+	return flushScreen(ctx)
 }
 
 func atBox(ctx *context.Context, row, col int, rest string) error {
@@ -99,7 +99,7 @@ func atBox(ctx *context.Context, row, col int, rest string) error {
 	scr.WriteString(row, c2, "+", false)
 	scr.WriteString(r2, col, "+", false)
 	scr.WriteString(r2, c2, "+", false)
-	return scr.Present(ctx.Out())
+	return flushScreen(ctx)
 }
 
 func parseAtCoord(args string) (row, col int, rest string, err error) {
@@ -158,7 +158,7 @@ func atSAY(ctx *context.Context, row, col int, rest string) error {
 	}
 	scr := ensureScreen(ctx)
 	scr.WriteString(row, col, text, false)
-	_ = scr.Present(ctx.Out())
+	_ = flushScreen(ctx)
 	return nil
 }
 
@@ -192,7 +192,7 @@ func (m *Mux) atGET(ctx *context.Context, row, col int, rest string) error {
 	scr := ensureScreen(ctx)
 	left, right := fieldDelims(ctx)
 	writeDelimitedField(scr, row, col, text, ctx.Config.Intensity, left, right)
-	_ = scr.Present(ctx.Out())
+	_ = flushScreen(ctx)
 	return nil
 }
 

@@ -15,7 +15,7 @@ func (m *Mux) cmdCLEAR(ctx *context.Context, cmd command.Command) error {
 	case args == "" || args == "SCREEN":
 		scr := ensureScreen(ctx)
 		scr.Clear()
-		_ = scr.PresentClear(ctx.Out())
+		_ = flushScreenClear(ctx)
 		return nil
 	case args == "ALL":
 		_ = ctx.CloseAll()
