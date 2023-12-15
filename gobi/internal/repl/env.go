@@ -50,6 +50,9 @@ func (e *sessionEnv) Call(name string, args []expr.Value) (expr.Value, error) {
 			return expr.Value{}, fmt.Errorf("INKEY: wrong number of arguments")
 		}
 		e.ctx.KeyRead = true
+		if b, ok := e.ctx.PopTypeahead(); ok {
+			return expr.NumberVal(float64(b)), nil
+		}
 		if e.ctx.Keys == nil {
 			e.ctx.Keys = term.NewReader(e.ctx.Stdin)
 		}

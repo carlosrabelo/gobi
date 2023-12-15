@@ -172,6 +172,31 @@ func parseArea(name string) (int, error) {
 	return int(letter-'A') + 1, nil
 }
 
+// PushTypeahead appends bytes to the typeahead FIFO, respecting SET TYPEAHEAD size (033.3).
+func (c *Context) PushTypeahead(b ...byte) {
+	max := 20
+	if c.Config != nil {
+		max = c.Config.Typeahead
+	}
+	if max <= 0 {
+		return // buffering disabled
+	}
+	c.TypeaheadBuf = append(c.TypeaheadBuf, b...)
+	if len(c.TypeaheadBuf) > max {
+		c.TypeaheadBuf = c.TypeaheadBuf[len(c.TypeaheadBuf)-max:]
+	}
+}
+
+// PopTypeahead returns the next typeahead byte, or 0 if empty.
+func (c *Context) PopTypeahead() (byte, bool) {
+	if len(c.TypeaheadBuf) == 0 {
+		return 0, false
+	}
+	b := c.TypeaheadBuf[0]
+	c.TypeaheadBuf = c.TypeaheadBuf[1:]
+	return b, true
+}
+
 // StdinReader returns a buffered reader over Stdin. Replacing Stdin rebuilds it.
 func (c *Context) StdinReader() *bufio.Reader {
 	if c.stdinReader == nil || c.stdinSource != c.Stdin {

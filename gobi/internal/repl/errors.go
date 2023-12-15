@@ -128,7 +128,7 @@ func maybeOnKey(ctx *context.Context, m *Mux) error {
 			return nil
 		}
 		if k > 0 && k < 256 {
-			ctx.TypeaheadBuf = append(ctx.TypeaheadBuf, byte(k))
+			ctx.PushTypeahead(byte(k))
 		} else {
 			return nil
 		}

@@ -272,7 +272,7 @@ func checkProgramEscape(ctx *context.Context, m *Mux) (stop bool, err error) {
 	}
 	// Non-Esc key stays available for ON KEY / typeahead (031.4 / 033).
 	if k > 0 && k < 256 {
-		ctx.TypeaheadBuf = append(ctx.TypeaheadBuf, byte(k))
+		ctx.PushTypeahead(byte(k))
 	}
 	return false, nil
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
+	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
 
 func TestHistoryTypeSuspendTYPE(t *testing.T) {
@@ -51,11 +52,22 @@ func TestHistoryTypeSuspendTYPE(t *testing.T) {
 		t.Fatalf("DISPLAY HISTORY: %q", hout.String())
 	}
 
-	_ = mux.Dispatch(ctx, command.Split("CLEAR TYPEAHEAD"))
-	ctx.TypeaheadBuf = []byte{65}
+	_ = mux.Dispatch(ctx, command.Split("SET TYPEAHEAD TO 2"))
+	ctx.PushTypeahead('A', 'B', 'C')
+	if len(ctx.TypeaheadBuf) != 2 || ctx.TypeaheadBuf[0] != 'B' {
+		t.Fatalf("typeahead cap: %v", ctx.TypeaheadBuf)
+	}
 	_ = mux.Dispatch(ctx, command.Split("CLEAR TYPEAHEAD"))
 	if len(ctx.TypeaheadBuf) != 0 {
 		t.Fatal("typeahead not cleared")
+	}
+	ctx.PushTypeahead('Z')
+	ink, err := expr.Eval(mustParse(t, "INKEY()"), newEnv(ctx))
+	if err != nil || ink.Num != float64('Z') {
+		t.Fatalf("INKEY from typeahead: %v %v", ink, err)
+	}
+	if len(ctx.TypeaheadBuf) != 0 {
+		t.Fatal("typeahead not drained")
 	}
 
 	prg := "SUSPEND\nX = 1\nRETURN\n"
