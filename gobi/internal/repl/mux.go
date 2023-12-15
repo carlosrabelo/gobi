@@ -43,8 +43,12 @@ func NewMux() *Mux {
 	m.Register("GOTO", cmdGOTO)
 	m.Register("GO", cmdGO)
 	m.Register("SKIP", cmdSKIP)
-	m.Register("DISPLAY", cmdDISPLAY)
-	m.Register("LIST", cmdLIST)
+	m.Register("DISPLAY", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdDISPLAY(ctx, cmd)
+	})
+	m.Register("LIST", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdLIST(ctx, cmd)
+	})
 	m.Register("INSERT", func(ctx *context.Context, cmd command.Command) error {
 		return m.cmdINSERT(ctx, cmd)
 	})
