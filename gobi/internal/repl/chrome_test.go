@@ -42,6 +42,14 @@ func TestHistoryTypeSuspendTYPE(t *testing.T) {
 	if !found {
 		t.Fatalf("DOHISTORY missing line: %v", hist.Lines())
 	}
+	var hout bytes.Buffer
+	ctx.Stdout = &hout
+	if err := mux.Dispatch(ctx, command.Split("DISPLAY HISTORY")); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(hout.String(), "STORE 1 TO Z") {
+		t.Fatalf("DISPLAY HISTORY: %q", hout.String())
+	}
 
 	_ = mux.Dispatch(ctx, command.Split("CLEAR TYPEAHEAD"))
 	ctx.TypeaheadBuf = []byte{65}

@@ -10,7 +10,7 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
 
-func cmdLIST(ctx *context.Context, cmd command.Command) error {
+func (m *Mux) cmdLIST(ctx *context.Context, cmd command.Command) error {
 	args := strings.TrimSpace(cmd.Args)
 	up := strings.ToUpper(args)
 	if strings.EqualFold(args, "STRUCTURE") {
@@ -21,7 +21,7 @@ func cmdLIST(ctx *context.Context, cmd command.Command) error {
 			return printMemory(ctx)
 		}
 		if strings.HasPrefix(up, "HISTORY") {
-			return fail(ctx, "LIST HISTORY requires session history")
+			return cmdDisplayHistory(ctx, m.hist, cmd)
 		}
 		if strings.HasPrefix(up, "FILES") {
 			return cmdDIR(ctx, cmd)
@@ -31,7 +31,7 @@ func cmdLIST(ctx *context.Context, cmd command.Command) error {
 	return listRecords(ctx, cmd, listOpts{fromOne: true, leaveEOF: true, pageLimit: 0})
 }
 
-func cmdDISPLAY(ctx *context.Context, cmd command.Command) error {
+func (m *Mux) cmdDISPLAY(ctx *context.Context, cmd command.Command) error {
 	args := strings.TrimSpace(cmd.Args)
 	up := strings.ToUpper(args)
 	if strings.EqualFold(args, "STRUCTURE") {
@@ -45,6 +45,9 @@ func cmdDISPLAY(ctx *context.Context, cmd command.Command) error {
 	}
 	if strings.HasPrefix(up, "STATUS") {
 		return displayStatus(ctx)
+	}
+	if strings.HasPrefix(up, "HISTORY") {
+		return cmdDisplayHistory(ctx, m.hist, cmd)
 	}
 	if _, ok := cmd.Clauses["TO"]; ok {
 		return fail(ctx, "DISPLAY does not accept TO")
