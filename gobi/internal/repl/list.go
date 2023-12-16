@@ -302,6 +302,7 @@ func printDataLine(ctx *context.Context, env expr.Env, cols []column, recNo int)
 	var b strings.Builder
 	fmt.Fprintf(&b, "%7d", recNo)
 	a := ctx.Active()
+	var memoExtra []string
 	for _, c := range cols {
 		var s string
 		if c.expr != nil {
@@ -312,13 +313,48 @@ func printDataLine(ctx *context.Context, env expr.Env, cols []column, recNo int)
 			s = v.String()
 		} else {
 			f := a.Table.Header.Fields[c.field]
-			s = fieldString(f, a.Record.Values[c.field])
+			if f.Type == 'M' && !a.Record.Values[c.field].Empty {
+				lines := wrapMemo(a.Record.Values[c.field].Str, ctx.Config.MemoWidth)
+				if len(lines) > 0 {
+					s = lines[0]
+					memoExtra = append(memoExtra, lines[1:]...)
+				}
+			} else {
+				s = fieldString(f, a.Record.Values[c.field])
+			}
 		}
 		b.WriteByte(' ')
 		b.WriteString(s)
 	}
 	writeScreenLine(ctx, b.String(), true)
+	for _, ln := range memoExtra {
+		writeScreenLine(ctx, "        "+ln, true)
+	}
 	return nil
+}
+
+func wrapMemo(s string, width int) []string {
+	if width < 1 {
+		width = 50
+	}
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	var out []string
+	for _, para := range strings.Split(s, "\n") {
+		for len(para) > width {
+			cut := width
+			if i := strings.LastIndex(para[:width], " "); i > 0 {
+				cut = i
+			}
+			out = append(out, para[:cut])
+			para = strings.TrimLeft(para[cut:], " ")
+		}
+		out = append(out, para)
+	}
+	if len(out) == 0 {
+		return []string{""}
+	}
+	return out
 }
 
 func fieldString(f dbf.Field, v dbf.Value) string {

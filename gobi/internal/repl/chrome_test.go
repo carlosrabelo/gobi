@@ -12,6 +12,24 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
 
+func TestSETMemoWidthWraps(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("SET MEMOWIDTH TO 10"))
+	if ctx.Config.MemoWidth != 10 {
+		t.Fatalf("width %d", ctx.Config.MemoWidth)
+	}
+	lines := wrapMemo("one two three four five six", 10)
+	if len(lines) < 2 {
+		t.Fatalf("wrap lines: %v", lines)
+	}
+	for _, ln := range lines {
+		if len(ln) > 10 {
+			t.Fatalf("line too long %q", ln)
+		}
+	}
+}
+
 func TestSETStatusDrawsAlias(t *testing.T) {
 	dir := t.TempDir()
 	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{
