@@ -150,18 +150,51 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 }
 
 func pictureAllows(pic string, pos int, ch byte) bool {
-	if pos >= len(pic) {
-		return false
+	template := pic
+	if strings.HasPrefix(pic, "@") {
+		if i := strings.IndexByte(pic, ' '); i >= 0 {
+			template = pic[i+1:]
+		} else {
+			return true
+		}
 	}
-	switch pic[pos] {
+	// Walk template slots (skip literals) to the pos-th editable cell.
+	slot := 0
+	for i := 0; i < len(template); i++ {
+		c := template[i]
+		switch c {
+		case '9', '#', 'A', 'L', 'N', 'X', 'Y', '!', '$', '*':
+			if slot == pos {
+				return pictureSlotAllows(c, ch)
+			}
+			slot++
+		case '.', ',':
+			// display-only in template for input walk
+		default:
+			// literal
+		}
+	}
+	return false
+}
+
+func pictureSlotAllows(slot, ch byte) bool {
+	switch slot {
 	case '9':
 		return ch >= '0' && ch <= '9' || ch == '-' || ch == '+'
+	case '#':
+		return ch >= '0' && ch <= '9' || ch == ' ' || ch == '-' || ch == '+' || ch == '.'
 	case 'A':
 		return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
-	case 'X', '$', '.':
+	case 'L':
+		return ch == 'T' || ch == 't' || ch == 'F' || ch == 'f' || ch == 'Y' || ch == 'y' || ch == 'N' || ch == 'n'
+	case 'N':
+		return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')
+	case 'Y':
+		return ch == 'Y' || ch == 'y' || ch == 'N' || ch == 'n'
+	case '!', 'X', '$', '*':
 		return true
 	default:
-		return ch == pic[pos]
+		return false
 	}
 }
 

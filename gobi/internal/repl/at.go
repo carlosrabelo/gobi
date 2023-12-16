@@ -242,43 +242,17 @@ func applyPicture(text, pic string) string {
 	if pic == "" {
 		return text
 	}
-	var b strings.Builder
-	ti := 0
-	for i := 0; i < len(pic); i++ {
-		switch pic[i] {
-		case '9':
-			if ti < len(text) && ((text[ti] >= '0' && text[ti] <= '9') || text[ti] == '-' || text[ti] == '+') {
-				b.WriteByte(text[ti])
-				ti++
-			} else {
-				b.WriteByte(' ')
-			}
-		case 'A':
-			if ti < len(text) && unicode.IsLetter(rune(text[ti])) {
-				b.WriteByte(text[ti])
-				ti++
-			} else {
-				b.WriteByte(' ')
-			}
-		case 'X':
-			if ti < len(text) {
-				b.WriteByte(text[ti])
-				ti++
-			} else {
-				b.WriteByte(' ')
-			}
-		case '.':
-			b.WriteByte('.')
-			if ti < len(text) && text[ti] == '.' {
-				ti++
-			}
-		case '$':
-			b.WriteByte('$')
-		default:
-			b.WriteByte(pic[i])
+	if n, err := strconv.ParseFloat(strings.TrimSpace(text), 64); err == nil {
+		s, err := expr.Transform(expr.NumberVal(n), pic)
+		if err == nil {
+			return s
 		}
 	}
-	return b.String()
+	s, err := expr.Transform(expr.StringVal(text), pic)
+	if err != nil {
+		return text
+	}
+	return s
 }
 
 func getValueText(ctx *context.Context, g PendingGET) string {
