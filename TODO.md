@@ -108,7 +108,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 
 - [x] `DO` command loader checking file existence
 - [x] PRG line-by-line script reader and parser
-- [ ] Script instruction pointer controller
+- [x] Script instruction pointer controller
 - [ ] `IF ... ELSE ... ENDIF` parser and branch executor
 - [ ] `DO WHILE ... ENDDO` loop manager
 - [ ] `LOOP` and `EXIT` jump resolution

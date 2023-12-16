@@ -2,11 +2,9 @@ package repl
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
-	"github.com/carlosrabelo/gobi/gobi/pkg/script"
 )
 
 func handleDo(ctx *context.Context, cmd Command) error {
@@ -23,23 +21,21 @@ func handleDo(ctx *context.Context, cmd Command) error {
 		return fmt.Errorf("*** DO CASE is only valid in command files")
 	}
 
-	_, err := loadScript(ctx, args)
-	return err
+	return RunScript(ctx, args)
 }
 
-func loadScript(ctx *context.Context, filename string) (*script.Program, error) {
-	path := resolveDataPath(ctx, filename, ".prg")
+// handleCaseInteractive rejects a CASE branch typed at the dot prompt or left
+// in a script outside a DO CASE structure.
+func handleCaseInteractive(ctx *context.Context, cmd Command) error {
+	return fmt.Errorf("*** CASE without matching DO CASE")
+}
 
-	info, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("*** Command file not found")
-		}
-		return nil, fmt.Errorf("*** %s", err)
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("*** not a command file")
-	}
+// handleOtherwiseInteractive rejects a stray OTHERWISE branch.
+func handleOtherwiseInteractive(ctx *context.Context, cmd Command) error {
+	return fmt.Errorf("*** OTHERWISE without matching DO CASE")
+}
 
-	return &script.Program{Path: path}, nil
+// handleEndCaseInteractive rejects a stray ENDCASE.
+func handleEndCaseInteractive(ctx *context.Context, cmd Command) error {
+	return fmt.Errorf("*** ENDCASE without matching DO CASE")
 }

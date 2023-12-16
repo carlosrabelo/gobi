@@ -20,6 +20,11 @@ func TestDispatchDoExistingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	val, ok := ctx.Variables.Get("X")
+	if !ok || val.(float64) != 1 {
+		t.Fatalf("expected X=1 after DO, got %#v", val)
+	}
 }
 
 func TestDispatchDoWithExtension(t *testing.T) {

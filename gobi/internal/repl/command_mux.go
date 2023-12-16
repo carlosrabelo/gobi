@@ -112,7 +112,3 @@ func stubHandler(verb string) HandlerFunc {
 }
 
 var commandMux *CommandMux
-
-func init() {
-	commandMux = NewCommandMux()
-}
