@@ -133,3 +133,85 @@ func TestRunProgramTracksExecutionStack(t *testing.T) {
 		t.Fatalf("expected execution stack cleared, got %#v", ctx.ExecutionStack)
 	}
 }
+
+func TestRunProgramIfTrueBranch(t *testing.T) {
+	source := "IF .T.\nSTORE 1 TO taken\nENDIF\nSTORE 2 TO always\n"
+	prog, err := script.ParseSource("test.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	if err := RunProgram(ctx, prog); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	taken, ok := ctx.Variables.Get("TAKEN")
+	if !ok || taken.(float64) != 1 {
+		t.Fatalf("expected TAKEN=1, got %#v", taken)
+	}
+	always, ok := ctx.Variables.Get("ALWAYS")
+	if !ok || always.(float64) != 2 {
+		t.Fatalf("expected ALWAYS=2, got %#v", always)
+	}
+}
+
+func TestRunProgramIfFalseBranchSkipped(t *testing.T) {
+	source := "IF .F.\nSTORE 1 TO skipped\nENDIF\nSTORE 2 TO kept\n"
+	prog, err := script.ParseSource("test.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	if err := RunProgram(ctx, prog); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	if _, ok := ctx.Variables.Get("SKIPPED"); ok {
+		t.Fatal("expected SKIPPED branch not to run")
+	}
+	kept, ok := ctx.Variables.Get("KEPT")
+	if !ok || kept.(float64) != 2 {
+		t.Fatalf("expected KEPT=2, got %#v", kept)
+	}
+}
+
+func TestRunProgramIfElseBranch(t *testing.T) {
+	source := "IF .F.\nSTORE 1 TO false_branch\nELSE\nSTORE 2 TO else_branch\nENDIF\n"
+	prog, err := script.ParseSource("test.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	if err := RunProgram(ctx, prog); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	if _, ok := ctx.Variables.Get("FALSE_BRANCH"); ok {
+		t.Fatal("expected false branch not to run")
+	}
+	elseBranch, ok := ctx.Variables.Get("ELSE_BRANCH")
+	if !ok || elseBranch.(float64) != 2 {
+		t.Fatalf("expected ELSE_BRANCH=2, got %#v", elseBranch)
+	}
+}
+
+func TestRunProgramNestedIf(t *testing.T) {
+	source := "STORE 0 TO result\nIF .T.\nIF .T.\nSTORE 1 TO result\nELSE\nSTORE 2 TO result\nENDIF\nELSE\nSTORE 3 TO result\nENDIF\n"
+	prog, err := script.ParseSource("test.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	if err := RunProgram(ctx, prog); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	result, ok := ctx.Variables.Get("RESULT")
+	if !ok || result.(float64) != 1 {
+		t.Fatalf("expected RESULT=1, got %#v", result)
+	}
+}

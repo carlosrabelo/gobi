@@ -14,8 +14,10 @@ var ErrNotFound = errors.New("command file not found")
 
 // Program represents a located and parsed command file.
 type Program struct {
-	Path  string
-	Lines []Line
+	Path     string
+	Lines    []Line
+	ifBlocks map[int]IfBlock
+	elseSkip map[int]int
 }
 
 // ResolvePath returns the filesystem path for a command file name.

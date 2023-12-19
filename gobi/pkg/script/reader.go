@@ -52,6 +52,10 @@ func ParseSource(path, content string) (*Program, error) {
 		prog.Lines = append(prog.Lines, line)
 	}
 
+	if err := prog.buildIfBlocks(); err != nil {
+		return nil, err
+	}
+
 	return prog, nil
 }
 
