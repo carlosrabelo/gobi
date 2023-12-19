@@ -21,6 +21,10 @@ type PendingGET struct {
 	Picture  string
 	IsField  bool
 	FieldIdx int
+	Scroll   int  // @Sn display width; 0 means no scroll
+	PicUpper bool // @!
+	PicAlpha bool // @A
+	PicR     bool // @R literals not stored
 }
 
 func ensureScreen(ctx *context.Context) *term.Screen {
@@ -149,7 +153,12 @@ func atSAY(ctx *context.Context, row, col int, rest string) error {
 	}
 	text := v.String()
 	if pic != "" {
-		text = applyPicture(text, pic)
+		s, err := expr.TransformWithDate(v, pic, ctx.Config.DateOrder, ctx.Config.Century)
+		if err == nil {
+			text = s
+		} else {
+			text = applyPicture(text, pic)
+		}
 	}
 	if strings.EqualFold(ctx.Config.Device, "PRINT") {
 		// SET DEVICE TO PRINT: @ SAY goes to the print sink (023.15).
@@ -172,6 +181,11 @@ func (m *Mux) atGET(ctx *context.Context, row, col int, rest string) error {
 		return fail(ctx, "GET requires a name")
 	}
 	g := PendingGET{Row: row, Col: col, Name: strings.ToUpper(name), Picture: pic, Width: 10}
+	flags := expr.PictureFuncFlags(pic)
+	g.PicUpper = strings.Contains(flags, "!")
+	g.PicAlpha = strings.Contains(flags, "A")
+	g.PicR = strings.Contains(flags, "R")
+	g.Scroll = expr.PictureScrollWidth(pic)
 	a := ctx.Active()
 	if a.HasTable() {
 		fi := fieldIndex(a, name)
@@ -179,6 +193,20 @@ func (m *Mux) atGET(ctx *context.Context, row, col int, rest string) error {
 			g.IsField = true
 			g.FieldIdx = fi
 			g.Width = int(a.Table.Header.Fields[fi].Length)
+		}
+	}
+	if g.Scroll > 0 {
+		g.Width = g.Scroll
+	} else if tmpl := expr.PictureTemplate(pic); tmpl != "" {
+		n := 0
+		for i := 0; i < len(tmpl); i++ {
+			switch tmpl[i] {
+			case '9', '#', 'A', 'L', 'N', 'X', 'Y', '!', '$', '*':
+				n++
+			}
+		}
+		if n > 0 {
+			g.Width = n
 		}
 	}
 	m.gets = append(m.gets, g)

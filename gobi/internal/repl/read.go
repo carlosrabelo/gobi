@@ -28,7 +28,9 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 	drawGET := func(i int, active bool) {
 		g := m.gets[i]
 		text := values[i]
-		if len(text) > g.Width {
+		if g.Scroll > 0 && len(text) > g.Width {
+			text = text[len(text)-g.Width:]
+		} else if len(text) > g.Width {
 			text = text[:g.Width]
 		}
 		for len(text) < g.Width {
@@ -115,18 +117,33 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 			if k >= 32 && k < 127 {
 				g := m.gets[cur]
 				ch := byte(k)
+				if g.PicUpper {
+					if ch >= 'a' && ch <= 'z' {
+						ch = ch - 'a' + 'A'
+					}
+				}
+				if g.PicAlpha && !((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) {
+					if ctx.Config.Bell {
+						_, _ = ctx.Out().Write([]byte{7})
+					}
+					continue
+				}
 				if g.Picture != "" && !pictureAllows(g.Picture, len(values[cur]), ch) {
 					if ctx.Config.Bell {
 						_, _ = ctx.Out().Write([]byte{7})
 					}
 					continue
 				}
-				if len(values[cur]) < g.Width {
+				maxLen := g.Width
+				if g.Scroll > 0 {
+					maxLen = 254
+				}
+				if len(values[cur]) < maxLen {
 					values[cur] += string(ch)
 					drawGET(cur, true)
 					_ = flushScreen(ctx)
 					// SET CONFIRM OFF: a full GET advances without Enter (023.6).
-					if !ctx.Config.Confirm && len(values[cur]) >= g.Width {
+					if !ctx.Config.Confirm && g.Scroll == 0 && len(values[cur]) >= g.Width {
 						if cur == len(m.gets)-1 {
 							if err := save(); err != nil {
 								return err
@@ -200,6 +217,9 @@ func pictureSlotAllows(slot, ch byte) bool {
 
 func storeGET(ctx *context.Context, g PendingGET, text string) error {
 	text = strings.TrimRight(text, " ")
+	if g.PicR {
+		text = expr.StripPictureLiterals(text, g.Picture)
+	}
 	if g.IsField {
 		a := ctx.Active()
 		if !a.Landed {
