@@ -214,6 +214,52 @@ func TestSETConfirmWaitsOnFullField(t *testing.T) {
 	}
 }
 
+func TestPictureFunctionCharsOnGET(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split(`STORE "x" TO V`))
+	// @A rejects digits; @! uppercases; typed "ab" (digit ignored) then Enter.
+	ctx.Stdin = strings.NewReader("\x7fab1\r")
+	if err := mux.Dispatch(ctx, command.Split(`@ 0, 0 GET V PICTURE "@A!"`)); err != nil {
+		t.Fatal(err)
+	}
+	if !mux.gets[0].PicAlpha || !mux.gets[0].PicUpper {
+		t.Fatalf("flags %+v", mux.gets[0])
+	}
+	if err := mux.Dispatch(ctx, command.Split("READ")); err != nil {
+		t.Fatal(err)
+	}
+	v, ok := ctx.Symbols.Get("V")
+	if !ok || v.String() != "AB" {
+		t.Fatalf("V=%v ok=%v", v, ok)
+	}
+
+	_ = mux.Dispatch(ctx, command.Split(`STORE "" TO W`))
+	ctx.Stdin = strings.NewReader("1234\r")
+	if err := mux.Dispatch(ctx, command.Split(`@ 0, 0 GET W PICTURE "@R 99-99"`)); err != nil {
+		t.Fatal(err)
+	}
+	if !mux.gets[0].PicR {
+		t.Fatal("expected @R")
+	}
+	if err := mux.Dispatch(ctx, command.Split("READ")); err != nil {
+		t.Fatal(err)
+	}
+	w, _ := ctx.Symbols.Get("W")
+	if w.String() != "1234" {
+		t.Fatalf("@R stored %q", w.String())
+	}
+
+	_ = mux.Dispatch(ctx, command.Split(`STORE "" TO S`))
+	if err := mux.Dispatch(ctx, command.Split(`@ 0, 0 GET S PICTURE "@S4"`)); err != nil {
+		t.Fatal(err)
+	}
+	if mux.gets[0].Scroll != 4 || mux.gets[0].Width != 4 {
+		t.Fatalf("scroll %+v", mux.gets[0])
+	}
+}
+
 func TestAtGETLimit(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	mux := NewMux()

@@ -28,6 +28,49 @@ func TestTransformTemplateChars(t *testing.T) {
 	}
 }
 
+func TestTransformFunctionChars(t *testing.T) {
+	got, err := Transform(NumberVal(0), "@Z 999")
+	if err != nil || strings.TrimSpace(got) != "" {
+		t.Fatalf("@Z: %q %v", got, err)
+	}
+	got, err = Transform(NumberVal(12), "@B 999")
+	if err != nil || !strings.HasPrefix(strings.TrimRight(got, " "), "12") {
+		t.Fatalf("@B: %q %v", got, err)
+	}
+	got, err = Transform(NumberVal(1), "@C 9")
+	if err != nil || !strings.HasSuffix(got, "CR") {
+		t.Fatalf("@C: %q %v", got, err)
+	}
+	got, err = Transform(NumberVal(-1), "@( 9")
+	if err != nil || got != "(1)" {
+		t.Fatalf("@(: %q %v", got, err)
+	}
+	got, err = Transform(StringVal("ab1"), "@A")
+	if err != nil || got != "ab" {
+		t.Fatalf("@A: %q %v", got, err)
+	}
+	got, err = Transform(StringVal("ab"), "@!")
+	if err != nil || got != "AB" {
+		t.Fatalf("@!: %q %v", got, err)
+	}
+	d := mustEval(t, `CTOD("07/04/86")`, &testEnv{})
+	got, err = Transform(d, "@E")
+	if err != nil || got != "04/07/86" {
+		t.Fatalf("@E: %q %v", got, err)
+	}
+	got, err = TransformWithDate(d, "@D", DateBritish, false)
+	if err != nil || got != "04/07/86" {
+		t.Fatalf("@D British: %q %v", got, err)
+	}
+	if PictureScrollWidth("@S8 XXXXXXXX") != 8 {
+		t.Fatalf("scroll width %d", PictureScrollWidth("@S8 XXXXXXXX"))
+	}
+	stripped := StripPictureLiterals("12-34", "@R 99-99")
+	if stripped != "1234" {
+		t.Fatalf("@R strip %q", stripped)
+	}
+}
+
 func TestTransformAcceptance(t *testing.T) {
 	got, err := Transform(NumberVal(1234.5), "9,999.99")
 	if err != nil {
