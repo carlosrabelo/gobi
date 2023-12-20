@@ -89,6 +89,16 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 			clearGets()
 			return nil
 		case term.KeyTab, term.KeyEnter:
+			g := m.gets[cur]
+			if g.HasRange && !valueInRange(ctx, g, values[cur]) {
+				if ctx.Config.Bell {
+					_, _ = ctx.Out().Write([]byte{7})
+				}
+				values[cur] = strings.TrimRight(getValueText(ctx, g), " ")
+				drawGET(cur, true)
+				_ = flushScreen(ctx)
+				continue
+			}
 			if k == term.KeyEnter && cur == len(m.gets)-1 {
 				if err := save(); err != nil {
 					return err
@@ -144,6 +154,15 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 					_ = flushScreen(ctx)
 					// SET CONFIRM OFF: a full GET advances without Enter (023.6).
 					if !ctx.Config.Confirm && g.Scroll == 0 && len(values[cur]) >= g.Width {
+						if g.HasRange && !valueInRange(ctx, g, values[cur]) {
+							if ctx.Config.Bell {
+								_, _ = ctx.Out().Write([]byte{7})
+							}
+							values[cur] = strings.TrimRight(getValueText(ctx, g), " ")
+							drawGET(cur, true)
+							_ = flushScreen(ctx)
+							continue
+						}
 						if cur == len(m.gets)-1 {
 							if err := save(); err != nil {
 								return err

@@ -25,6 +25,11 @@ type PendingGET struct {
 	PicUpper bool // @!
 	PicAlpha bool // @A
 	PicR     bool // @R literals not stored
+	HasRange bool
+	RangeLo  expr.Value
+	RangeHi  expr.Value
+	HasLo    bool
+	HasHi    bool
 }
 
 func ensureScreen(ctx *context.Context) *term.Screen {
@@ -175,7 +180,10 @@ func (m *Mux) atGET(ctx *context.Context, row, col int, rest string) error {
 	if len(m.gets) >= 128 {
 		return fail(ctx, "too many pending GETs")
 	}
-	name, pic := splitPicture(rest)
+	name, pic, rangeSrc, err := splitGETRest(rest)
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fail(ctx, "GET requires a name")
@@ -186,6 +194,15 @@ func (m *Mux) atGET(ctx *context.Context, row, col int, rest string) error {
 	g.PicAlpha = strings.Contains(flags, "A")
 	g.PicR = strings.Contains(flags, "R")
 	g.Scroll = expr.PictureScrollWidth(pic)
+	if rangeSrc != "" {
+		lo, hi, hasLo, hasHi, err := parseRANGE(ctx, rangeSrc)
+		if err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		g.HasRange = true
+		g.RangeLo, g.RangeHi = lo, hi
+		g.HasLo, g.HasHi = hasLo, hasHi
+	}
 	a := ctx.Active()
 	if a.HasTable() {
 		fi := fieldIndex(a, name)
@@ -222,6 +239,162 @@ func (m *Mux) atGET(ctx *context.Context, row, col int, rest string) error {
 	writeDelimitedField(scr, row, col, text, ctx.Config.Intensity, left, right)
 	_ = flushScreen(ctx)
 	return nil
+}
+
+// splitGETRest pulls name, optional PICTURE/USING, and optional RANGE clause.
+func splitGETRest(rest string) (name, pic, rangeSrc string, err error) {
+	up := strings.ToUpper(rest)
+	body := rest
+	if i := strings.Index(up, " RANGE "); i >= 0 {
+		rangeSrc = strings.TrimSpace(rest[i+7:])
+		body = strings.TrimSpace(rest[:i])
+		up = strings.ToUpper(body)
+	}
+	name, pic = splitPicture(body)
+	if name == "" && pic == "" && rangeSrc == "" {
+		return "", "", "", errString("GET requires a name")
+	}
+	return name, pic, rangeSrc, nil
+}
+
+func parseRANGE(ctx *context.Context, src string) (lo, hi expr.Value, hasLo, hasHi bool, err error) {
+	src = strings.TrimSpace(src)
+	if src == "" {
+		return lo, hi, false, false, errString("RANGE requires bounds")
+	}
+	// Split on first comma at top level (expressions may nest later; keep simple).
+	comma := strings.IndexByte(src, ',')
+	var loSrc, hiSrc string
+	if comma < 0 {
+		loSrc = strings.TrimSpace(src)
+	} else {
+		loSrc = strings.TrimSpace(src[:comma])
+		hiSrc = strings.TrimSpace(src[comma+1:])
+	}
+	env := newEnv(ctx)
+	if loSrc != "" {
+		tree, errs := expr.Parse(loSrc)
+		if len(errs) > 0 || tree == nil {
+			return lo, hi, false, false, errString("invalid RANGE low")
+		}
+		lo, err = expr.Eval(tree, env)
+		if err != nil {
+			return lo, hi, false, false, err
+		}
+		hasLo = true
+	}
+	if hiSrc != "" {
+		tree, errs := expr.Parse(hiSrc)
+		if len(errs) > 0 || tree == nil {
+			return lo, hi, false, false, errString("invalid RANGE high")
+		}
+		hi, err = expr.Eval(tree, env)
+		if err != nil {
+			return lo, hi, false, false, err
+		}
+		hasHi = true
+	}
+	return lo, hi, hasLo, hasHi, nil
+}
+
+func valueInRange(ctx *context.Context, g PendingGET, text string) bool {
+	if !g.HasRange {
+		return true
+	}
+	v, err := parseGETValue(ctx, g, text)
+	if err != nil {
+		return false
+	}
+	if g.HasLo {
+		if cmpRange(v, g.RangeLo) < 0 {
+			return false
+		}
+	}
+	if g.HasHi {
+		if cmpRange(v, g.RangeHi) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func parseGETValue(ctx *context.Context, g PendingGET, text string) (expr.Value, error) {
+	text = strings.TrimRight(text, " ")
+	if g.IsField {
+		a := ctx.Active()
+		f := a.Table.Header.Fields[g.FieldIdx]
+		switch f.Type {
+		case 'N':
+			s := strings.TrimSpace(text)
+			if s == "" {
+				return expr.NumberVal(0), nil
+			}
+			n, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				return expr.Value{}, err
+			}
+			return expr.NumberVal(n), nil
+		case 'D':
+			return expr.ParseDateString(text, ctx.Config.DateOrder), nil
+		case 'L':
+			return expr.LogicalVal(text == "T" || text == "t" || text == "Y" || text == "y" || text == ".T."), nil
+		default:
+			return expr.StringVal(text), nil
+		}
+	}
+	if old, ok := ctx.Symbols.Get(g.Name); ok {
+		switch old.Kind {
+		case expr.KindNumber:
+			n, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+			if err != nil {
+				if strings.TrimSpace(text) == "" {
+					return expr.NumberVal(0), nil
+				}
+				return expr.Value{}, err
+			}
+			return expr.NumberVal(n), nil
+		case expr.KindDate:
+			return expr.ParseDateString(text, ctx.Config.DateOrder), nil
+		case expr.KindLogical:
+			return expr.LogicalVal(text == "T" || text == "t" || text == "Y" || text == "y" || text == ".T."), nil
+		default:
+			return expr.StringVal(text), nil
+		}
+	}
+	if n, err := strconv.ParseFloat(strings.TrimSpace(text), 64); err == nil {
+		return expr.NumberVal(n), nil
+	}
+	return expr.StringVal(text), nil
+}
+
+func cmpRange(a, b expr.Value) int {
+	if a.Kind == expr.KindDate && b.Kind == expr.KindDate {
+		if a.EmptyDate || b.EmptyDate {
+			return 0
+		}
+		if a.Date.Before(b.Date) {
+			return -1
+		}
+		if a.Date.After(b.Date) {
+			return 1
+		}
+		return 0
+	}
+	an := a.Num
+	bn := b.Num
+	if a.Kind != expr.KindNumber {
+		an, _ = strconv.ParseFloat(strings.TrimSpace(a.String()), 64)
+	}
+	if b.Kind != expr.KindNumber {
+		bn, _ = strconv.ParseFloat(strings.TrimSpace(b.String()), 64)
+	}
+	if an < bn {
+		return -1
+	}
+	if an > bn {
+		return 1
+	}
+	return 0
 }
 
 // fieldDelims returns the left/right characters around a full-screen field when

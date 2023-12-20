@@ -8,6 +8,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
+	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
 )
 
 func TestAtSAY(t *testing.T) {
@@ -211,6 +212,28 @@ func TestSETConfirmWaitsOnFullField(t *testing.T) {
 	_ = ctx.Active().LoadCurrent()
 	if strings.TrimSpace(ctx.Active().Record.Values[0].Str) != "XYZ" {
 		t.Fatalf("CONFIRM ON: %q", ctx.Active().Record.Values[0].Str)
+	}
+}
+
+func TestGETRangeRejectsKeepsOld(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split(`STORE 5 TO N`))
+	// Out of RANGE 1,10: type 99 then Enter → restore 5; replace with 7.
+	ctx.Stdin = strings.NewReader("\x7f99\r\x7f7\r")
+	if err := mux.Dispatch(ctx, command.Split(`@ 0, 0 GET N RANGE 1, 10`)); err != nil {
+		t.Fatal(err)
+	}
+	if !mux.gets[0].HasRange || !mux.gets[0].HasLo || !mux.gets[0].HasHi {
+		t.Fatalf("range %+v", mux.gets[0])
+	}
+	if err := mux.Dispatch(ctx, command.Split("READ")); err != nil {
+		t.Fatal(err)
+	}
+	v, _ := ctx.Symbols.Get("N")
+	if v.Kind != expr.KindNumber || v.Num != 7 {
+		t.Fatalf("N=%v", v)
 	}
 }
 
