@@ -96,6 +96,24 @@ func executeScriptLine(ctx *context.Context, ctrl *script.Controller, line scrip
 			return true, nil
 		}
 		return false, nil
+	case "LOOP":
+		block, ok := prog.WhileEnclosingAt(ctrl.Index())
+		if !ok {
+			return false, fmt.Errorf("*** Error in %s, line %d: LOOP outside DO WHILE", prog.Path, line.Number)
+		}
+		if err := ctrl.SetIndex(block.DoIndex); err != nil {
+			return false, err
+		}
+		return false, nil
+	case "EXIT":
+		block, ok := prog.WhileEnclosingAt(ctrl.Index())
+		if !ok {
+			return false, fmt.Errorf("*** Error in %s, line %d: EXIT outside DO WHILE", prog.Path, line.Number)
+		}
+		if err := ctrl.SetIndex(block.EndIndex + 1); err != nil {
+			return false, err
+		}
+		return false, nil
 	case "IF":
 		block, ok := prog.IfBlockAt(ctrl.Index())
 		if !ok {

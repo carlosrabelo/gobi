@@ -273,3 +273,79 @@ func TestRunProgramNestedDoWhile(t *testing.T) {
 		t.Fatalf("expected COUNT=2, got %#v", count)
 	}
 }
+
+func TestRunProgramLoopRestartsCycle(t *testing.T) {
+	source := "STORE 0 TO n\nSTORE 0 TO tail\nDO WHILE n < 3\nSTORE n + 1 TO n\nIF n = 2\nLOOP\nENDIF\nSTORE 1 TO tail\nENDDO\n"
+	prog, err := script.ParseSource("test.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	if err := RunProgram(ctx, prog); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	n, ok := ctx.Variables.Get("N")
+	if !ok || n.(float64) != 3 {
+		t.Fatalf("expected N=3, got %#v", n)
+	}
+	tail, ok := ctx.Variables.Get("TAIL")
+	if !ok || tail.(float64) != 1 {
+		t.Fatalf("expected TAIL=1, got %#v", tail)
+	}
+}
+
+func TestRunProgramExitBreaksLoop(t *testing.T) {
+	source := "STORE 0 TO n\nDO WHILE .T.\nSTORE n + 1 TO n\nIF n = 3\nEXIT\nENDIF\nENDDO\nSTORE 1 TO done\n"
+	prog, err := script.ParseSource("test.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	if err := RunProgram(ctx, prog); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	n, ok := ctx.Variables.Get("N")
+	if !ok || n.(float64) != 3 {
+		t.Fatalf("expected N=3, got %#v", n)
+	}
+	done, ok := ctx.Variables.Get("DONE")
+	if !ok || done.(float64) != 1 {
+		t.Fatalf("expected DONE=1, got %#v", done)
+	}
+}
+
+func TestRunProgramExitNestedLoopOnly(t *testing.T) {
+	source := "STORE 0 TO n\nDO WHILE n < 2\nSTORE n + 1 TO n\nDO WHILE .T.\nEXIT\nENDDO\nSTORE 10 TO n\nENDDO\n"
+	prog, err := script.ParseSource("test.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	if err := RunProgram(ctx, prog); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	n, ok := ctx.Variables.Get("N")
+	if !ok || n.(float64) != 10 {
+		t.Fatalf("expected N=10, got %#v", n)
+	}
+}
+
+func TestRunProgramLoopOutsideDoWhile(t *testing.T) {
+	source := "LOOP\n"
+	prog, err := script.ParseSource("test.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	err = RunProgram(ctx, prog)
+	if err == nil {
+		t.Fatal("expected LOOP outside DO WHILE error")
+	}
+}

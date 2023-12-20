@@ -103,6 +103,7 @@ func (m *CommandMux) registerAll() {
 	m.register("RESTORE", handleRestore)
 	m.register("RELEASE", handleRelease)
 	m.register("DO", handleDo)
+	m.register("LOOP", stubHandler("LOOP"))
 }
 
 func stubHandler(verb string) HandlerFunc {
