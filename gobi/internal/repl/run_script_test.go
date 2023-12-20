@@ -215,3 +215,61 @@ func TestRunProgramNestedIf(t *testing.T) {
 		t.Fatalf("expected RESULT=1, got %#v", result)
 	}
 }
+
+func TestRunProgramDoWhileLoop(t *testing.T) {
+	source := "STORE 0 TO counter\nDO WHILE counter < 3\nSTORE counter + 1 TO counter\nENDDO\n"
+	prog, err := script.ParseSource("test.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	if err := RunProgram(ctx, prog); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	counter, ok := ctx.Variables.Get("COUNTER")
+	if !ok || counter.(float64) != 3 {
+		t.Fatalf("expected COUNTER=3, got %#v", counter)
+	}
+}
+
+func TestRunProgramDoWhileFalseSkipsBody(t *testing.T) {
+	source := "STORE 0 TO x\nDO WHILE .F.\nSTORE 999 TO x\nENDDO\nSTORE 1 TO done\n"
+	prog, err := script.ParseSource("test.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	if err := RunProgram(ctx, prog); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	x, ok := ctx.Variables.Get("X")
+	if !ok || x.(float64) != 0 {
+		t.Fatalf("expected X=0, got %#v", x)
+	}
+	done, ok := ctx.Variables.Get("DONE")
+	if !ok || done.(float64) != 1 {
+		t.Fatalf("expected DONE=1, got %#v", done)
+	}
+}
+
+func TestRunProgramNestedDoWhile(t *testing.T) {
+	source := "STORE 0 TO count\nDO WHILE count < 2\nDO WHILE count < 2\nSTORE count + 1 TO count\nENDDO\nENDDO\n"
+	prog, err := script.ParseSource("test.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	if err := RunProgram(ctx, prog); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	count, ok := ctx.Variables.Get("COUNT")
+	if !ok || count.(float64) != 2 {
+		t.Fatalf("expected COUNT=2, got %#v", count)
+	}
+}

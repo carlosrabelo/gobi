@@ -55,6 +55,9 @@ func ParseSource(path, content string) (*Program, error) {
 	if err := prog.buildIfBlocks(); err != nil {
 		return nil, err
 	}
+	if err := prog.buildWhileBlocks(); err != nil {
+		return nil, err
+	}
 
 	return prog, nil
 }

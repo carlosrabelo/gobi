@@ -54,6 +54,48 @@ func executeScriptLine(ctx *context.Context, ctrl *script.Controller, line scrip
 	switch line.Command.Verb {
 	case "RETURN":
 		return true, nil
+	case "DO":
+		if line.Command.WhileClause == "" {
+			break
+		}
+		block, ok := prog.WhileBlockAt(ctrl.Index())
+		if !ok {
+			return false, fmt.Errorf("*** Error in %s, line %d: unmatched DO WHILE block", prog.Path, line.Number)
+		}
+
+		truthy, err := evalLogicalExpression(ctx, line.Command.WhileClause, "DO WHILE")
+		if err != nil {
+			return false, fmt.Errorf("*** Error in %s, line %d: %w", prog.Path, line.Number, err)
+		}
+
+		if truthy {
+			if finishAdvance(ctrl) {
+				return true, nil
+			}
+		} else if err := ctrl.SetIndex(block.EndIndex + 1); err != nil {
+			return false, err
+		}
+		return false, nil
+	case "ENDDO":
+		block, ok := prog.WhileBlockForEnd(ctrl.Index())
+		if !ok {
+			return false, fmt.Errorf("*** Error in %s, line %d: ENDDO without matching DO WHILE", prog.Path, line.Number)
+		}
+
+		doLine := prog.Commands()[block.DoIndex]
+		truthy, err := evalLogicalExpression(ctx, doLine.Command.WhileClause, "DO WHILE")
+		if err != nil {
+			return false, fmt.Errorf("*** Error in %s, line %d: %w", prog.Path, line.Number, err)
+		}
+
+		if truthy {
+			if err := ctrl.SetIndex(block.StartIndex); err != nil {
+				return false, err
+			}
+		} else if finishAdvance(ctrl) {
+			return true, nil
+		}
+		return false, nil
 	case "IF":
 		block, ok := prog.IfBlockAt(ctrl.Index())
 		if !ok {
