@@ -215,6 +215,40 @@ func TestSETConfirmWaitsOnFullField(t *testing.T) {
 	}
 }
 
+func TestAtClearAndBox(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split(`@ 0, 0 SAY "ABC"`))
+	_ = mux.Dispatch(ctx, command.Split(`@ 1, 0 SAY "XYZ"`))
+	if err := mux.Dispatch(ctx, command.Split(`@ 0, 0 CLEAR TO 0, 1`)); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Screen.CellAt(0, 0).Ch != ' ' || ctx.Screen.CellAt(0, 1).Ch != ' ' {
+		t.Fatalf("CLEAR TO left %q %q", ctx.Screen.CellAt(0, 0).Ch, ctx.Screen.CellAt(0, 1).Ch)
+	}
+	if ctx.Screen.CellAt(0, 2).Ch != 'C' {
+		t.Fatalf("CLEAR TO spilled: %q", ctx.Screen.CellAt(0, 2).Ch)
+	}
+	if err := mux.Dispatch(ctx, command.Split(`@ 0, 0 TO 2, 2`)); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range [][2]int{{0, 0}, {0, 2}, {2, 0}, {2, 2}} {
+		if ctx.Screen.CellAt(p[0], p[1]).Ch != '+' {
+			t.Fatalf("corner %v = %q", p, ctx.Screen.CellAt(p[0], p[1]).Ch)
+		}
+	}
+	if ctx.Screen.CellAt(0, 1).Ch != '-' || ctx.Screen.CellAt(1, 0).Ch != '|' {
+		t.Fatalf("edges %q %q", ctx.Screen.CellAt(0, 1).Ch, ctx.Screen.CellAt(1, 0).Ch)
+	}
+	if err := mux.Dispatch(ctx, command.Split(`@ 3, 0 TO 3, 3 DOUBLE`)); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Screen.CellAt(3, 1).Ch != '=' {
+		t.Fatalf("DOUBLE h %q", ctx.Screen.CellAt(3, 1).Ch)
+	}
+}
+
 func TestGETRangeRejectsKeepsOld(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	ctx.Stdout = &bytes.Buffer{}
@@ -299,3 +333,4 @@ func TestAtGETLimit(t *testing.T) {
 		t.Fatalf("pending %d", len(mux.gets))
 	}
 }
+

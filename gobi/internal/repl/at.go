@@ -40,7 +40,7 @@ func ensureScreen(ctx *context.Context) *term.Screen {
 }
 
 func (m *Mux) cmdAt(ctx *context.Context, cmd command.Command) error {
-	args := strings.TrimSpace(cmd.Args)
+	args := joinAtArgs(cmd)
 	row, col, rest, err := parseAtCoord(args)
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
@@ -53,11 +53,38 @@ func (m *Mux) cmdAt(ctx *context.Context, cmd command.Command) error {
 		return m.atGET(ctx, row, col, strings.TrimSpace(rest[4:]))
 	case strings.HasPrefix(up, "CLEAR"):
 		return atClear(ctx, row, col, strings.TrimSpace(rest[5:]))
-	case strings.Contains(up, " TO "):
+	case strings.HasPrefix(up, "TO ") || strings.Contains(up, " TO "):
 		return atBox(ctx, row, col, rest)
 	default:
 		return fail(ctx, "@ requires SAY or GET")
 	}
+}
+
+// joinAtArgs rebuilds @ argument text after command.Split pulls TO into Clauses.
+func joinAtArgs(cmd command.Command) string {
+	args := strings.TrimSpace(cmd.Args)
+	to := strings.TrimSpace(cmd.Clauses["TO"])
+	if to == "" {
+		return args
+	}
+	up := strings.ToUpper(args)
+	if strings.Contains(up, "CLEAR") {
+		return args + " TO " + to
+	}
+	double := false
+	switch {
+	case strings.HasSuffix(up, " DOUBLE"):
+		double = true
+		args = strings.TrimSpace(args[:len(args)-7])
+	case strings.HasSuffix(up, "DOUBLE"):
+		double = true
+		args = strings.TrimSpace(args[:len(args)-6])
+	}
+	out := args + " TO " + to
+	if double {
+		out += " DOUBLE"
+	}
+	return out
 }
 
 func atClear(ctx *context.Context, row, col int, rest string) error {
@@ -82,27 +109,68 @@ func atClear(ctx *context.Context, row, col int, rest string) error {
 func atBox(ctx *context.Context, row, col int, rest string) error {
 	up := strings.ToUpper(rest)
 	double := strings.Contains(up, "DOUBLE")
-	i := strings.Index(up, " TO ")
-	if i < 0 {
+	coordSrc := rest
+	if i := strings.Index(up, " TO "); i >= 0 {
+		coordSrc = strings.TrimSpace(rest[i+4:])
+	} else if strings.HasPrefix(up, "TO ") {
+		coordSrc = strings.TrimSpace(rest[3:])
+	} else {
 		return fail(ctx, "@ TO required")
 	}
-	r2, c2, _, err := parseAtCoord(strings.TrimSpace(rest[i+4:]))
+	// Drop trailing DOUBLE keyword from the coordinate tail.
+	cu := strings.ToUpper(coordSrc)
+	if j := strings.Index(cu, " DOUBLE"); j >= 0 {
+		coordSrc = strings.TrimSpace(coordSrc[:j])
+	} else if strings.HasSuffix(cu, "DOUBLE") {
+		coordSrc = strings.TrimSpace(coordSrc[:len(coordSrc)-6])
+	}
+	r2, c2, _, err := parseAtCoord(coordSrc)
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
-	scr := ensureScreen(ctx)
-	h, v, corner := byte('-'), byte('|'), byte('+')
-	if double {
-		h, v = '=', '|'
+	if r2 < row {
+		row, r2 = r2, row
 	}
-	_ = corner
+	if c2 < col {
+		col, c2 = c2, col
+	}
+	scr := ensureScreen(ctx)
+	h, v := "-", "|"
+	if double {
+		h = "="
+	}
+	// Degenerate: one row → horizontal line; one column → vertical line.
+	if row == r2 && col == c2 {
+		scr.WriteString(row, col, "+", false)
+		return flushScreen(ctx)
+	}
+	if row == r2 {
+		for c := col; c <= c2 && c < scr.Cols; c++ {
+			ch := h
+			if c == col || c == c2 {
+				ch = "+"
+			}
+			scr.WriteString(row, c, ch, false)
+		}
+		return flushScreen(ctx)
+	}
+	if col == c2 {
+		for r := row; r <= r2 && r < scr.Rows; r++ {
+			ch := v
+			if r == row || r == r2 {
+				ch = "+"
+			}
+			scr.WriteString(r, col, ch, false)
+		}
+		return flushScreen(ctx)
+	}
 	for c := col; c <= c2 && c < scr.Cols; c++ {
-		scr.WriteString(row, c, string(h), false)
-		scr.WriteString(r2, c, string(h), false)
+		scr.WriteString(row, c, h, false)
+		scr.WriteString(r2, c, h, false)
 	}
 	for r := row; r <= r2 && r < scr.Rows; r++ {
-		scr.WriteString(r, col, string(v), false)
-		scr.WriteString(r, c2, string(v), false)
+		scr.WriteString(r, col, v, false)
+		scr.WriteString(r, c2, v, false)
 	}
 	scr.WriteString(row, col, "+", false)
 	scr.WriteString(row, c2, "+", false)
