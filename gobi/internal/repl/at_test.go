@@ -215,6 +215,39 @@ func TestSETConfirmWaitsOnFullField(t *testing.T) {
 	}
 }
 
+func TestREADSAVEKeepsGets(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	ctx.Stdout = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split(`STORE "A" TO V`))
+	if err := mux.Dispatch(ctx, command.Split(`@ 0, 0 GET V`)); err != nil {
+		t.Fatal(err)
+	}
+	ctx.Stdin = strings.NewReader("\x7fB\r")
+	if err := mux.Dispatch(ctx, command.Split("READ SAVE")); err != nil {
+		t.Fatal(err)
+	}
+	if len(mux.gets) != 1 {
+		t.Fatalf("READ SAVE cleared gets: %d", len(mux.gets))
+	}
+	v, _ := ctx.Symbols.Get("V")
+	if v.String() != "B" {
+		t.Fatalf("after SAVE read V=%q", v.String())
+	}
+	// Second READ without a new @ GET.
+	ctx.Stdin = strings.NewReader("\x7fC\r")
+	if err := mux.Dispatch(ctx, command.Split("READ")); err != nil {
+		t.Fatal(err)
+	}
+	if len(mux.gets) != 0 {
+		t.Fatal("plain READ should clear gets")
+	}
+	v, _ = ctx.Symbols.Get("V")
+	if v.String() != "C" {
+		t.Fatalf("second READ V=%q", v.String())
+	}
+}
+
 func TestAtClearAndBox(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	ctx.Stdout = &bytes.Buffer{}
