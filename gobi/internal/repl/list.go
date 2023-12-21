@@ -16,6 +16,9 @@ func (m *Mux) cmdLIST(ctx *context.Context, cmd command.Command) error {
 	if strings.EqualFold(args, "STRUCTURE") {
 		return displayStructure(ctx)
 	}
+	if strings.EqualFold(args, "USERS") {
+		return failCode(ctx, 36, "LIST USERS is not available in Gobi")
+	}
 	if strings.HasPrefix(up, "FILES") || strings.HasPrefix(up, "STATUS") || strings.EqualFold(args, "MEMORY") || strings.HasPrefix(up, "HISTORY") {
 		if strings.EqualFold(args, "MEMORY") {
 			return printMemory(ctx)
@@ -36,6 +39,9 @@ func (m *Mux) cmdDISPLAY(ctx *context.Context, cmd command.Command) error {
 	up := strings.ToUpper(args)
 	if strings.EqualFold(args, "STRUCTURE") {
 		return displayStructure(ctx)
+	}
+	if strings.EqualFold(args, "USERS") {
+		return failCode(ctx, 36, "DISPLAY USERS is not available in Gobi")
 	}
 	if strings.EqualFold(args, "MEMORY") {
 		return printMemory(ctx)
