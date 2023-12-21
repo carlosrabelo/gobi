@@ -56,7 +56,19 @@ func executeScriptLine(ctx *context.Context, ctrl *script.Controller, line scrip
 		return true, nil
 	case "DO":
 		if line.Command.WhileClause == "" {
-			break
+			filename := strings.TrimSpace(line.Command.Args)
+			if filename == "" {
+				return false, fmt.Errorf("*** Error in %s, line %d: DO requires a command file name", prog.Path, line.Number)
+			}
+			child, err := loadScript(ctx, filename)
+			if err != nil {
+				return false, fmt.Errorf("*** Error in %s, line %d: %w", prog.Path, line.Number, err)
+			}
+			if err := ctrl.PushFrame(child); err != nil {
+				return false, fmt.Errorf("*** Error in %s, line %d: %w", prog.Path, line.Number, err)
+			}
+			pushScriptFrame(ctx, child.Path)
+			return false, nil
 		}
 		block, ok := prog.WhileBlockAt(ctrl.Index())
 		if !ok {

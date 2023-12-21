@@ -349,3 +349,102 @@ func TestRunProgramLoopOutsideDoWhile(t *testing.T) {
 		t.Fatal("expected LOOP outside DO WHILE error")
 	}
 }
+
+func TestRunProgramNestedDoResumesParent(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tempDir, "child.prg"), []byte("STORE 42 TO answer\n"), 0644); err != nil {
+		t.Fatalf("write child: %v", err)
+	}
+
+	parent, err := script.ParseSource(filepath.Join(tempDir, "parent.prg"), "DO child\nSTORE 1 TO done\n")
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	ctx.Config.DefaultDir = tempDir
+	if err := RunProgram(ctx, parent); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	answer, ok := ctx.Variables.Get("ANSWER")
+	if !ok || answer.(float64) != 42 {
+		t.Fatalf("expected ANSWER=42, got %#v", answer)
+	}
+	done, ok := ctx.Variables.Get("DONE")
+	if !ok || done.(float64) != 1 {
+		t.Fatalf("expected DONE=1, got %#v", done)
+	}
+}
+
+func TestRunProgramNestedExecutionStack(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tempDir, "child.prg"), []byte("STORE 1 TO x\n"), 0644); err != nil {
+		t.Fatalf("write child: %v", err)
+	}
+
+	parent, err := script.ParseSource(filepath.Join(tempDir, "parent.prg"), "DO child\nSTORE 1 TO done\n")
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	ctx.Config.DefaultDir = tempDir
+
+	stackSeen := false
+	originalStore := commandMux.handlers["STORE"]
+	commandMux.handlers["STORE"] = func(ctx *context.Context, cmd Command) error {
+		if ctx.Script.Program().Path == filepath.Join(tempDir, "child.prg") {
+			if ctx.Script.Depth() != 2 {
+				t.Fatalf("expected controller depth 2 during child, got %d", ctx.Script.Depth())
+			}
+			if len(ctx.ExecutionStack) != 2 {
+				t.Fatalf("expected execution stack depth 2, got %#v", ctx.ExecutionStack)
+			}
+			if ctx.ExecutionStack[0] != parent.Path || ctx.ExecutionStack[1] != filepath.Join(tempDir, "child.prg") {
+				t.Fatalf("unexpected execution stack: %#v", ctx.ExecutionStack)
+			}
+			stackSeen = true
+		}
+		return originalStore(ctx, cmd)
+	}
+	defer func() {
+		commandMux.handlers["STORE"] = originalStore
+	}()
+
+	if err := RunProgram(ctx, parent); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+	if !stackSeen {
+		t.Fatal("expected STORE handler during child script")
+	}
+	if len(ctx.ExecutionStack) != 0 {
+		t.Fatalf("expected execution stack cleared, got %#v", ctx.ExecutionStack)
+	}
+}
+
+func TestRunProgramThreeLevelDoStack(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tempDir, "grandchild.prg"), []byte("STORE 3 TO level\n"), 0644); err != nil {
+		t.Fatalf("write grandchild: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "child.prg"), []byte("DO grandchild\nSTORE 2 TO level\n"), 0644); err != nil {
+		t.Fatalf("write child: %v", err)
+	}
+
+	parent, err := script.ParseSource(filepath.Join(tempDir, "parent.prg"), "DO child\nSTORE 1 TO level\n")
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	ctx.Config.DefaultDir = tempDir
+	if err := RunProgram(ctx, parent); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	level, ok := ctx.Variables.Get("LEVEL")
+	if !ok || level.(float64) != 1 {
+		t.Fatalf("expected LEVEL=1 after parent resumed, got %#v", level)
+	}
+}

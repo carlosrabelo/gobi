@@ -112,7 +112,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `IF ... ELSE ... ENDIF` parser and branch executor
 - [x] `DO WHILE ... ENDDO` loop manager
 - [x] `LOOP` and `EXIT` jump resolution
-- [ ] Nesting call stack for parent/child scripts execution
+- [x] Nesting call stack for parent/child scripts execution
 - [ ] `RETURN` pops caller state from call stack
 - [ ] `CANCEL` clears script execution stack and halts to REPL
 
