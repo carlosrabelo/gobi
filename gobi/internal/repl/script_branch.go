@@ -53,7 +53,11 @@ func executeScriptLine(ctx *context.Context, ctrl *script.Controller, line scrip
 
 	switch line.Command.Verb {
 	case "RETURN":
-		return true, nil
+		if ctrl.Depth() <= 1 {
+			return true, nil
+		}
+		popCallerFrame(ctx, ctrl)
+		return false, nil
 	case "DO":
 		if line.Command.WhileClause == "" {
 			filename := strings.TrimSpace(line.Command.Args)

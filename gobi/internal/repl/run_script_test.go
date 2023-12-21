@@ -448,3 +448,59 @@ func TestRunProgramThreeLevelDoStack(t *testing.T) {
 		t.Fatalf("expected LEVEL=1 after parent resumed, got %#v", level)
 	}
 }
+
+func TestRunProgramNestedReturnResumesParent(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tempDir, "child.prg"), []byte("STORE 42 TO answer\nRETURN\nSTORE 999 TO skipped\n"), 0644); err != nil {
+		t.Fatalf("write child: %v", err)
+	}
+
+	parent, err := script.ParseSource(filepath.Join(tempDir, "parent.prg"), "DO child\nSTORE 1 TO done\n")
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	ctx.Config.DefaultDir = tempDir
+	if err := RunProgram(ctx, parent); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	answer, ok := ctx.Variables.Get("ANSWER")
+	if !ok || answer.(float64) != 42 {
+		t.Fatalf("expected ANSWER=42, got %#v", answer)
+	}
+	done, ok := ctx.Variables.Get("DONE")
+	if !ok || done.(float64) != 1 {
+		t.Fatalf("expected DONE=1, got %#v", done)
+	}
+	if _, ok := ctx.Variables.Get("SKIPPED"); ok {
+		t.Fatal("expected child commands after RETURN to be skipped")
+	}
+}
+
+func TestRunProgramThreeLevelReturn(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tempDir, "grandchild.prg"), []byte("RETURN\n"), 0644); err != nil {
+		t.Fatalf("write grandchild: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "child.prg"), []byte("DO grandchild\nSTORE 2 TO level\n"), 0644); err != nil {
+		t.Fatalf("write child: %v", err)
+	}
+
+	parent, err := script.ParseSource(filepath.Join(tempDir, "parent.prg"), "DO child\nSTORE 1 TO level\n")
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	ctx.Config.DefaultDir = tempDir
+	if err := RunProgram(ctx, parent); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	level, ok := ctx.Variables.Get("LEVEL")
+	if !ok || level.(float64) != 1 {
+		t.Fatalf("expected LEVEL=1 after nested RETURN chain, got %#v", level)
+	}
+}
