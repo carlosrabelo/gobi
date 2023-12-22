@@ -58,6 +58,8 @@ func executeScriptLine(ctx *context.Context, ctrl *script.Controller, line scrip
 		}
 		popCallerFrame(ctx, ctrl)
 		return false, nil
+	case "CANCEL":
+		return true, nil
 	case "DO":
 		if line.Command.WhileClause == "" {
 			filename := strings.TrimSpace(line.Command.Args)

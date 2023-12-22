@@ -114,7 +114,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 - [x] `LOOP` and `EXIT` jump resolution
 - [x] Nesting call stack for parent/child scripts execution
 - [x] `RETURN` pops caller state from call stack
-- [ ] `CANCEL` clears script execution stack and halts to REPL
+- [x] `CANCEL` clears script execution stack and halts to REPL
 
 ## Indexing (.ndx)
 
