@@ -18,42 +18,34 @@ func refuse(verb string) Handler {
 }
 
 func registerRefused(m *Mux) {
-	verbs := []string{
-		"ASSIST", "CREATE LABEL", "MODIFY LABEL", "CREATE REPORT", "MODIFY REPORT",
-		"CREATE QUERY", "MODIFY QUERY", "CREATE SCREEN", "MODIFY SCREEN",
-		"CREATE VIEW", "MODIFY VIEW", "LOAD", "CALL", "EXPORT", "IMPORT",
-		"LOGOUT", "UNLOCK",
+	for _, v := range []string{
+		"ASSIST", "LOAD", "CALL", "EXPORT", "IMPORT", "LOGOUT", "UNLOCK",
+	} {
+		m.Register(v, refuse(v))
 	}
-	for _, v := range verbs {
-		// multi-word: register first token only when single; multi handled specially
-		parts := strings.Fields(v)
-		if len(parts) == 1 {
-			m.Register(parts[0], refuse(parts[0]))
-		}
+	for _, topic := range refusedHelpTopics() {
+		help.Register(topic, topic+" — not available in Gobi.")
 	}
-	// multi-word via CREATE/MODIFY already registered — wrap
-	m.Register("ASSIST", refuse("ASSIST"))
-	m.Register("LOAD", refuse("LOAD"))
-	m.Register("CALL", refuse("CALL"))
-	m.Register("EXPORT", refuse("EXPORT"))
-	m.Register("IMPORT", refuse("IMPORT"))
-	m.Register("LOGOUT", refuse("LOGOUT"))
-	m.Register("UNLOCK", refuse("UNLOCK"))
-	help.Register("ASSIST", "ASSIST — not available in Gobi.")
-	help.Register("LOAD", "LOAD — not available in Gobi.")
-	help.Register("CALL", "CALL — not available in Gobi.")
-	help.Register("EXPORT", "EXPORT — not available in Gobi.")
-	help.Register("IMPORT", "IMPORT — not available in Gobi.")
-	help.Register("RELEASE MODULE", "RELEASE MODULE — not available in Gobi.")
-	help.Register("DISPLAY USERS", "DISPLAY USERS — not available in Gobi.")
-	help.Register("LIST USERS", "LIST USERS — not available in Gobi.")
-	help.Register("LOGOUT", "LOGOUT — not available in Gobi.")
-	help.Register("UNLOCK", "UNLOCK — not available in Gobi.")
-	help.Register("SET EXCLUSIVE", "SET EXCLUSIVE — not available in Gobi.")
-	help.Register("SET ENCRYPTION", "SET ENCRYPTION — not available in Gobi.")
-	help.Register("FLOCK", "FLOCK() — not available in Gobi.")
-	help.Register("RLOCK", "RLOCK() — not available in Gobi.")
-	help.Register("LOCK", "LOCK() — not available in Gobi.")
+}
+
+func refusedHelpTopics() []string {
+	return []string{
+		"ASSIST",
+		"CREATE LABEL", "MODIFY LABEL",
+		"CREATE REPORT", "MODIFY REPORT",
+		"CREATE QUERY", "MODIFY QUERY",
+		"CREATE SCREEN", "MODIFY SCREEN",
+		"CREATE VIEW", "MODIFY VIEW",
+		"CREATE VIEW FROM ENVIRONMENT",
+		"SET CATALOG", "SET CATALOG TO", "SET TITLE", "SET VIEW TO",
+		"SET FILTER TO FILE",
+		"LOAD", "CALL", "RELEASE MODULE", "EXPORT", "IMPORT",
+		"DISPLAY USERS", "LIST USERS", "LOGOUT", "UNLOCK",
+		"SET EXCLUSIVE", "SET ENCRYPTION",
+		"FLOCK", "RLOCK", "LOCK",
+		"SET PRINTER TO", "SET PRINTER",
+		"SET COLOR ON", "SET COLOR OFF",
+	}
 }
 
 func refuseCreateModify(ctx *context.Context, cmd command.Command, kind string) error {

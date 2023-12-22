@@ -11,6 +11,44 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/help"
 )
 
+func TestRefusePrinterColorAndHelp(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	var errBuf, out bytes.Buffer
+	ctx.Stderr = &errBuf
+	ctx.Stdout = &out
+	mux := NewMux()
+	for _, line := range []string{`SET PRINTER TO LPT1`, `SET COLOR ON`, `SET COLOR OFF`} {
+		errBuf.Reset()
+		err := mux.Dispatch(ctx, command.Split(line))
+		if err == nil || !strings.Contains(err.Error(), "not available") {
+			t.Fatalf("%s: %v", line, err)
+		}
+		if ctx.LastError != 36 {
+			t.Fatalf("%s code %d", line, ctx.LastError)
+		}
+	}
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("HELP ASSIST")); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "not available") {
+		t.Fatalf("HELP ASSIST: %q", out.String())
+	}
+	for _, topic := range refusedHelpTopics() {
+		text, ok := help.Text(topic)
+		if !ok || !strings.Contains(text, "not available") {
+			t.Fatalf("help %s: %q ok=%v", topic, text, ok)
+		}
+	}
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("HELP CREATE LABEL")); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "CREATE LABEL") || !strings.Contains(out.String(), "not available") {
+		t.Fatalf("HELP CREATE LABEL: %q", out.String())
+	}
+}
+
 func TestRefuseNetworkAndLocks(t *testing.T) {
 	dir := t.TempDir()
 	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{

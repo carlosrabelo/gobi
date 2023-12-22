@@ -31,10 +31,15 @@ func (m *Mux) cmdHELP(ctx *context.Context, cmd command.Command) error {
 		}
 		return nil
 	}
-	verb := strings.Fields(args)[0]
-	text, ok := help.Text(verb)
+	topic := strings.ToUpper(strings.TrimSpace(args))
+	text, ok := help.Text(topic)
 	if !ok {
-		return fail(ctx, "no help for %s", strings.ToUpper(verb))
+		// Fall back to the first word (e.g. HELP USE).
+		verb := strings.Fields(topic)[0]
+		text, ok = help.Text(verb)
+		if !ok {
+			return fail(ctx, "no help for %s", topic)
+		}
 	}
 	fmt.Fprintln(ctx.Out(), text)
 	return nil
