@@ -93,7 +93,7 @@ func setFilter(ctx *context.Context, exprSrc string) error {
 	a := ctx.Active()
 	if strings.EqualFold(strings.TrimSpace(exprSrc), "FILE") ||
 		strings.HasPrefix(strings.ToUpper(strings.TrimSpace(exprSrc)), "FILE ") {
-		return fail(ctx, "SET FILTER TO FILE is not available in Gobi")
+		return failCode(ctx, 36, "SET FILTER TO FILE is not available in Gobi")
 	}
 	a.FilterExpr = strings.TrimSpace(exprSrc)
 	return nil
