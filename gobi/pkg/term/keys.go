@@ -13,6 +13,7 @@ const (
 	KeyCtrlY     = 25
 	KeyCtrlR     = 18
 	KeyTab       = 9
+	KeyCtrlC     = 3 // cancel; must not kill the process at the prompt
 	KeyEnter     = 13
 	KeyEsc       = 27
 	KeyBackspace = 127
@@ -43,7 +44,16 @@ func (kr *Reader) ReadKey() (int, error) {
 	}
 	if b != 0x1b {
 		switch b {
-		case KeyTab, KeyEnter, KeyEsc, KeyBackspace,
+		case '\n':
+			// Unix cooked Enter is LF; treat as KeyEnter (CR).
+			return KeyEnter, nil
+		case KeyEnter: // '\r'
+			// CRLF: consume the following LF so it is not a second Enter.
+			if next, err := kr.readByte(); err == nil && next != '\n' {
+				kr.unread(next)
+			}
+			return KeyEnter, nil
+		case KeyTab, KeyEsc, KeyBackspace,
 			KeyCtrlQ, KeyCtrlW, KeyCtrlU, KeyCtrlY, KeyCtrlR, KeyCtrlX:
 			return int(b), nil
 		default:
