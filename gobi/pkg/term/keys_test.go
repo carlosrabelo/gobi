@@ -18,3 +18,17 @@ func TestReadKeyArrowsAndControls(t *testing.T) {
 		}
 	}
 }
+
+func TestReadKeyLFAndCRLFAsEnter(t *testing.T) {
+	r := NewReader(strings.NewReader("a\nb\r\nc\r"))
+	want := []int{int('a'), KeyEnter, int('b'), KeyEnter, int('c'), KeyEnter}
+	for i, w := range want {
+		got, err := r.ReadKey()
+		if err != nil {
+			t.Fatalf("%d: %v", i, err)
+		}
+		if got != w {
+			t.Fatalf("%d: got %d want %d", i, got, w)
+		}
+	}
+}

@@ -1,0 +1,18 @@
+* relation.prg — SET RELATION seeks ORD when CUST moves
+SET TALK OFF
+SET SAFETY OFF
+SET DEFAULT TO demos
+SELECT 2
+USE orders ALIAS ORD
+INDEX ON CODE TO ordcode
+SET INDEX TO ordcode
+SELECT 1
+USE customers ALIAS CUST
+SET RELATION TO CODE INTO ORD
+GOTO 1
+? "first customer:", CODE, NAME, "order:", ORD->ORD_ID, ORD->AMOUNT
+GOTO 3
+? "third customer:", CODE, NAME, "order:", ORD->ORD_ID, ORD->AMOUNT
+SET RELATION TO
+CLOSE DATABASES
+RETURN

@@ -26,6 +26,7 @@ bin/*
 !/gobi/
 coverage.out
 coverage.html
+demos/*.ndx
 
 # ============================================================================
 # EDITORS

@@ -35,6 +35,7 @@ gobi                  # dot prompt
 gobi script.prg       # run a command file, then exit
 gobi -e 'USE c; LIST' # run semicolon-separated commands, then exit
 make run -- -e QUIT   # build if needed and execute bin/gobi
+bin/gobi demos/hello.prg   # sample tables and .prg files under demos/
 ```
 
 ## Development
