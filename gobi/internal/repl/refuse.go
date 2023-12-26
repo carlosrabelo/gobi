@@ -19,7 +19,7 @@ func refuse(verb string) Handler {
 
 func registerRefused(m *Mux) {
 	for _, v := range []string{
-		"ASSIST", "LOAD", "CALL", "EXPORT", "IMPORT", "LOGOUT", "UNLOCK",
+		"LOAD", "CALL", "EXPORT", "IMPORT", "LOGOUT", "UNLOCK",
 	} {
 		m.Register(v, refuse(v))
 	}

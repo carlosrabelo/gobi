@@ -8,6 +8,9 @@ import (
 )
 
 func paintChrome(ctx *context.Context) {
+	if ctx.AssistOpen {
+		return
+	}
 	scr := ctx.Screen
 	if scr == nil || scr.Rows < 2 || scr.Cols < 8 {
 		return
