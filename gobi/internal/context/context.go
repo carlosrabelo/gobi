@@ -74,6 +74,7 @@ type Context struct {
 	Message      string
 	Suspended    bool
 	InsertMode   bool
+	AssistOpen   bool // ASSIST full-screen menu (037); suppresses STATUS chrome
 
 	// FormatLines are the loaded SET FORMAT TO .fmt lines (023.17).
 	FormatLines []string

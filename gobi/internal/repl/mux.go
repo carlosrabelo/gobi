@@ -150,6 +150,9 @@ func NewMux() *Mux {
 	m.Register("TYPE", cmdTYPE)
 	m.Register("LABEL", cmdLABEL)
 	registerRefused(m)
+	m.Register("ASSIST", func(ctx *context.Context, cmd command.Command) error {
+		return m.cmdASSIST(ctx, cmd)
+	})
 	return m
 }
 

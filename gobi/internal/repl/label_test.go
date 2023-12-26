@@ -55,13 +55,13 @@ func TestLABELForm(t *testing.T) {
 	}
 }
 
-func TestRefuseASSIST(t *testing.T) {
+func TestRefuseLOADStillClosed(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	var errBuf bytes.Buffer
 	ctx.Stderr = &errBuf
 	ctx.Stdout = &bytes.Buffer{}
 	mux := NewMux()
-	err := mux.Dispatch(ctx, command.Split("ASSIST"))
+	err := mux.Dispatch(ctx, command.Split("LOAD x"))
 	if err == nil || !strings.Contains(err.Error(), "not available") {
 		t.Fatalf("%v", err)
 	}
