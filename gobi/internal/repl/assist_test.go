@@ -2,10 +2,12 @@ package repl
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
+	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
 	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
@@ -80,6 +82,48 @@ func TestASSISTNavigationSubmenu(t *testing.T) {
 	}
 	if assistCreateHasReport() {
 		t.Fatal("Create submenu must not offer Report")
+	}
+}
+
+func TestASSISTUseFromSetUp(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "c.dbf"), []dbf.Field{
+		{Name: "N", Type: 'C', Length: 3},
+	}, []dbf.Record{{Values: []dbf.Value{{Str: "AB "}}}})
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	ctx.Stderr = &bytes.Buffer{}
+	// Set Up is first; Down open; Enter Database file; type c; Enter; Esc Esc leave.
+	in := string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) + "c" + string(rune(term.KeyEnter)) +
+		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
+	ctx.Stdin = strings.NewReader(in)
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
+		t.Fatal(err)
+	}
+	if !ctx.Active().HasTable() {
+		t.Fatal("expected USE c from Assist")
+	}
+}
+
+func TestASSISTPromptCancel(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "c.dbf"), []dbf.Field{
+		{Name: "N", Type: 'C', Length: 3},
+	}, nil)
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	ctx.Stderr = &bytes.Buffer{}
+	// Open Database file prompt then Esc cancel; leave Assist.
+	in := string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) + string(rune(term.KeyEsc)) +
+		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
+	ctx.Stdin = strings.NewReader(in)
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Active().HasTable() {
+		t.Fatal("cancelled USE should leave no table")
 	}
 }
 
