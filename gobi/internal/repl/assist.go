@@ -202,7 +202,7 @@ func (m *Mux) runAssistAction(ctx *context.Context, keys *term.Reader, action st
 	case "quit":
 		return true, ErrQuit, ""
 	default:
-		return false, nil, "action pending: "+action
+		return false, nil, "action pending: " + action
 	}
 }
 
