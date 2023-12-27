@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -194,15 +195,126 @@ func assistJumpItem(cat, from int, letter byte) int {
 }
 
 // runAssistAction runs a menu action. leave means exit Assist; qerr is QUIT.
-// Unwired actions return a short note (wired in later 037 tasks).
 func (m *Mux) runAssistAction(ctx *context.Context, keys *term.Reader, action string) (leave bool, qerr error, note string) {
 	switch action {
 	case "leave":
 		return true, nil, ""
 	case "quit":
 		return true, ErrQuit, ""
+	case "use":
+		name, ok, err := assistPrompt(ctx, keys, "Database file:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok {
+			return false, nil, "cancelled"
+		}
+		line := "USE"
+		if strings.TrimSpace(name) != "" {
+			line = "USE " + strings.TrimSpace(name)
+		}
+		return m.assistDispatch(ctx, line)
+	case "setindex":
+		name, ok, err := assistPrompt(ctx, keys, "Index file:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "SET INDEX TO "+strings.TrimSpace(name))
+	case "setdefault":
+		path, ok, err := assistPrompt(ctx, keys, "Default directory:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "SET DEFAULT TO "+strings.TrimSpace(path))
+	case "create":
+		name, ok, err := assistPrompt(ctx, keys, "New database:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(name) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "CREATE "+strings.TrimSpace(name))
+	case "createfrom":
+		name, ok, err := assistPrompt(ctx, keys, "New database:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(name) == "" {
+			return false, nil, "cancelled"
+		}
+		from, ok, err := assistPrompt(ctx, keys, "FROM file:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(from) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "CREATE "+strings.TrimSpace(name)+" FROM "+strings.TrimSpace(from))
 	default:
 		return false, nil, "action pending: " + action
+	}
+}
+
+func (m *Mux) assistDispatch(ctx *context.Context, line string) (leave bool, qerr error, note string) {
+	err := m.Dispatch(ctx, command.Split(line))
+	if errors.Is(err, ErrQuit) {
+		return true, err, ""
+	}
+	if err != nil {
+		note = strings.TrimPrefix(err.Error(), "*** ")
+		if len(note) > 70 {
+			note = note[:70]
+		}
+		return false, nil, note
+	}
+	return false, nil, "ok"
+}
+
+// assistPrompt edits one line on the Assist screen. ok is false when Esc cancels.
+func assistPrompt(ctx *context.Context, keys *term.Reader, label string) (text string, ok bool, err error) {
+	scr := ensureScreen(ctx)
+	var b strings.Builder
+	for {
+		scr.Clear()
+		scr.WriteString(2, 0, label, false)
+		line := b.String()
+		if len(line) > scr.Cols {
+			line = line[len(line)-scr.Cols:]
+		}
+		scr.WriteString(3, 0, line, ctx.Config.Intensity)
+		scr.WriteString(scr.Rows-2, 0, "Enter=accept  Esc=cancel", false)
+		scr.WriteString(scr.Rows-1, 0, assistStatusLine(ctx, scr.Cols), false)
+		if err := flushScreenClear(ctx); err != nil {
+			return "", false, err
+		}
+		k, err := keys.ReadKey()
+		if err != nil {
+			if err == io.EOF {
+				return b.String(), true, nil
+			}
+			return "", false, err
+		}
+		switch {
+		case k == term.KeyEsc || k == term.KeyCtrlQ:
+			return "", false, nil
+		case k == term.KeyEnter || k == '\n':
+			return b.String(), true, nil
+		case k == term.KeyBackspace:
+			s := b.String()
+			if len(s) > 0 {
+				b.Reset()
+				b.WriteString(s[:len(s)-1])
+			}
+		case k >= 32 && k < 127 && b.Len() < 80:
+			b.WriteByte(byte(k))
+		}
 	}
 }
 
