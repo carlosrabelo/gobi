@@ -4,16 +4,88 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
-// assistCategories is the top menu bar order (037).
-var assistCategories = []string{
-	"Set Up", "Create", "Update", "Position", "Retrieve",
-	"Organize", "Modify", "Tools", "Exit",
+type assistItem struct {
+	Label  string
+	Help   string
+	Action string // dispatch id; empty = leave Assist
+}
+
+type assistCat struct {
+	Name  string
+	Items []assistItem
+}
+
+// assistMenu is the Assist category bar and submenus (037). Refused designers omitted.
+var assistMenu = []assistCat{
+	{Name: "Set Up", Items: []assistItem{
+		{Label: "Database file", Help: "USE a table", Action: "use"},
+		{Label: "Index file", Help: "SET INDEX TO", Action: "setindex"},
+		{Label: "Default drive/directory", Help: "SET DEFAULT TO", Action: "setdefault"},
+	}},
+	{Name: "Create", Items: []assistItem{
+		{Label: "Database file", Help: "CREATE a table", Action: "create"},
+		{Label: "From file", Help: "CREATE FROM", Action: "createfrom"},
+	}},
+	{Name: "Update", Items: []assistItem{
+		{Label: "Append", Help: "APPEND", Action: "append"},
+		{Label: "Edit", Help: "EDIT", Action: "edit"},
+		{Label: "Browse", Help: "BROWSE", Action: "browse"},
+		{Label: "Replace", Help: "REPLACE", Action: "replace"},
+		{Label: "Delete", Help: "DELETE", Action: "delete"},
+		{Label: "Recall", Help: "RECALL", Action: "recall"},
+		{Label: "Pack", Help: "PACK", Action: "pack"},
+	}},
+	{Name: "Position", Items: []assistItem{
+		{Label: "Goto record", Help: "GOTO n", Action: "goto"},
+		{Label: "Skip", Help: "SKIP n", Action: "skip"},
+		{Label: "Locate", Help: "LOCATE FOR", Action: "locate"},
+		{Label: "Continue", Help: "CONTINUE", Action: "continue"},
+		{Label: "Seek", Help: "SEEK", Action: "seek"},
+		{Label: "Find", Help: "FIND", Action: "find"},
+		{Label: "Go top", Help: "GO TOP", Action: "gotop"},
+		{Label: "Go bottom", Help: "GO BOTTOM", Action: "gobottom"},
+	}},
+	{Name: "Retrieve", Items: []assistItem{
+		{Label: "List", Help: "LIST", Action: "list"},
+		{Label: "Display", Help: "DISPLAY", Action: "display"},
+		{Label: "Report", Help: "REPORT FORM", Action: "report"},
+		{Label: "Label", Help: "LABEL FORM", Action: "label"},
+		{Label: "Sum", Help: "SUM", Action: "sum"},
+		{Label: "Average", Help: "AVERAGE", Action: "average"},
+		{Label: "Count", Help: "COUNT", Action: "count"},
+	}},
+	{Name: "Organize", Items: []assistItem{
+		{Label: "Index", Help: "INDEX ON", Action: "index"},
+		{Label: "Sort", Help: "SORT", Action: "sort"},
+		{Label: "Copy", Help: "COPY TO", Action: "copy"},
+		{Label: "Copy structure", Help: "COPY STRUCTURE TO", Action: "copystruct"},
+		{Label: "Join", Help: "JOIN", Action: "join"},
+		{Label: "Total", Help: "TOTAL", Action: "total"},
+	}},
+	{Name: "Modify", Items: []assistItem{
+		{Label: "Structure", Help: "MODIFY STRUCTURE", Action: "modstruct"},
+		{Label: "Command file", Help: "MODIFY COMMAND", Action: "modcmd"},
+	}},
+	{Name: "Tools", Items: []assistItem{
+		{Label: "Dir", Help: "DIR", Action: "dir"},
+		{Label: "Display status", Help: "DISPLAY STATUS", Action: "status"},
+		{Label: "Display memory", Help: "DISPLAY MEMORY", Action: "memory"},
+		{Label: "Display structure", Help: "DISPLAY STRUCTURE", Action: "structure"},
+		{Label: "Help", Help: "HELP", Action: "help"},
+		{Label: "Run DOS / shell", Help: "RUN", Action: "run"},
+	}},
+	{Name: "Exit", Items: []assistItem{
+		{Label: "Exit to dot prompt", Help: "Leave ASSIST", Action: "leave"},
+		{Label: "Quit to DOS", Help: "QUIT", Action: "quit"},
+		{Label: "Cancel", Help: "Leave ASSIST", Action: "leave"},
+	}},
 }
 
 func (m *Mux) cmdASSIST(ctx *context.Context, cmd command.Command) error {
@@ -28,9 +100,12 @@ func (m *Mux) cmdASSIST(ctx *context.Context, cmd command.Command) error {
 	ctx.Keys = keys
 	cat := 0
 	barScroll := 0
+	inSub := false
+	item := 0
+	msg := "Esc=leave  Left/Right=menu  Down=open"
 
 	for {
-		drawAssistShell(ctx, scr, cat, barScroll, "")
+		drawAssistShell(ctx, scr, cat, barScroll, inSub, item, msg)
 		if err := flushScreenClear(ctx); err != nil {
 			return err
 		}
@@ -41,42 +116,135 @@ func (m *Mux) cmdASSIST(ctx *context.Context, cmd command.Command) error {
 			}
 			return fail(ctx, "%s", err.Error())
 		}
-		switch k {
-		case term.KeyEsc, term.KeyCtrlQ:
+		switch {
+		case k == term.KeyEsc || k == term.KeyCtrlQ:
+			if inSub {
+				inSub = false
+				msg = "Esc=leave  Left/Right=menu  Down=open"
+				continue
+			}
 			return nil
-		case term.KeyLeft:
+		case !inSub && k == term.KeyLeft:
 			if cat > 0 {
 				cat--
 			}
-			barScroll = assistBarScroll(scr.Cols, cat, barScroll)
-		case term.KeyRight:
-			if cat < len(assistCategories)-1 {
+			barScroll = assistEnsureCatVisible(scr.Cols, cat, barScroll)
+		case !inSub && k == term.KeyRight:
+			if cat < len(assistMenu)-1 {
 				cat++
 			}
-			barScroll = assistBarScroll(scr.Cols, cat, barScroll)
-		default:
-			// 037.1: shell only; other keys ignored until later tasks.
+			barScroll = assistEnsureCatVisible(scr.Cols, cat, barScroll)
+		case !inSub && (k == term.KeyDown || k == term.KeyEnter):
+			inSub = true
+			item = 0
+			msg = "Esc=back  Enter=run  Up/Down=item"
+		case inSub && k == term.KeyUp:
+			if item > 0 {
+				item--
+			}
+		case inSub && k == term.KeyDown:
+			if item < len(assistMenu[cat].Items)-1 {
+				item++
+			}
+		case inSub && k == term.KeyEnter:
+			it := assistMenu[cat].Items[item]
+			leave, qerr, note := m.runAssistAction(ctx, keys, it.Action)
+			if note != "" {
+				msg = note
+			}
+			if qerr != nil {
+				return qerr
+			}
+			if leave {
+				return nil
+			}
+		case k >= 'a' && k <= 'z' || k >= 'A' && k <= 'Z':
+			letter := byte(unicode.ToUpper(rune(k)))
+			if inSub {
+				item = assistJumpItem(cat, item, letter)
+			} else {
+				cat = assistJumpCat(cat, letter)
+				barScroll = assistEnsureCatVisible(scr.Cols, cat, barScroll)
+			}
 		}
 	}
 }
 
-func assistBarScroll(cols, cat, scroll int) int {
-	// Ensure category cat is visible: recompute scroll so labels fit.
-	_ = cols
-	if cat < scroll {
-		return cat
+func assistJumpCat(from int, letter byte) int {
+	n := len(assistMenu)
+	for i := 1; i <= n; i++ {
+		j := (from + i) % n
+		if assistMenu[j].Name != "" && byte(unicode.ToUpper(rune(assistMenu[j].Name[0]))) == letter {
+			return j
+		}
 	}
-	return scroll
+	return from
 }
 
-func drawAssistShell(ctx *context.Context, scr *term.Screen, cat, barScroll int, message string) {
+func assistJumpItem(cat, from int, letter byte) int {
+	items := assistMenu[cat].Items
+	n := len(items)
+	for i := 1; i <= n; i++ {
+		j := (from + i) % n
+		if items[j].Label != "" && byte(unicode.ToUpper(rune(items[j].Label[0]))) == letter {
+			return j
+		}
+	}
+	return from
+}
+
+// runAssistAction runs a menu action. leave means exit Assist; qerr is QUIT.
+// Unwired actions return a short note (wired in later 037 tasks).
+func (m *Mux) runAssistAction(ctx *context.Context, keys *term.Reader, action string) (leave bool, qerr error, note string) {
+	switch action {
+	case "leave":
+		return true, nil, ""
+	case "quit":
+		return true, ErrQuit, ""
+	default:
+		return false, nil, "action pending: "+action
+	}
+}
+
+func assistEnsureCatVisible(cols, cat, scroll int) int {
+	for {
+		if cat < scroll {
+			scroll = cat
+		}
+		col := 0
+		visibleEnd := scroll
+		for i := scroll; i < len(assistMenu); i++ {
+			need := len(assistMenu[i].Name)
+			if i > scroll {
+				need += 2
+			}
+			if col+need > cols {
+				break
+			}
+			col += need
+			visibleEnd = i
+		}
+		if cat <= visibleEnd {
+			return scroll
+		}
+		scroll++
+		if scroll > cat {
+			return cat
+		}
+	}
+}
+
+func drawAssistShell(ctx *context.Context, scr *term.Screen, cat, barScroll int, inSub bool, item int, message string) {
 	scr.Clear()
 	rev := ctx.Config.Intensity
 	drawAssistBar(scr, cat, barScroll, rev)
+	if inSub {
+		drawAssistSubmenu(scr, cat, item, rev)
+	}
 	msgRow := scr.Rows - 2
 	statRow := scr.Rows - 1
 	if message == "" {
-		message = "Esc=leave  Left/Right=menu"
+		message = "Esc=leave"
 	}
 	if len(message) > scr.Cols {
 		message = message[:scr.Cols]
@@ -87,11 +255,11 @@ func drawAssistShell(ctx *context.Context, scr *term.Screen, cat, barScroll int,
 
 func drawAssistBar(scr *term.Screen, cat, scroll int, reverseActive bool) {
 	col := 0
-	for i := scroll; i < len(assistCategories); i++ {
-		label := assistCategories[i]
+	for i := scroll; i < len(assistMenu); i++ {
+		label := assistMenu[i].Name
 		need := len(label)
 		if i > scroll {
-			need += 2 // gap
+			need += 2
 		}
 		if col+need > scr.Cols {
 			break
@@ -102,6 +270,36 @@ func drawAssistBar(scr *term.Screen, cat, scroll int, reverseActive bool) {
 		}
 		scr.WriteString(0, col, label, reverseActive && i == cat)
 		col += len(label)
+	}
+}
+
+func drawAssistSubmenu(scr *term.Screen, cat, item int, reverseActive bool) {
+	items := assistMenu[cat].Items
+	maxRows := scr.Rows - 3
+	if maxRows < 1 {
+		return
+	}
+	start := 0
+	if item >= maxRows {
+		start = item - maxRows + 1
+	}
+	for i := start; i < len(items) && i-start < maxRows; i++ {
+		row := 1 + (i - start)
+		label := "  " + items[i].Label
+		if len(label) > scr.Cols {
+			label = label[:scr.Cols]
+		}
+		scr.WriteString(row, 0, label, reverseActive && i == item)
+	}
+	if item >= 0 && item < len(items) && items[item].Help != "" {
+		helpRow := scr.Rows - 3
+		if helpRow > 1 {
+			h := items[item].Help
+			if len(h) > scr.Cols {
+				h = h[:scr.Cols]
+			}
+			scr.WriteString(helpRow, 0, h, false)
+		}
 	}
 }
 
@@ -120,4 +318,14 @@ func assistStatusLine(ctx *context.Context, cols int) string {
 		return line[:cols]
 	}
 	return line
+}
+
+// assistCreateHasReport reports whether Create offers Report (must be false).
+func assistCreateHasReport() bool {
+	for _, it := range assistMenu[1].Items {
+		if strings.EqualFold(it.Label, "Report") || strings.Contains(strings.ToLower(it.Label), "report") {
+			return true
+		}
+	}
+	return false
 }

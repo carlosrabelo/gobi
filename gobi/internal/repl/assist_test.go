@@ -62,6 +62,27 @@ func TestASSISTShellEscLeaves(t *testing.T) {
 	}
 }
 
+func TestASSISTNavigationSubmenu(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	ctx.Stdout = &bytes.Buffer{}
+	ctx.Stderr = &bytes.Buffer{}
+	// Right to Create, Down open, letter D jumps? Create items Database/From.
+	// Down opens Set Up submenu, Esc back, Esc leave.
+	ctx.Stdin = strings.NewReader(
+		string(rune(term.KeyRight)) + // Create
+			string(rune(term.KeyDown)) + // open
+			string(rune(term.KeyEsc)) + // back
+			string(rune(term.KeyEsc)), // leave
+	)
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
+		t.Fatal(err)
+	}
+	if assistCreateHasReport() {
+		t.Fatal("Create submenu must not offer Report")
+	}
+}
+
 func TestASSISTRejectsArgs(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	ctx.Stdout = &bytes.Buffer{}
