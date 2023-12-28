@@ -333,6 +333,130 @@ func (m *Mux) runAssistAction(ctx *context.Context, keys *term.Reader, action st
 		return m.assistDispatch(ctx, "GO TOP")
 	case "gobottom":
 		return m.assistDispatch(ctx, "GO BOTTOM")
+	case "list":
+		return m.assistDispatch(ctx, "LIST")
+	case "display":
+		return m.assistDispatch(ctx, "DISPLAY")
+	case "report":
+		name, ok, err := assistPrompt(ctx, keys, "REPORT FORM name:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(name) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "REPORT FORM "+strings.TrimSpace(name))
+	case "label":
+		name, ok, err := assistPrompt(ctx, keys, "LABEL FORM name:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(name) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "LABEL FORM "+strings.TrimSpace(name))
+	case "sum":
+		body, ok, err := assistPrompt(ctx, keys, "SUM expr [FOR …]:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(body) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "SUM "+strings.TrimSpace(body))
+	case "average":
+		body, ok, err := assistPrompt(ctx, keys, "AVERAGE expr [FOR …]:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(body) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "AVERAGE "+strings.TrimSpace(body))
+	case "count":
+		body, ok, err := assistPrompt(ctx, keys, "COUNT [FOR …] (empty=all):")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok {
+			return false, nil, "cancelled"
+		}
+		body = strings.TrimSpace(body)
+		if body == "" {
+			return m.assistDispatch(ctx, "COUNT")
+		}
+		if strings.HasPrefix(strings.ToUpper(body), "FOR ") {
+			return m.assistDispatch(ctx, "COUNT "+body)
+		}
+		return m.assistDispatch(ctx, "COUNT FOR "+body)
+	case "index":
+		expr, ok, err := assistPrompt(ctx, keys, "INDEX ON expression:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(expr) == "" {
+			return false, nil, "cancelled"
+		}
+		to, ok, err := assistPrompt(ctx, keys, "TO index name:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(to) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "INDEX ON "+strings.TrimSpace(expr)+" TO "+strings.TrimSpace(to))
+	case "sort":
+		fields, ok, err := assistPrompt(ctx, keys, "SORT ON fields:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(fields) == "" {
+			return false, nil, "cancelled"
+		}
+		to, ok, err := assistPrompt(ctx, keys, "TO file:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(to) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "SORT TO "+strings.TrimSpace(to)+" ON "+strings.TrimSpace(fields))
+	case "copy":
+		to, ok, err := assistPrompt(ctx, keys, "COPY TO file:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(to) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "COPY TO "+strings.TrimSpace(to))
+	case "copystruct":
+		to, ok, err := assistPrompt(ctx, keys, "COPY STRUCTURE TO file:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(to) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "COPY STRUCTURE TO "+strings.TrimSpace(to))
+	case "join":
+		body, ok, err := assistPrompt(ctx, keys, "JOIN WITH … TO … FOR …:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(body) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "JOIN "+strings.TrimSpace(body))
+	case "total":
+		body, ok, err := assistPrompt(ctx, keys, "TOTAL ON … TO …:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(body) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "TOTAL "+strings.TrimSpace(body))
 	default:
 		return false, nil, "action pending: " + action
 	}

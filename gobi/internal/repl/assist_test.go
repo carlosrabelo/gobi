@@ -106,6 +106,30 @@ func TestASSISTUseFromSetUp(t *testing.T) {
 	}
 }
 
+func TestASSISTListFromRetrieve(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "c.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 8},
+	}, []dbf.Record{{Values: []dbf.Value{{Str: "Ada     "}}}})
+	ctx := testCtx(t, dir)
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	ctx.Stderr = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE c"))
+	// Retrieve is index 4: Right×4, Down, Enter List, Esc Esc
+	in := strings.Repeat(string(rune(term.KeyRight)), 4) +
+		string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) +
+		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
+	ctx.Stdin = strings.NewReader(in)
+	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Ada") {
+		t.Fatalf("LIST output missing Ada: %q", out.String())
+	}
+}
+
 func TestASSISTGotoFromPosition(t *testing.T) {
 	dir := t.TempDir()
 	mustCreateDBF(t, filepath.Join(dir, "c.dbf"), []dbf.Field{
