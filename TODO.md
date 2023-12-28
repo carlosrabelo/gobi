@@ -121,7 +121,7 @@ References: [docs/dbf_spec.md](file:///home/carlos/Sources/gobi/docs/dbf_spec.md
 References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md)
 
 - [x] NDX page 0 header structure serialization
-- [ ] B-Tree in-memory representations for nodes and entries
+- [x] B-Tree in-memory representations for nodes and entries
 - [ ] Disk page manager allocating 512-byte blocks
 - [ ] Internal node split on page overflow
 - [ ] Leaf node entry insertion and record mapping
