@@ -106,6 +106,32 @@ func TestASSISTUseFromSetUp(t *testing.T) {
 	}
 }
 
+func TestASSISTGotoFromPosition(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "c.dbf"), []dbf.Field{
+		{Name: "N", Type: 'C', Length: 3},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "A  "}}},
+		{Values: []dbf.Value{{Str: "B  "}}},
+	})
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	ctx.Stderr = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE c"))
+	// Position is index 3: Right×3, Down, Down (Skip is 2nd? Goto is first), Enter, "2", Enter, Esc Esc
+	in := strings.Repeat(string(rune(term.KeyRight)), 3) +
+		string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) + "2" + string(rune(term.KeyEnter)) +
+		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
+	ctx.Stdin = strings.NewReader(in)
+	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Active().Cursor != 2 {
+		t.Fatalf("cursor %d want 2", ctx.Active().Cursor)
+	}
+}
+
 func TestASSISTPromptCancel(t *testing.T) {
 	dir := t.TempDir()
 	mustCreateDBF(t, filepath.Join(dir, "c.dbf"), []dbf.Field{

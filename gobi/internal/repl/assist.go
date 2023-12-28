@@ -257,6 +257,82 @@ func (m *Mux) runAssistAction(ctx *context.Context, keys *term.Reader, action st
 			return false, nil, "cancelled"
 		}
 		return m.assistDispatch(ctx, "CREATE "+strings.TrimSpace(name)+" FROM "+strings.TrimSpace(from))
+	case "append":
+		return m.assistDispatch(ctx, "APPEND")
+	case "edit":
+		return m.assistDispatch(ctx, "EDIT")
+	case "browse":
+		return m.assistDispatch(ctx, "BROWSE")
+	case "replace":
+		body, ok, err := assistPrompt(ctx, keys, "REPLACE (field WITH expr [FOR …]):")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(body) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "REPLACE "+strings.TrimSpace(body))
+	case "delete":
+		return m.assistDispatch(ctx, "DELETE")
+	case "recall":
+		return m.assistDispatch(ctx, "RECALL")
+	case "pack":
+		return m.assistDispatch(ctx, "PACK")
+	case "goto":
+		n, ok, err := assistPrompt(ctx, keys, "Record number:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(n) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "GOTO "+strings.TrimSpace(n))
+	case "skip":
+		n, ok, err := assistPrompt(ctx, keys, "Skip records (default 1):")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok {
+			return false, nil, "cancelled"
+		}
+		n = strings.TrimSpace(n)
+		if n == "" {
+			n = "1"
+		}
+		return m.assistDispatch(ctx, "SKIP "+n)
+	case "locate":
+		expr, ok, err := assistPrompt(ctx, keys, "LOCATE FOR:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(expr) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "LOCATE FOR "+strings.TrimSpace(expr))
+	case "continue":
+		return m.assistDispatch(ctx, "CONTINUE")
+	case "seek":
+		expr, ok, err := assistPrompt(ctx, keys, "SEEK expression:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(expr) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "SEEK "+strings.TrimSpace(expr))
+	case "find":
+		text, ok, err := assistPrompt(ctx, keys, "FIND string:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(text) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "FIND "+strings.TrimSpace(text))
+	case "gotop":
+		return m.assistDispatch(ctx, "GO TOP")
+	case "gobottom":
+		return m.assistDispatch(ctx, "GO BOTTOM")
 	default:
 		return false, nil, "action pending: " + action
 	}
