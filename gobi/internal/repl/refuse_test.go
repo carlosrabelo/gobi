@@ -31,8 +31,8 @@ func TestRefusePrinterColorAndHelp(t *testing.T) {
 	if err := mux.Dispatch(ctx, command.Split("HELP ASSIST")); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "not available") {
-		t.Fatalf("HELP ASSIST: %q", out.String())
+	if strings.Contains(out.String(), "not available") || !strings.Contains(out.String(), "ASSIST") {
+		t.Fatalf("HELP ASSIST should describe the menu: %q", out.String())
 	}
 	for _, topic := range refusedHelpTopics() {
 		text, ok := help.Text(topic)

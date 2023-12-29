@@ -30,7 +30,6 @@ func registerRefused(m *Mux) {
 
 func refusedHelpTopics() []string {
 	return []string{
-		"ASSIST",
 		"CREATE LABEL", "MODIFY LABEL",
 		"CREATE REPORT", "MODIFY REPORT",
 		"CREATE QUERY", "MODIFY QUERY",
