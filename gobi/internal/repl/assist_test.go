@@ -210,3 +210,25 @@ func TestASSISTRejectsArgs(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+func TestASSISTHelpAndExitQuit(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	ctx.Stderr = &bytes.Buffer{}
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("HELP ASSIST")); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "not available") {
+		t.Fatalf("HELP still refuses: %q", out.String())
+	}
+	// Exit category: Right×8, Down, Down (Quit to DOS is 2nd item), Enter
+	in := strings.Repeat(string(rune(term.KeyRight)), 8) +
+		string(rune(term.KeyDown)) + string(rune(term.KeyDown)) + string(rune(term.KeyEnter))
+	ctx.Stdin = strings.NewReader(in)
+	err := mux.Dispatch(ctx, command.Split("ASSIST"))
+	if err != ErrQuit {
+		t.Fatalf("want ErrQuit got %v", err)
+	}
+}

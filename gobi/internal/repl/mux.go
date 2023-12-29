@@ -153,6 +153,7 @@ func NewMux() *Mux {
 	m.Register("ASSIST", func(ctx *context.Context, cmd command.Command) error {
 		return m.cmdASSIST(ctx, cmd)
 	})
+	help.Register("ASSIST", "ASSIST — full-screen menu of session commands; Esc leaves.")
 	return m
 }
 
