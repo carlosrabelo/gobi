@@ -457,6 +457,47 @@ func (m *Mux) runAssistAction(ctx *context.Context, keys *term.Reader, action st
 			return false, nil, "cancelled"
 		}
 		return m.assistDispatch(ctx, "TOTAL "+strings.TrimSpace(body))
+	case "modstruct":
+		return m.assistDispatch(ctx, "MODIFY STRUCTURE")
+	case "modcmd":
+		name, ok, err := assistPrompt(ctx, keys, "MODIFY COMMAND file:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(name) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "MODIFY COMMAND "+strings.TrimSpace(name))
+	case "dir":
+		return m.assistDispatch(ctx, "DIR")
+	case "status":
+		return m.assistDispatch(ctx, "DISPLAY STATUS")
+	case "memory":
+		return m.assistDispatch(ctx, "DISPLAY MEMORY")
+	case "structure":
+		return m.assistDispatch(ctx, "DISPLAY STRUCTURE")
+	case "help":
+		topic, ok, err := assistPrompt(ctx, keys, "HELP topic (empty=list):")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok {
+			return false, nil, "cancelled"
+		}
+		topic = strings.TrimSpace(topic)
+		if topic == "" {
+			return m.assistDispatch(ctx, "HELP")
+		}
+		return m.assistDispatch(ctx, "HELP "+topic)
+	case "run":
+		text, ok, err := assistPrompt(ctx, keys, "RUN command:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(text) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "RUN "+strings.TrimSpace(text))
 	default:
 		return false, nil, "action pending: " + action
 	}

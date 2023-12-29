@@ -106,6 +106,29 @@ func TestASSISTUseFromSetUp(t *testing.T) {
 	}
 }
 
+func TestASSISTDirFromTools(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "c.dbf"), []dbf.Field{
+		{Name: "N", Type: 'C', Length: 1},
+	}, nil)
+	ctx := testCtx(t, dir)
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	ctx.Stderr = &bytes.Buffer{}
+	mux := NewMux()
+	// Tools is index 7: Right×7, Down, Enter Dir, Esc Esc
+	in := strings.Repeat(string(rune(term.KeyRight)), 7) +
+		string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) +
+		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
+	ctx.Stdin = strings.NewReader(in)
+	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "c.dbf") {
+		t.Fatalf("DIR missing c.dbf: %q", out.String())
+	}
+}
+
 func TestASSISTListFromRetrieve(t *testing.T) {
 	dir := t.TempDir()
 	mustCreateDBF(t, filepath.Join(dir, "c.dbf"), []dbf.Field{
