@@ -98,3 +98,24 @@ func TestRunQuitClean(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestReadDotLineHistoryArrows(t *testing.T) {
+	ctx := context.New()
+	var out, errBuf bytes.Buffer
+	ctx.Stdout = &out
+	ctx.Stderr = &errBuf
+	hist := NewHistory(t.TempDir())
+	hist.Add("HELP")
+	// CSI Up recalls HELP; Enter dispatches it.
+	ctx.Stdin = strings.NewReader("\x1b[A\rQUIT\n")
+
+	if err := RunWithHistory(ctx, NewMux(), hist); err != nil {
+		t.Fatal(err)
+	}
+	if errBuf.Len() != 0 {
+		t.Fatalf("stderr: %q", errBuf.String())
+	}
+	if !strings.Contains(out.String(), "USE") {
+		t.Fatalf("up-arrow did not recall HELP: %q", out.String())
+	}
+}

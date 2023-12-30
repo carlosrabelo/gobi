@@ -1,7 +1,10 @@
 package term
 
 import (
+	"errors"
 	"io"
+	"os"
+	"time"
 )
 
 // Key codes matching the constitution / INKEY values.
@@ -25,15 +28,24 @@ const (
 	KeyF12       = 326
 )
 
+// How long to wait for the next byte after ESC before treating it as bare Esc.
+// Modern terminals send CSI / SS3 immediately; a lone Esc pauses briefly.
+const escInterByte = 50 * time.Millisecond
+
 // Reader reads keys from a byte stream (tests inject bytes; terminals use raw mode).
 type Reader struct {
-	r   io.Reader
-	buf []byte
+	r    io.Reader
+	buf  []byte
+	file *os.File // optional; enables Esc inter-byte deadline
 }
 
 // NewReader wraps r.
 func NewReader(r io.Reader) *Reader {
-	return &Reader{r: r}
+	kr := &Reader{r: r}
+	if f, ok := r.(*os.File); ok {
+		kr.file = f
+	}
+	return kr
 }
 
 // ReadKey returns the next logical key as an INKEY-style number.
@@ -48,8 +60,10 @@ func (kr *Reader) ReadKey() (int, error) {
 			// Unix cooked Enter is LF; treat as KeyEnter (CR).
 			return KeyEnter, nil
 		case KeyEnter: // '\r'
-			// CRLF: consume the following LF so it is not a second Enter.
-			if next, err := kr.readByte(); err == nil && next != '\n' {
+			// CRLF: consume a following LF only if already available. Never
+			// block — raw Enter is a lone CR, and a blocking peek would steal
+			// the next keystroke (or lose it when the Reader is replaced).
+			if next, ok := kr.tryNonblockByte(); ok && next != '\n' {
 				kr.unread(next)
 			}
 			return KeyEnter, nil
@@ -60,20 +74,31 @@ func (kr *Reader) ReadKey() (int, error) {
 			return int(b), nil
 		}
 	}
-	b2, err := kr.readByte()
+	b2, err := kr.readByteDeadline(escInterByte)
 	if err != nil {
 		return KeyEsc, nil
 	}
 	if b2 == 'O' {
-		// ESC O P–S = F1–F4
+		// SS3: ESC O A–D = arrows (application cursor keys);
+		// ESC O P–S = F1–F4.
 		b3, err := kr.readByte()
 		if err != nil {
 			return KeyEsc, nil
 		}
-		if b3 >= 'P' && b3 <= 'S' {
+		switch b3 {
+		case 'A':
+			return KeyUp, nil
+		case 'B':
+			return KeyDown, nil
+		case 'C':
+			return KeyRight, nil
+		case 'D':
+			return KeyLeft, nil
+		case 'P', 'Q', 'R', 'S':
 			return KeyF1 + int(b3-'P'), nil
+		default:
+			return KeyEsc, nil
 		}
-		return KeyEsc, nil
 	}
 	if b2 != '[' {
 		kr.unread(b2)
@@ -93,7 +118,7 @@ func (kr *Reader) ReadKey() (int, error) {
 	case 'D':
 		return KeyLeft, nil
 	default:
-		// ESC [ 1 1 ~ … ESC [ 2 4 ~ = F1–F12
+		// ESC [ n ~ = F-keys; ESC [ 1 ; mod A–D = modified arrows.
 		if b3 >= '0' && b3 <= '9' {
 			num := int(b3 - '0')
 			for {
@@ -105,12 +130,37 @@ func (kr *Reader) ReadKey() (int, error) {
 					num = num*10 + int(bn-'0')
 					continue
 				}
-				if bn == '~' {
+				if bn == ';' {
+					// Skip modifier parameters until a final byte.
+					for {
+						bm, err := kr.readByte()
+						if err != nil {
+							return KeyEsc, nil
+						}
+						if (bm >= '0' && bm <= '9') || bm == ';' {
+							continue
+						}
+						bn = bm
+						break
+					}
+				}
+				switch bn {
+				case '~':
 					if n, ok := fkeyFromCSI(num); ok {
 						return n, nil
 					}
+					return KeyEsc, nil
+				case 'A':
+					return KeyUp, nil
+				case 'B':
+					return KeyDown, nil
+				case 'C':
+					return KeyRight, nil
+				case 'D':
+					return KeyLeft, nil
+				default:
+					return KeyEsc, nil
 				}
-				return KeyEsc, nil
 			}
 		}
 		return KeyEsc, nil
@@ -166,6 +216,44 @@ func (kr *Reader) readByte() (byte, error) {
 	var one [1]byte
 	_, err := kr.r.Read(one[:])
 	return one[0], err
+}
+
+// tryNonblockByte returns the next byte only if it will not block.
+func (kr *Reader) tryNonblockByte() (byte, bool) {
+	if len(kr.buf) > 0 {
+		b := kr.buf[0]
+		kr.buf = kr.buf[1:]
+		return b, true
+	}
+	if s, ok := kr.r.(interface{ Len() int }); ok {
+		if s.Len() == 0 {
+			return 0, false
+		}
+		b, err := kr.readByte()
+		return b, err == nil
+	}
+	return 0, false
+}
+
+// readByteDeadline reads one byte, optionally timing out on a terminal file.
+func (kr *Reader) readByteDeadline(d time.Duration) (byte, error) {
+	if len(kr.buf) > 0 {
+		return kr.readByte()
+	}
+	if kr.file != nil && d > 0 {
+		_ = kr.file.SetReadDeadline(time.Now().Add(d))
+		defer func() { _ = kr.file.SetReadDeadline(time.Time{}) }()
+	}
+	b, err := kr.readByte()
+	if err != nil && isTimeout(err) {
+		return 0, err
+	}
+	return b, err
+}
+
+func isTimeout(err error) bool {
+	var to interface{ Timeout() bool }
+	return errors.As(err, &to) && to.Timeout()
 }
 
 func (kr *Reader) unread(b byte) {
