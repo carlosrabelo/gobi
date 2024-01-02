@@ -33,6 +33,17 @@ func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 		return err
 	}
 	defer restore()
+	// MakeRaw clears OPOST/ONLCR: bare '\n' must become CRLF or the next
+	// prompt stays mid-line (". use customers" then spaces then ". ").
+	if term.IsTerminal(ctx.Stdin) {
+		out, errOut := ctx.Stdout, ctx.Stderr
+		ctx.Stdout = &term.CRLFWriter{W: out}
+		ctx.Stderr = &term.CRLFWriter{W: errOut}
+		defer func() {
+			ctx.Stdout = out
+			ctx.Stderr = errOut
+		}()
+	}
 
 	mux.hist = hist
 	if hist != nil {
