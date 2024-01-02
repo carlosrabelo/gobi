@@ -205,6 +205,46 @@ func TestASSISTHelpAndExitQuit(t *testing.T) {
 	}
 }
 
+func TestASSISTModifyStructureTakesScreen(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "c.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 4},
+		{Name: "AGE", Type: 'N', Length: 3, Decimals: 0},
+	}, []dbf.Record{{Values: []dbf.Value{{Str: "ANN"}, {Num: 10}}}})
+	ctx := testCtx(t, dir)
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	ctx.Stderr = &bytes.Buffer{}
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE c"))
+	// Modify is index 6: Right×6, Down, Enter Structure; keep NAME only; Esc leave Assist.
+	in := strings.Repeat(string(rune(term.KeyRight)), 6) +
+		string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) +
+		"NAME\nC\n4\n0\n\n" +
+		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
+	ctx.Stdin = strings.NewReader(in)
+	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	idxClear := strings.Index(got, "\x1b[2J\x1b[H")
+	idxStruct := strings.Index(got, "Current structure:")
+	if idxClear < 0 || idxStruct < 0 || idxClear > idxStruct {
+		t.Fatalf("MODIFY STRUCTURE must clear before listing fields: clear=%d struct=%d out=%q", idxClear, idxStruct, got)
+	}
+	// Prompt lines must not be glued on one visual row after the status chrome.
+	if strings.Contains(got, "Rec:") && strings.Contains(got[strings.Index(got, "Rec:"):], "Current structure:") {
+		fragment := got[strings.Index(got, "Rec:"):]
+		if i := strings.Index(fragment, "Current structure:"); i > 0 && i < 40 {
+			t.Fatalf("structure listing glued to Assist status: %q", fragment[:min(80, len(fragment))])
+		}
+	}
+	a := ctx.Active()
+	if len(a.Table.Header.Fields) != 1 || a.Table.Header.Fields[0].Name != "NAME" {
+		t.Fatalf("fields %+v", a.Table.Header.Fields)
+	}
+}
+
 func TestASSISTLeaveClearsTerminal(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	var out bytes.Buffer
