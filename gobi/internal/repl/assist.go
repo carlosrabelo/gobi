@@ -509,6 +509,11 @@ func (m *Mux) runAssistAction(ctx *context.Context, keys *term.Reader, action st
 }
 
 func (m *Mux) assistDispatch(ctx *context.Context, line string) (leave bool, qerr error, note string) {
+	// Line-mode and nested full-screen commands must not paint over Assist chrome.
+	// Spec 037: they take over the screen; Assist redraws when they return.
+	if scr := ctx.Screen; scr != nil {
+		_ = scr.ClearTerminal(ctx.Out())
+	}
 	err := m.Dispatch(ctx, command.Split(line))
 	if errors.Is(err, ErrQuit) {
 		return true, err, ""
