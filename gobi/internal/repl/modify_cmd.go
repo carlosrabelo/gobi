@@ -61,6 +61,7 @@ func modifyCommand(ctx *context.Context, name string) error {
 		}
 	}
 	scr := ensureScreen(ctx)
+	defer func() { _ = scr.ClearTerminal(ctx.Out()) }()
 	keys := term.NewReader(ctx.Stdin)
 	cur := 0
 	if len(lines) == 0 {

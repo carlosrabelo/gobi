@@ -8,6 +8,7 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
+	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
 func cmdACCEPT(ctx *context.Context, cmd command.Command) error {
@@ -19,11 +20,10 @@ func cmdACCEPT(ctx *context.Context, cmd command.Command) error {
 	if prompt != "" {
 		fmt.Fprint(ctx.Out(), prompt)
 	}
-	line, err := ctx.StdinReader().ReadString('\n')
+	line, err := readInteractiveLine(ctx)
 	if err != nil && err != io.EOF {
 		return fail(ctx, "%s", err.Error())
 	}
-	line = strings.TrimRight(line, "\r\n")
 	if err := ctx.Symbols.Set(name, expr.StringVal(line)); err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
@@ -39,11 +39,10 @@ func cmdINPUT(ctx *context.Context, cmd command.Command) error {
 	if prompt != "" {
 		fmt.Fprint(ctx.Out(), prompt)
 	}
-	line, err := ctx.StdinReader().ReadString('\n')
+	line, err := readInteractiveLine(ctx)
 	if err != nil && err != io.EOF {
 		return fail(ctx, "%s", err.Error())
 	}
-	line = strings.TrimRight(line, "\r\n")
 	tree, errs := expr.Parse(line)
 	if len(errs) > 0 || tree == nil {
 		msg := "invalid expression"
@@ -71,15 +70,16 @@ func cmdWAIT(ctx *context.Context, cmd command.Command) error {
 		prompt = strings.Trim(args, `"'`)
 	}
 	fmt.Fprint(ctx.Out(), prompt)
-	b, err := ctx.StdinReader().ReadByte()
+	k, err := readInteractiveKey(ctx)
 	if err != nil && err != io.EOF {
 		return fail(ctx, "%s", err.Error())
 	}
-	k := int(b)
 	if to != "" {
-		ch := string(b)
-		if k == 13 || b == '\n' {
+		ch := ""
+		if k == term.KeyEnter {
 			ch = "\r"
+		} else if k > 0 && k < 127 {
+			ch = string(byte(k))
 		}
 		if err := ctx.Symbols.Set(strings.Fields(to)[0], expr.StringVal(ch)); err != nil {
 			return fail(ctx, "%s", err.Error())

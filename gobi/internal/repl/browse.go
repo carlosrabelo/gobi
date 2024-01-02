@@ -38,6 +38,7 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 	}
 
 	scr := ensureScreen(ctx)
+	defer func() { _ = scr.ClearTerminal(ctx.Out()) }()
 	keys := term.NewReader(ctx.Stdin)
 	rec := a.Cursor
 	if rec < 1 {

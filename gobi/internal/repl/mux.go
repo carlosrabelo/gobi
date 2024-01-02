@@ -33,6 +33,11 @@ func NewMux() *Mux {
 	m.Register("QUIT", func(*context.Context, command.Command) error {
 		return ErrQuit
 	})
+	// Interactive EXIT matches common shell habit; DO WHILE EXIT is handled
+	// in the program walker and never reaches this handler.
+	m.Register("EXIT", func(*context.Context, command.Command) error {
+		return ErrQuit
+	})
 	m.Register("*", func(*context.Context, command.Command) error { return nil })
 	m.Register("NOTE", func(*context.Context, command.Command) error { return nil })
 	m.Register("USE", cmdUSE)
@@ -223,7 +228,7 @@ func (m *Mux) shouldAskHelp(ctx *context.Context) bool {
 
 func askHelp(ctx *context.Context, verb string) {
 	fmt.Fprint(ctx.Out(), "Do you want some help? (Y/N) ")
-	line, err := ctx.StdinReader().ReadString('\n')
+	line, err := readInteractiveLine(ctx)
 	if err != nil {
 		return
 	}

@@ -97,6 +97,7 @@ func editForm(ctx *context.Context, appendMode bool) error {
 	a := ctx.Active()
 	fields := a.Table.Header.Fields
 	scr := ensureScreen(ctx)
+	defer func() { _ = scr.ClearTerminal(ctx.Out()) }()
 	keys := term.NewReader(ctx.Stdin)
 
 	for {

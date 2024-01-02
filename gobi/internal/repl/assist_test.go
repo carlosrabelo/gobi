@@ -27,40 +27,12 @@ func TestASSISTShellEscLeaves(t *testing.T) {
 	if ctx.Screen == nil {
 		t.Fatal("expected screen")
 	}
-	// Menu bar starts with Set Up (possibly reverse).
-	row0 := ""
-	for c := 0; c < 10 && c < ctx.Screen.Cols; c++ {
-		ch := ctx.Screen.CellAt(0, c).Ch
-		if ch != 0 && ch != ' ' {
-			row0 += string(ch)
-		}
+	// Leave blanks the cell buffer and homes the terminal for the dot prompt.
+	if ctx.Screen.CellAt(0, 0).Ch != ' ' {
+		t.Fatalf("bar not cleared: %q", ctx.Screen.CellAt(0, 0).Ch)
 	}
-	if !strings.HasPrefix(row0, "Set") && !strings.Contains(row0, "S") {
-		// After leave, last frame still has the bar in pending cells.
-		got := ctx.Screen.CellAt(0, 0).Ch
-		if got != 'S' {
-			t.Fatalf("menu bar cell0=%q row=%q", got, row0)
-		}
-	}
-	msg := ""
-	for c := 0; c < ctx.Screen.Cols; c++ {
-		ch := ctx.Screen.CellAt(ctx.Screen.Rows-2, c).Ch
-		if ch != ' ' && ch != 0 {
-			msg += string(ch)
-		}
-	}
-	if !strings.Contains(msg, "Esc") {
-		t.Fatalf("message line %q", msg)
-	}
-	stat := ""
-	for c := 0; c < ctx.Screen.Cols; c++ {
-		ch := ctx.Screen.CellAt(ctx.Screen.Rows-1, c).Ch
-		if ch != ' ' && ch != 0 {
-			stat += string(ch)
-		}
-	}
-	if !strings.Contains(stat, "Rec:") {
-		t.Fatalf("status %q", stat)
+	if !strings.Contains(out.String(), "\x1b[2J\x1b[H") {
+		t.Fatalf("terminal not cleared: %q", out.String())
 	}
 }
 
@@ -229,6 +201,30 @@ func TestASSISTHelpAndExitQuit(t *testing.T) {
 	ctx.Stdin = strings.NewReader(in)
 	err := mux.Dispatch(ctx, command.Split("ASSIST"))
 	if err != ErrQuit {
+		t.Fatalf("want ErrQuit got %v", err)
+	}
+}
+
+func TestASSISTLeaveClearsTerminal(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	ctx.Stderr = &bytes.Buffer{}
+	ctx.Stdin = strings.NewReader(string(rune(term.KeyEsc)))
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "\x1b[2J\x1b[H") {
+		t.Fatalf("leave did not clear terminal: %q", out.String())
+	}
+}
+
+func TestEXITQuitsSession(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	ctx.Stdout = &bytes.Buffer{}
+	ctx.Stderr = &bytes.Buffer{}
+	if err := NewMux().Dispatch(ctx, command.Split("EXIT")); err != ErrQuit {
 		t.Fatalf("want ErrQuit got %v", err)
 	}
 }

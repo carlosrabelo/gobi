@@ -5,6 +5,7 @@ import "strings"
 var texts = map[string]string{
 	"USE":     "USE [file] [ALIAS name] — open a table in the active work area.",
 	"QUIT":    "QUIT — close tables and leave the session.",
+	"EXIT":    "EXIT — leave the session (same as QUIT); inside DO WHILE, ends the loop.",
 	"HELP":    "HELP [verb] — list verbs or show one verb's help.",
 	"SET":     "SET option ON|OFF or SET DEFAULT TO path.",
 	"DIR":     "DIR — list .dbf files in the default directory.",
