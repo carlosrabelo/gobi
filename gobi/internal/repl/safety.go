@@ -3,7 +3,6 @@ package repl
 import (
 	"fmt"
 	"io"
-	"strings"
 	"unicode"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
@@ -13,11 +12,10 @@ import (
 // Any other line, including EOF, cancels with a *** line.
 func confirmSafety(ctx *context.Context, question string) (bool, error) {
 	fmt.Fprintln(ctx.Out(), question)
-	line, err := ctx.StdinReader().ReadString('\n')
+	line, err := readInteractiveLine(ctx)
 	if err != nil && err != io.EOF {
 		return false, err
 	}
-	line = strings.TrimRight(line, "\r\n")
 	for _, r := range line {
 		if unicode.IsSpace(r) {
 			continue
@@ -32,9 +30,9 @@ func confirmSafety(ctx *context.Context, question string) (bool, error) {
 
 func readPromptLine(ctx *context.Context, prompt string) (string, error) {
 	fmt.Fprint(ctx.Out(), prompt)
-	line, err := ctx.StdinReader().ReadString('\n')
+	line, err := readInteractiveLine(ctx)
 	if err != nil && err != io.EOF {
 		return "", err
 	}
-	return strings.TrimRight(line, "\r\n"), nil
+	return line, nil
 }

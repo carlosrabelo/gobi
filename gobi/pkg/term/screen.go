@@ -138,6 +138,18 @@ func (s *Screen) PresentClear(w io.Writer) error {
 	return s.Present(w)
 }
 
+// ClearTerminal blanks the buffer and wipes the physical terminal to home,
+// without redrawing the grid. Used when leaving full-screen commands so the
+// dot prompt is not painted over leftover Assist/EDIT chrome.
+func (s *Screen) ClearTerminal(w io.Writer) error {
+	s.Clear()
+	for i := range s.presented {
+		s.presented[i] = Cell{Ch: ' '}
+	}
+	_, err := io.WriteString(w, "\x1b[2J\x1b[H")
+	return err
+}
+
 // CellAt returns the pending cell (for tests).
 func (s *Screen) CellAt(row, col int) Cell {
 	if row < 0 || col < 0 || row >= s.Rows || col >= s.Cols {

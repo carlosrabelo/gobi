@@ -94,7 +94,12 @@ func (m *Mux) cmdASSIST(ctx *context.Context, cmd command.Command) error {
 		return fail(ctx, "ASSIST takes no arguments")
 	}
 	ctx.AssistOpen = true
-	defer func() { ctx.AssistOpen = false }()
+	defer func() {
+		ctx.AssistOpen = false
+		if scr := ctx.Screen; scr != nil {
+			_ = scr.ClearTerminal(ctx.Out())
+		}
+	}()
 
 	scr := ensureScreen(ctx)
 	keys := term.NewReader(ctx.Stdin)

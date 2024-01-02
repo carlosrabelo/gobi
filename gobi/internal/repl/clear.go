@@ -81,20 +81,18 @@ func cmdCHANGE(ctx *context.Context, cmd command.Command) error {
 		cur := fieldDisplay(a.Record.Values[fi], f)
 		fmt.Fprintln(ctx.Out(), cur)
 		fmt.Fprint(ctx.Out(), "CHANGE? ")
-		from, err := ctx.StdinReader().ReadString('\n')
+		from, err := readInteractiveLine(ctx)
 		if err != nil {
 			return fail(ctx, "%s", err.Error())
 		}
-		from = strings.TrimRight(from, "\r\n")
 		if from == "" {
 			continue
 		}
 		fmt.Fprint(ctx.Out(), "TO? ")
-		to, err := ctx.StdinReader().ReadString('\n')
+		to, err := readInteractiveLine(ctx)
 		if err != nil {
 			return fail(ctx, "%s", err.Error())
 		}
-		to = strings.TrimRight(to, "\r\n")
 		newVal := strings.Replace(cur, from, to, 1)
 		v, err := parseFieldInput(f, newVal)
 		if err != nil {
