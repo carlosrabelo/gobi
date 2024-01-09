@@ -124,7 +124,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] B-Tree in-memory representations for nodes and entries
 - [x] Disk page manager allocating 512-byte blocks
 - [x] Internal node split on page overflow
-- [ ] Leaf node entry insertion and record mapping
+- [x] Leaf node entry insertion and record mapping
 - [ ] Exact key search traversing tree pages
 - [ ] Prefix key search mapping to first matches
 - [ ] Leaf node entry deletion on key removals
