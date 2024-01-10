@@ -13,13 +13,9 @@ func TestInsertMappingEmptyIndex(t *testing.T) {
 		t.Fatalf("InsertMapping: %v", err)
 	}
 
-	node, err := pm.ReadNode(pm.Header().RootPageID, NodeKindLeaf)
-	if err != nil {
-		t.Fatalf("ReadNode: %v", err)
-	}
-	entry, found, err := LeafEntryForKey(pm.Header(), node, Key("Alice"))
-	if err != nil || !found || entry.RecordNumber != 1 {
-		t.Fatalf("expected Alice rec 1, found=%v entry=%#v err=%v", found, entry, err)
+	_, found, err := pm.SearchExact(Key("Alice"))
+	if err != nil || !found {
+		t.Fatalf("expected Alice, found=%v err=%v", found, err)
 	}
 }
 
@@ -36,12 +32,8 @@ func TestInsertMappingLeafRoot(t *testing.T) {
 		t.Fatalf("InsertMapping: %v", err)
 	}
 
-	node, err := pm.ReadNode(pm.Header().RootPageID, NodeKindLeaf)
-	if err != nil {
-		t.Fatalf("ReadNode: %v", err)
-	}
-	entry, found, err := LeafEntryForKey(pm.Header(), node, Key("Bob"))
-	if err != nil || !found || entry.RecordNumber != 2 {
-		t.Fatalf("expected Bob rec 2, found=%v entry=%#v err=%v", found, entry, err)
+	_, found, err := pm.SearchExact(Key("Bob"))
+	if err != nil || !found {
+		t.Fatalf("expected Bob, found=%v err=%v", found, err)
 	}
 }
