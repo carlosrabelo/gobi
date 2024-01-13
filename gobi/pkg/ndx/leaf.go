@@ -5,6 +5,9 @@ import "fmt"
 // ErrLeafFull indicates a leaf node has no room for another entry.
 var ErrLeafFull = fmt.Errorf("ndx: leaf node is full")
 
+// ErrLeafKeyNotFound indicates the requested key is absent from a leaf node.
+var ErrLeafKeyNotFound = fmt.Errorf("ndx: leaf key not found")
+
 // LeafSplitResult holds the outcome of splitting a full leaf node.
 type LeafSplitResult struct {
 	Left     *Node
@@ -118,6 +121,32 @@ func LeafEntryForKey(h *Header, node *Node, key Key) (LeafEntry, bool, error) {
 	return LeafEntry{}, false, nil
 }
 
+// DeleteLeafEntry removes the first mapping for key from node.
+func DeleteLeafEntry(h *Header, node *Node, key Key) (LeafEntry, error) {
+	if err := validateHeader(h); err != nil {
+		return LeafEntry{}, err
+	}
+	if node == nil {
+		return LeafEntry{}, fmt.Errorf("ndx: nil node")
+	}
+	if node.Kind != NodeKindLeaf {
+		return LeafEntry{}, fmt.Errorf("ndx: node %d is not a leaf", node.PageID)
+	}
+
+	idx, err := leafKeyIndex(h, node.Leaf, key)
+	if err != nil {
+		return LeafEntry{}, err
+	}
+	if idx < 0 {
+		return LeafEntry{}, ErrLeafKeyNotFound
+	}
+
+	removed := node.Leaf[idx]
+	node.Leaf = append(node.Leaf[:idx], node.Leaf[idx+1:]...)
+	return removed, nil
+}
+
+// SplitLeafNode persists a full leaf split and returns the split outcome.
 func (pm *PageManager) SplitLeafNode(node *Node) (*LeafSplitResult, error) {
 	result, err := SplitLeafNode(pm.header, node)
 	if err != nil {
@@ -249,6 +278,52 @@ func (pm *PageManager) AppendLeafMapping(pageID uint16, recNo uint16, key Key) (
 		return nil, err
 	}
 	return result, nil
+}
+
+// DeleteLeafMapping removes key from the leaf at pageID.
+func (pm *PageManager) DeleteLeafMapping(pageID uint16, key Key) (LeafEntry, error) {
+	node, err := pm.ReadNode(pageID, NodeKindLeaf)
+	if err != nil {
+		return LeafEntry{}, err
+	}
+	removed, err := DeleteLeafEntry(pm.header, node, key)
+	if err != nil {
+		return LeafEntry{}, err
+	}
+	if err := pm.WriteNode(node); err != nil {
+		return LeafEntry{}, err
+	}
+	return removed, nil
+}
+
+// DeleteMapping removes the first index entry for key and clears an empty root index.
+func (pm *PageManager) DeleteMapping(key Key) (LeafEntry, error) {
+	if pm.header.RootPageID == 0 {
+		return LeafEntry{}, ErrLeafKeyNotFound
+	}
+
+	_, leaf, err := pm.descendToLeaf(pm.header.RootPageID, key)
+	if err != nil {
+		return LeafEntry{}, err
+	}
+
+	removed, err := DeleteLeafEntry(pm.header, leaf, key)
+	if err != nil {
+		return LeafEntry{}, err
+	}
+
+	if len(leaf.Leaf) == 0 && leaf.PageID == pm.header.RootPageID {
+		pm.header.RootPageID = 0
+		if err := pm.SyncHeader(); err != nil {
+			return LeafEntry{}, err
+		}
+		return removed, nil
+	}
+
+	if err := pm.WriteNode(leaf); err != nil {
+		return LeafEntry{}, err
+	}
+	return removed, nil
 }
 
 func leafInsertIndex(h *Header, entries []LeafEntry, key Key) (int, error) {

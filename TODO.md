@@ -127,7 +127,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] Leaf node entry insertion and record mapping
 - [x] Exact key search traversing tree pages
 - [x] Prefix key search mapping to first matches
-- [ ] Leaf node entry deletion on key removals
+- [x] Leaf node entry deletion on key removals
 - [ ] `INDEX ON` command scanning DBF and constructing tree
 - [ ] Multi-index synchronization during table `APPEND`
 - [ ] Multi-index synchronization during table `REPLACE`

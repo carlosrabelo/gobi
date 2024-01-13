@@ -311,3 +311,235 @@ func TestLeafNodeFullNilInputs(t *testing.T) {
 		t.Fatal("expected false for nil node")
 	}
 }
+
+func TestDeleteLeafEntryRemovesFirstMatch(t *testing.T) {
+	h := compactTestHeader()
+	node := makeLeafNode(h, 2, []LeafEntry{
+		{RecordNumber: 1, Key: Key("Alice")},
+		{RecordNumber: 2, Key: Key("Bob")},
+		{RecordNumber: 3, Key: Key("Charlie")},
+	})
+
+	removed, err := DeleteLeafEntry(h, node, Key("Bob"))
+	if err != nil {
+		t.Fatalf("DeleteLeafEntry: %v", err)
+	}
+	if removed.RecordNumber != 2 {
+		t.Fatalf("removed record = %d, want 2", removed.RecordNumber)
+	}
+	if len(node.Leaf) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(node.Leaf))
+	}
+	if strings.TrimRight(string(node.Leaf[0].Key), " ") != "Alice" {
+		t.Fatalf("first key = %q", node.Leaf[0].Key)
+	}
+	if strings.TrimRight(string(node.Leaf[1].Key), " ") != "Charlie" {
+		t.Fatalf("second key = %q", node.Leaf[1].Key)
+	}
+}
+
+func TestDeleteLeafEntryDuplicateKeysRemovesFirstOnly(t *testing.T) {
+	h := compactTestHeader()
+	node := makeLeafNode(h, 2, []LeafEntry{
+		{RecordNumber: 1, Key: Key("Alice")},
+		{RecordNumber: 2, Key: Key("Alice")},
+		{RecordNumber: 3, Key: Key("Bob")},
+	})
+
+	removed, err := DeleteLeafEntry(h, node, Key("Alice"))
+	if err != nil {
+		t.Fatalf("DeleteLeafEntry: %v", err)
+	}
+	if removed.RecordNumber != 1 {
+		t.Fatalf("removed record = %d, want 1", removed.RecordNumber)
+	}
+	if len(node.Leaf) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(node.Leaf))
+	}
+	if node.Leaf[0].RecordNumber != 2 {
+		t.Fatalf("remaining Alice record = %d, want 2", node.Leaf[0].RecordNumber)
+	}
+}
+
+func TestDeleteLeafEntryMissingKey(t *testing.T) {
+	h := compactTestHeader()
+	node := makeLeafNode(h, 2, []LeafEntry{{RecordNumber: 1, Key: Key("Alice")}})
+	_, err := DeleteLeafEntry(h, node, Key("Bob"))
+	if !errors.Is(err, ErrLeafKeyNotFound) {
+		t.Fatalf("expected ErrLeafKeyNotFound, got %v", err)
+	}
+}
+
+func TestDeleteLeafEntryRejectsInternalNode(t *testing.T) {
+	h := compactTestHeader()
+	_, err := DeleteLeafEntry(h, &Node{PageID: 2, Kind: NodeKindInternal}, Key("A"))
+	if err == nil {
+		t.Fatal("expected non-leaf error")
+	}
+}
+
+func TestPageManagerDeleteLeafMapping(t *testing.T) {
+	file := &ndxFile{}
+	pm, err := CreatePageManager(file, newTestHeader())
+	if err != nil {
+		t.Fatalf("CreatePageManager: %v", err)
+	}
+	if err := pm.CreateLeafMapping(1, Key("Alice")); err != nil {
+		t.Fatalf("CreateLeafMapping: %v", err)
+	}
+	if err := pm.InsertLeafMapping(pm.header.RootPageID, 2, Key("Bob")); err != nil {
+		t.Fatalf("InsertLeafMapping: %v", err)
+	}
+
+	removed, err := pm.DeleteLeafMapping(pm.header.RootPageID, Key("Alice"))
+	if err != nil {
+		t.Fatalf("DeleteLeafMapping: %v", err)
+	}
+	if removed.RecordNumber != 1 {
+		t.Fatalf("removed record = %d, want 1", removed.RecordNumber)
+	}
+
+	root, err := pm.ReadNode(pm.header.RootPageID, NodeKindLeaf)
+	if err != nil {
+		t.Fatalf("ReadNode: %v", err)
+	}
+	if len(root.Leaf) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(root.Leaf))
+	}
+}
+
+func TestPageManagerDeleteMappingSingleLeaf(t *testing.T) {
+	file := &ndxFile{}
+	pm, err := CreatePageManager(file, newTestHeader())
+	if err != nil {
+		t.Fatalf("CreatePageManager: %v", err)
+	}
+	if err := pm.CreateLeafMapping(1, Key("Alice")); err != nil {
+		t.Fatalf("CreateLeafMapping: %v", err)
+	}
+	if err := pm.InsertLeafMapping(pm.header.RootPageID, 2, Key("Bob")); err != nil {
+		t.Fatalf("InsertLeafMapping: %v", err)
+	}
+
+	removed, err := pm.DeleteMapping(Key("Bob"))
+	if err != nil {
+		t.Fatalf("DeleteMapping: %v", err)
+	}
+	if removed.RecordNumber != 2 {
+		t.Fatalf("removed record = %d, want 2", removed.RecordNumber)
+	}
+
+	_, found, err := pm.SearchExact(Key("Bob"))
+	if err != nil || found {
+		t.Fatalf("expected Bob removed, found=%v err=%v", found, err)
+	}
+	_, found, err = pm.SearchExact(Key("Alice"))
+	if err != nil || !found {
+		t.Fatalf("expected Alice to remain, found=%v err=%v", found, err)
+	}
+}
+
+func TestPageManagerDeleteMappingClearsEmptyRoot(t *testing.T) {
+	file := &ndxFile{}
+	pm, err := CreatePageManager(file, newTestHeader())
+	if err != nil {
+		t.Fatalf("CreatePageManager: %v", err)
+	}
+	if err := pm.CreateLeafMapping(1, Key("Alice")); err != nil {
+		t.Fatalf("CreateLeafMapping: %v", err)
+	}
+
+	if _, err := pm.DeleteMapping(Key("Alice")); err != nil {
+		t.Fatalf("DeleteMapping: %v", err)
+	}
+	if pm.header.RootPageID != 0 {
+		t.Fatalf("root page = %d, want 0", pm.header.RootPageID)
+	}
+
+	_, found, err := pm.SearchExact(Key("Alice"))
+	if err != nil || found {
+		t.Fatalf("expected empty index, found=%v err=%v", found, err)
+	}
+}
+
+func TestPageManagerDeleteMappingInternalRoot(t *testing.T) {
+	h := compactTestHeader()
+	file := &ndxFile{}
+	pm, err := CreatePageManager(file, h)
+	if err != nil {
+		t.Fatalf("CreatePageManager: %v", err)
+	}
+
+	rootID, err := pm.AllocatePage()
+	if err != nil {
+		t.Fatalf("AllocatePage root: %v", err)
+	}
+	leftID, err := pm.AllocatePage()
+	if err != nil {
+		t.Fatalf("AllocatePage left: %v", err)
+	}
+	rightID, err := pm.AllocatePage()
+	if err != nil {
+		t.Fatalf("AllocatePage right: %v", err)
+	}
+
+	left := makeLeafNode(h, leftID, []LeafEntry{
+		{RecordNumber: 1, Key: Key("K00")},
+		{RecordNumber: 2, Key: Key("K01")},
+	})
+	right := makeLeafNode(h, rightID, []LeafEntry{
+		{RecordNumber: 3, Key: Key("K03")},
+		{RecordNumber: 4, Key: Key("K04")},
+	})
+	root := &Node{
+		PageID: rootID,
+		Kind:   NodeKindInternal,
+		Internal: []InternalEntry{{
+			ChildPageID: leftID,
+			Key:         Key("K02"),
+		}},
+		RightChild: rightID,
+	}
+
+	for _, node := range []*Node{left, right, root} {
+		if err := pm.WriteNode(node); err != nil {
+			t.Fatalf("WriteNode: %v", err)
+		}
+	}
+	pm.header.RootPageID = rootID
+	if err := pm.SyncHeader(); err != nil {
+		t.Fatalf("SyncHeader: %v", err)
+	}
+
+	removed, err := pm.DeleteMapping(Key("K04"))
+	if err != nil {
+		t.Fatalf("DeleteMapping: %v", err)
+	}
+	if removed.RecordNumber != 4 {
+		t.Fatalf("removed record = %d, want 4", removed.RecordNumber)
+	}
+
+	_, found, err := pm.SearchExact(Key("K04"))
+	if err != nil || found {
+		t.Fatalf("expected K04 removed, found=%v err=%v", found, err)
+	}
+	_, found, err = pm.SearchExact(Key("K01"))
+	if err != nil || !found {
+		t.Fatalf("expected K01 to remain, found=%v err=%v", found, err)
+	}
+}
+
+func TestPageManagerDeleteMappingMissingKey(t *testing.T) {
+	file := &ndxFile{}
+	pm, err := CreatePageManager(file, newTestHeader())
+	if err != nil {
+		t.Fatalf("CreatePageManager: %v", err)
+	}
+	if err := pm.CreateLeafMapping(1, Key("Alice")); err != nil {
+		t.Fatalf("CreateLeafMapping: %v", err)
+	}
+	_, err = pm.DeleteMapping(Key("Bob"))
+	if !errors.Is(err, ErrLeafKeyNotFound) {
+		t.Fatalf("expected ErrLeafKeyNotFound, got %v", err)
+	}
+}
