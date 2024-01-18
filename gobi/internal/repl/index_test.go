@@ -91,3 +91,44 @@ func TestDispatchIndexOnRequiresToClause(t *testing.T) {
 		t.Fatalf("expected TO clause error, got %v", err)
 	}
 }
+
+func TestDispatchAppendSyncsMultipleIndexes(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "people.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Config.DefaultDir = tempDir
+	ctx.Config.Talk = false
+	ctx.Stdin = strings.NewReader("Bob\n30\n\n")
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("USE: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "INDEX", Args: "ON NAME", ToClause: "byname"}); err != nil {
+		t.Fatalf("INDEX NAME: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "INDEX", Args: "ON AGE", ToClause: "byage"}); err != nil {
+		t.Fatalf("INDEX AGE: %v", err)
+	}
+	if len(ctx.GetActiveArea().Indexes) != 2 {
+		t.Fatalf("expected 2 indexes, got %d", len(ctx.GetActiveArea().Indexes))
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "APPEND"}); err != nil {
+		t.Fatalf("APPEND: %v", err)
+	}
+
+	nameIdx := ctx.GetActiveArea().Indexes[0]
+	ageIdx := ctx.GetActiveArea().Indexes[1]
+
+	_, found, err := nameIdx.Manager().SearchExact(ndx.Key("Bob"))
+	if err != nil || !found {
+		t.Fatalf("expected Bob in name index, found=%v err=%v", found, err)
+	}
+
+	_, found, err = ageIdx.Manager().SearchExact(ndx.Key("30"))
+	if err != nil || !found {
+		t.Fatalf("expected 30 in age index, found=%v err=%v", found, err)
+	}
+}

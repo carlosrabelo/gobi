@@ -673,10 +673,6 @@ func parseFieldInput(fd dbf.FieldDescriptor, line string) (interface{}, error) {
 	}
 }
 
-func syncOpenIndexesAfterAppend(ctx *context.Context, area *context.WorkArea, recNo int) error {
-	return nil
-}
-
 func syncOpenIndexesAfterReplace(ctx *context.Context, area *context.WorkArea, recNo int, oldRec *dbf.Record) error {
 	return nil
 }

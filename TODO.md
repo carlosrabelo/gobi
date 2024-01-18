@@ -129,7 +129,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] Prefix key search mapping to first matches
 - [x] Leaf node entry deletion on key removals
 - [x] `INDEX ON` command scanning DBF and constructing tree
-- [ ] Multi-index synchronization during table `APPEND`
+- [x] Multi-index synchronization during table `APPEND`
 - [ ] Multi-index synchronization during table `REPLACE`
 - [ ] `REINDEX` command re-building active trees
 - [ ] `FIND` and `SEEK` commands setting DBF cursor

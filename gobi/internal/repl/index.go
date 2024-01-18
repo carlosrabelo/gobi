@@ -69,6 +69,74 @@ func handleIndex(ctx *context.Context, cmd Command) error {
 	return nil
 }
 
+// syncOpenIndexesAfterAppend updates every open index after a record is appended.
+func syncOpenIndexesAfterAppend(ctx *context.Context, area *context.WorkArea, recNo int) error {
+	if area == nil || len(area.Indexes) == 0 {
+		return nil
+	}
+
+	for _, idx := range area.Indexes {
+		if idx == nil || idx.Manager() == nil {
+			continue
+		}
+		expression := idx.Manager().Header().Expression
+		key, err := evaluateIndexKeyForRecord(ctx, area, idx.Manager().Header(), expression, recNo)
+		if err != nil {
+			return err
+		}
+
+		if err := idx.Manager().InsertMapping(uint16(recNo+1), key); err != nil {
+			scan, scanErr := scanIndexMappings(ctx, area, expression)
+			if scanErr != nil {
+				return scanErr
+			}
+			header := ndx.NewHeaderForExpression(scan.expression, scan.keyType, scan.keyLength)
+			if rebuildErr := ndx.RebuildIndex(idx, header, scan.mappings); rebuildErr != nil {
+				return fmt.Errorf("*** Error updating index %s: %w", filepath.Base(idx.Path), err)
+			}
+		}
+	}
+	return nil
+}
+
+func evaluateIndexKeyForRecord(ctx *context.Context, area *context.WorkArea, header *ndx.Header, expression string, recNo int) (ndx.Key, error) {
+	rseeker, ok := area.Table.Underlying().(io.ReadSeeker)
+	if !ok {
+		return nil, fmt.Errorf("*** Underlying database stream is not seekable")
+	}
+
+	rec, err := area.Table.ReadRecordAt(rseeker, recNo)
+	if err != nil {
+		return nil, fmt.Errorf("*** Error reading record %d: %w", recNo+1, err)
+	}
+
+	return evaluateIndexKeyFromRecord(ctx, area, header, expression, rec, recNo)
+}
+
+func evaluateIndexKeyFromRecord(ctx *context.Context, area *context.WorkArea, header *ndx.Header, expression string, rec *dbf.Record, recNo int) (ndx.Key, error) {
+	keyExp, err := parseReplExpression(expression)
+	if err != nil {
+		return nil, err
+	}
+
+	savedRecordNo := area.RecordNo
+	savedRecord := area.ActiveRecord
+	defer func() {
+		area.RecordNo = savedRecordNo
+		area.ActiveRecord = savedRecord
+	}()
+
+	area.RecordNo = recNo
+	area.ActiveRecord = rec
+
+	value, err := expr.Eval(keyExp, newReplEnvironment(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("*** Evaluation error in index expression: %w", err)
+	}
+
+	return indexKeyFromValue(header, value)
+}
+
 func scanIndexMappings(ctx *context.Context, area *context.WorkArea, expression string) (*indexScanResult, error) {
 	keyExp, err := parseReplExpression(expression)
 	if err != nil {
@@ -178,6 +246,14 @@ func indexValueText(value expr.Object) (string, bool, error) {
 	default:
 		return "", false, fmt.Errorf("*** Index expression must evaluate to character or numeric values")
 	}
+}
+
+func indexKeyFromValue(h *ndx.Header, value expr.Object) (ndx.Key, error) {
+	text, _, err := indexValueText(value)
+	if err != nil {
+		return nil, err
+	}
+	return ndx.KeyFromText(h, text)
 }
 
 func updateKeyScanState(state *keyScanState, text string, numeric bool) error {
