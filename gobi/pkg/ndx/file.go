@@ -6,32 +6,6 @@ import (
 	"os"
 )
 
-// Index is an open NDX index file bound to a DBF work area.
-type Index struct {
-	Path string
-	file io.ReadWriteSeeker
-	pm   *PageManager
-}
-
-// Manager returns the page manager for index operations.
-func (idx *Index) Manager() *PageManager {
-	if idx == nil {
-		return nil
-	}
-	return idx.pm
-}
-
-// Close closes the underlying index file.
-func (idx *Index) Close() error {
-	if idx == nil || idx.file == nil {
-		return nil
-	}
-	if closer, ok := idx.file.(io.Closer); ok {
-		return closer.Close()
-	}
-	return nil
-}
-
 func openIndexFile(path string) (io.ReadWriteSeeker, error) {
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {

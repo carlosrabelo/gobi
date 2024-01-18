@@ -1,7 +1,6 @@
 package ndx
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,14 +8,17 @@ import (
 
 func TestOpenIndexReadsExistingFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "people.ndx")
-	file, err := os.Create(path)
+	header := NewHeaderForExpression("NAME", KeyTypeCharacter, 10)
+	entries := []LeafEntry{
+		{RecordNumber: 1, Key: Key("Alice")},
+		{RecordNumber: 2, Key: Key("Bob")},
+	}
+
+	created, err := CreateIndexFile(path, header, entries)
 	if err != nil {
-		t.Fatalf("create: %v", err)
+		t.Fatalf("CreateIndexFile: %v", err)
 	}
-	if _, err := CreatePageManager(file, newTestHeader()); err != nil {
-		t.Fatalf("CreatePageManager: %v", err)
-	}
-	if err := file.Close(); err != nil {
+	if err := created.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
@@ -32,6 +34,14 @@ func TestOpenIndexReadsExistingFile(t *testing.T) {
 	got := idx.Manager().Header()
 	if got.Expression != "NAME" || got.KeyType != KeyTypeCharacter {
 		t.Fatalf("unexpected header: %#v", got)
+	}
+
+	result, found, err := idx.Manager().SearchPrefix(Key("Bob"))
+	if err != nil {
+		t.Fatalf("SearchPrefix: %v", err)
+	}
+	if !found || result.RecordNumber != 2 {
+		t.Fatalf("expected record 2, got found=%v result=%#v", found, result)
 	}
 }
 

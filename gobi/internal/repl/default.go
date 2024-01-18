@@ -25,6 +25,10 @@ func resolveDBFFilePath(ctx *context.Context, filename string) string {
 	return resolveDataPath(ctx, filename, ".dbf")
 }
 
+func resolveNDXFilePath(ctx *context.Context, filename string) string {
+	return resolveDataPath(ctx, filename, ".ndx")
+}
+
 func resolveMemFilePath(ctx *context.Context, filename string) string {
 	return resolveDataPath(ctx, filename, ".mem")
 }
