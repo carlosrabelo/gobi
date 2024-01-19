@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -97,6 +98,69 @@ func syncOpenIndexesAfterAppend(ctx *context.Context, area *context.WorkArea, re
 		}
 	}
 	return nil
+}
+
+// syncOpenIndexesAfterReplace updates index entries when a record's key values change.
+func syncOpenIndexesAfterReplace(ctx *context.Context, area *context.WorkArea, recNo int, beforeRec *dbf.Record) error {
+	if area == nil || len(area.Indexes) == 0 {
+		return nil
+	}
+
+	for _, idx := range area.Indexes {
+		if idx == nil || idx.Manager() == nil {
+			continue
+		}
+
+		header := idx.Manager().Header()
+		expression := header.Expression
+		oldKey, err := evaluateIndexKeyFromRecord(ctx, area, header, expression, beforeRec, recNo)
+		if err != nil {
+			return err
+		}
+		newKey, err := evaluateIndexKeyForRecord(ctx, area, header, expression, recNo)
+		if err != nil {
+			return err
+		}
+
+		equal, err := indexKeysEqual(header, oldKey, newKey)
+		if err != nil {
+			return err
+		}
+		if equal {
+			continue
+		}
+
+		needsRebuild := false
+		if _, err := idx.Manager().DeleteMapping(oldKey); err != nil {
+			if !errors.Is(err, ndx.ErrLeafKeyNotFound) {
+				needsRebuild = true
+			}
+		}
+		if !needsRebuild {
+			if err := idx.Manager().InsertMapping(uint16(recNo+1), newKey); err != nil {
+				needsRebuild = true
+			}
+		}
+		if needsRebuild {
+			scan, scanErr := scanIndexMappings(ctx, area, expression)
+			if scanErr != nil {
+				return scanErr
+			}
+			rebuildHeader := ndx.NewHeaderForExpression(scan.expression, scan.keyType, scan.keyLength)
+			if err := ndx.RebuildIndex(idx, rebuildHeader, scan.mappings); err != nil {
+				return fmt.Errorf("*** Error updating index %s: %w", filepath.Base(idx.Path), err)
+			}
+		}
+	}
+	return nil
+}
+
+func indexKeysEqual(header *ndx.Header, a, b ndx.Key) (bool, error) {
+	cmp, err := ndx.CompareKeys(header, a, b)
+	if err != nil {
+		return false, err
+	}
+	return cmp == 0, nil
 }
 
 func evaluateIndexKeyForRecord(ctx *context.Context, area *context.WorkArea, header *ndx.Header, expression string, recNo int) (ndx.Key, error) {

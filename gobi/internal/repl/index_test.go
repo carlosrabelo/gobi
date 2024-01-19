@@ -132,3 +132,56 @@ func TestDispatchAppendSyncsMultipleIndexes(t *testing.T) {
 		t.Fatalf("expected 30 in age index, found=%v err=%v", found, err)
 	}
 }
+
+func TestDispatchReplaceSyncsMultipleIndexes(t *testing.T) {
+	tempDir := t.TempDir()
+	rec1 := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x20}, append([]byte("Bob       "), []byte(" 30")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "people.dbf", [][]byte{rec1, rec2})
+
+	ctx := testCtx()
+	ctx.Config.DefaultDir = tempDir
+	ctx.Config.Talk = false
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("USE: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "INDEX", Args: "ON NAME", ToClause: "byname"}); err != nil {
+		t.Fatalf("INDEX NAME: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "INDEX", Args: "ON AGE", ToClause: "byage"}); err != nil {
+		t.Fatalf("INDEX AGE: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "GO", Args: "TO 2"}); err != nil {
+		t.Fatalf("GO TO 2: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "REPLACE", Args: `NAME WITH "Carol"`}); err != nil {
+		t.Fatalf("REPLACE NAME: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "REPLACE", Args: `AGE WITH 40`}); err != nil {
+		t.Fatalf("REPLACE AGE: %v", err)
+	}
+
+	nameIdx := ctx.GetActiveArea().Indexes[0]
+	ageIdx := ctx.GetActiveArea().Indexes[1]
+
+	if _, found, _ := nameIdx.Manager().SearchExact(ndx.Key("Bob")); found {
+		t.Fatal("expected Bob to be removed from name index")
+	}
+	result, found, err := nameIdx.Manager().SearchExact(ndx.Key("Carol"))
+	if err != nil || !found {
+		t.Fatalf("expected Carol in name index, found=%v err=%v", found, err)
+	}
+	if result.RecordNumber != 2 {
+		t.Fatalf("Carol record = %d, want 2", result.RecordNumber)
+	}
+
+	if _, found, _ := ageIdx.Manager().SearchExact(ndx.Key("30")); found {
+		t.Fatal("expected 30 to be removed from age index")
+	}
+	_, found, err = ageIdx.Manager().SearchExact(ndx.Key("40"))
+	if err != nil || !found {
+		t.Fatalf("expected 40 in age index, found=%v err=%v", found, err)
+	}
+}
