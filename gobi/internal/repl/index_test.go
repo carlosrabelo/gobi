@@ -92,6 +92,72 @@ func TestDispatchIndexOnRequiresToClause(t *testing.T) {
 	}
 }
 
+func TestDispatchReindexRebuildsActiveIndex(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "people.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Config.DefaultDir = tempDir
+	ctx.Config.Talk = false
+	ctx.Stdin = strings.NewReader("Bob\n30\n\n")
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("USE: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{
+		Verb:     "INDEX",
+		Args:     "ON NAME",
+		ToClause: "people",
+	}); err != nil {
+		t.Fatalf("INDEX: %v", err)
+	}
+
+	idx := ctx.GetActiveArea().Indexes[0]
+	if _, found, _ := idx.Manager().SearchExact(ndx.Key("Bob")); found {
+		t.Fatal("expected Bob to be missing before append/reindex")
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "APPEND"}); err != nil {
+		t.Fatalf("APPEND: %v", err)
+	}
+	if err := commandMux.Dispatch(ctx, Command{Verb: "REINDEX"}); err != nil {
+		t.Fatalf("REINDEX: %v", err)
+	}
+
+	result, found, err := idx.Manager().SearchExact(ndx.Key("Bob"))
+	if err != nil || !found {
+		t.Fatalf("expected Bob after REINDEX, found=%v err=%v", found, err)
+	}
+	if result.RecordNumber != 2 {
+		t.Fatalf("record = %d, want 2", result.RecordNumber)
+	}
+}
+
+func TestDispatchReindexRequiresDatabase(t *testing.T) {
+	ctx := testCtx()
+	err := commandMux.Dispatch(ctx, Command{Verb: "REINDEX"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
+	}
+}
+
+func TestDispatchReindexRequiresOpenIndexes(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "people.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("USE: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "REINDEX"})
+	if err == nil || !strings.Contains(err.Error(), "No index files are in use") {
+		t.Fatalf("expected no index error, got %v", err)
+	}
+}
+
 func TestDispatchAppendSyncsMultipleIndexes(t *testing.T) {
 	tempDir := t.TempDir()
 	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)

@@ -131,7 +131,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] `INDEX ON` command scanning DBF and constructing tree
 - [x] Multi-index synchronization during table `APPEND`
 - [x] Multi-index synchronization during table `REPLACE`
-- [ ] `REINDEX` command re-building active trees
+- [x] `REINDEX` command re-building active trees
 - [ ] `FIND` and `SEEK` commands setting DBF cursor
 - [ ] `SORT ON` sorting DBF records physically
 

@@ -70,6 +70,47 @@ func handleIndex(ctx *context.Context, cmd Command) error {
 	return nil
 }
 
+func handleReindex(ctx *context.Context, cmd Command) error {
+	if strings.TrimSpace(cmd.Args) != "" {
+		return fmt.Errorf("*** REINDEX does not accept arguments")
+	}
+
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+	if len(area.Indexes) == 0 {
+		return fmt.Errorf("*** No index files are in use")
+	}
+
+	return reindexOpenIndexes(ctx, area, true)
+}
+
+// reindexOpenIndexes rebuilds every open index from a full table scan. When
+// announce is true each rebuilt file is reported under SET TALK ON.
+func reindexOpenIndexes(ctx *context.Context, area *context.WorkArea, announce bool) error {
+	for _, idx := range area.Indexes {
+		if idx == nil || idx.Manager() == nil {
+			continue
+		}
+		expression := idx.Manager().Header().Expression
+		scan, err := scanIndexMappings(ctx, area, expression)
+		if err != nil {
+			return err
+		}
+
+		header := ndx.NewHeaderForExpression(scan.expression, scan.keyType, scan.keyLength)
+		if err := ndx.RebuildIndex(idx, header, scan.mappings); err != nil {
+			return fmt.Errorf("*** Error rebuilding index %s: %w", filepath.Base(idx.Path), err)
+		}
+
+		if announce {
+			talkPrint(ctx, "REINDEX %s\r\n", filepath.Base(idx.Path))
+		}
+	}
+	return nil
+}
+
 // syncOpenIndexesAfterAppend updates every open index after a record is appended.
 func syncOpenIndexesAfterAppend(ctx *context.Context, area *context.WorkArea, recNo int) error {
 	if area == nil || len(area.Indexes) == 0 {
