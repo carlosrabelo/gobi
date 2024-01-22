@@ -197,6 +197,13 @@ func TestDispatchAppendSyncsMultipleIndexes(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("expected 30 in age index, found=%v err=%v", found, err)
 	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "SEEK", Args: `"Bob"`}); err != nil {
+		t.Fatalf("SEEK: %v", err)
+	}
+	if ctx.GetActiveArea().RecordNo != 1 {
+		t.Fatalf("record index = %d, want 1", ctx.GetActiveArea().RecordNo)
+	}
 }
 
 func TestDispatchReplaceSyncsMultipleIndexes(t *testing.T) {
@@ -249,5 +256,12 @@ func TestDispatchReplaceSyncsMultipleIndexes(t *testing.T) {
 	_, found, err = ageIdx.Manager().SearchExact(ndx.Key("40"))
 	if err != nil || !found {
 		t.Fatalf("expected 40 in age index, found=%v err=%v", found, err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "SEEK", Args: `"Carol"`}); err != nil {
+		t.Fatalf("SEEK: %v", err)
+	}
+	if ctx.GetActiveArea().RecordNo != 1 {
+		t.Fatalf("record index = %d, want 1", ctx.GetActiveArea().RecordNo)
 	}
 }

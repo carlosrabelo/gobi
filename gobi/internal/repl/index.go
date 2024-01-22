@@ -353,14 +353,6 @@ func indexValueText(value expr.Object) (string, bool, error) {
 	}
 }
 
-func indexKeyFromValue(h *ndx.Header, value expr.Object) (ndx.Key, error) {
-	text, _, err := indexValueText(value)
-	if err != nil {
-		return nil, err
-	}
-	return ndx.KeyFromText(h, text)
-}
-
 func updateKeyScanState(state *keyScanState, text string, numeric bool) error {
 	if numeric {
 		if state.sawCharacter {
