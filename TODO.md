@@ -133,7 +133,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] Multi-index synchronization during table `REPLACE`
 - [x] `REINDEX` command re-building active trees
 - [x] `FIND` and `SEEK` commands setting DBF cursor
-- [ ] `SORT ON` sorting DBF records physically
+- [x] `SORT ON` sorting DBF records physically
 
 ## Screen and TUI (VT100)
 
