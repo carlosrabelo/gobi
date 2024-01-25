@@ -65,5 +65,3 @@ func NewKeyboard(in io.Reader) *Keyboard { return &Keyboard{} }
 func (k *Keyboard) ReadKey() (Key, error) {
 	return Key{}, io.EOF
 }
-
-func EraseLine(w io.Writer) error { return nil }
