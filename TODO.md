@@ -139,7 +139,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 
 - [x] ANSI escape wrapper for cursor positioning and colors
 - [x] Terminal raw-mode keyboard capture adapter
-- [ ] Double-buffered terminal frame writer
+- [x] Double-buffered terminal frame writer
 - [ ] `CLEAR` command clearing screen buffer
 - [ ] `@ SAY` printing expression string at coordinates
 - [ ] `@ GET` registering interactive input fields
