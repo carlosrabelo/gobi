@@ -2,17 +2,27 @@ MAKEFLAGS += --no-print-directory
 
 .DEFAULT_GOAL := help
 
-.PHONY: build clean fmt help lint quality test test-cover run install install-system uninstall uninstall-system
+.PHONY: build build-linux build-windows build-all clean fmt help lint quality test test-cover run install install-system uninstall uninstall-system
 
 help: ## Show available targets
 	@echo "gobi - Available targets"
 	@echo ""
 	@grep -hE '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) \
 		| sort \
-		| awk 'BEGIN {FS = ":.*## "} {printf "  %-15s %s\n", $$1, $$2}'
+		| awk 'BEGIN {FS = ":.*## "} {printf "  %-20s %s\n", $$1, $$2}'
 
-build: ## Write bin/gobi
+build: ## Write bin/gobi for the current host
 	@./.make/build.sh
+
+build-linux: ## Cross-compile bin/gobi-linux-amd64 (GOARCH=arm64 optional via ARCH=)
+	@./.make/build-cross.sh linux $(or $(ARCH),amd64)
+
+build-windows: ## Cross-compile bin/gobi-windows-amd64.exe (GOARCH via ARCH=)
+	@./.make/build-cross.sh windows $(or $(ARCH),amd64)
+
+build-all: ## build-linux and build-windows (amd64)
+	@$(MAKE) build-linux
+	@$(MAKE) build-windows
 
 run: ## Build if needed and run bin/gobi (args after --)
 	@./.make/run.sh $(filter-out $@,$(MAKECMDGOALS))

@@ -34,8 +34,9 @@ type Context struct {
 	Stdout io.Writer
 	Stderr io.Writer
 
-	Alternate *os.File // SET ALTERNATE file; closed by CLOSE ALTERNATE / CLOSE ALL
-	Procedure bool     // procedure file open
+	Alternate   *os.File // SET ALTERNATE file; closed by CLOSE ALTERNATE / CLOSE ALL
+	PrinterFile *os.File // SET PRINTER TO file; nil = stdout print sink
+	Procedure   bool     // procedure file open
 
 	// Locate holds the last LOCATE FOR/WHILE text for CONTINUE (013).
 	LocateActive bool
@@ -74,7 +75,12 @@ type Context struct {
 	Message      string
 	Suspended    bool
 	InsertMode   bool
-	AssistOpen   bool // ASSIST full-screen menu (037); suppresses STATUS chrome
+	AssistOpen   bool              // ASSIST full-screen menu; suppresses STATUS chrome
+	StatusMode   string            // status bar mode label (Command Line, ASSIST, EDIT, …)
+	ResizeWired  bool              // hostterm.OnResize registered for this session
+	Modules      map[string]string // LOAD name → path (038)
+	CatalogPath  string            // SET CATALOG TO path (040)
+	CatalogTitle string            // SET TITLE TO text (040)
 
 	// FormatLines are the loaded SET FORMAT TO .fmt lines (023.17).
 	FormatLines []string
@@ -100,6 +106,7 @@ func New() *Context {
 		Stdout:      os.Stdout,
 		Stderr:      os.Stderr,
 		SessionDate: time.Date(y, m, d, 0, 0, 0, 0, time.Local),
+		Message:     "Enter a Gobi command.",
 	}
 	for i := 1; i <= AreaCount; i++ {
 		c.Areas[i] = &Area{}

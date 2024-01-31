@@ -6,10 +6,12 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/carlosrabelo/gobi/gobi/internal/config"
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
+	"github.com/carlosrabelo/gobi/gobi/pkg/hostterm"
 	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
@@ -33,10 +35,45 @@ type PendingGET struct {
 }
 
 func ensureScreen(ctx *context.Context) *term.Screen {
+	cols, rows := screenGeometry(ctx)
 	if ctx.Screen == nil {
-		ctx.Screen = term.New()
+		ctx.Screen = term.NewSize(cols, rows)
+	} else if ctx.Config.Screen == config.ScreenAuto &&
+		(ctx.Screen.Cols != cols || ctx.Screen.Rows != rows) {
+		// Re-probe each time: interactive Run wraps Stdout in CRLFWriter, and
+		// the host size must still drive AUTO (CLEAR, @, ASSIST, …).
+		ctx.Screen.Resize(cols, rows)
 	}
+	wireHostResize(ctx)
 	return ctx.Screen
+}
+
+func wireHostResize(ctx *context.Context) {
+	if ctx.ResizeWired {
+		return
+	}
+	ctx.ResizeWired = true
+	fd := 1
+	if f := hostterm.FileFromWriter(ctx.Stdout); f != nil {
+		fd = int(f.Fd())
+	}
+	hostterm.OnResize(fd, func(cols, rows int) {
+		if ctx.Config.Screen != config.ScreenAuto || ctx.Screen == nil {
+			return
+		}
+		cols, rows = hostterm.ApplyAuto(cols, rows)
+		ctx.Screen.Resize(cols, rows)
+		repaintAfterResize(ctx)
+	})
+}
+
+// screenGeometry returns cols/rows for the session screen mode.
+func screenGeometry(ctx *context.Context) (cols, rows int) {
+	if ctx.Config.Screen == config.ScreenDefault {
+		return term.DefaultCols, term.DefaultRows
+	}
+	c, r := hostterm.SizeOfWriter(ctx.Stdout)
+	return hostterm.ApplyAuto(c, r)
 }
 
 func (m *Mux) cmdAt(ctx *context.Context, cmd command.Command) error {

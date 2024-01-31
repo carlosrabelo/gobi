@@ -37,15 +37,25 @@ func TestSETStatusDrawsAlias(t *testing.T) {
 	}, []dbf.Record{{Values: []dbf.Value{{Str: "A"}}}})
 	ctx := testCtx(t, dir)
 	ctx.Stdout = &bytes.Buffer{}
+	ctx.Config.Intensity = true
 	mux := NewMux()
 	_ = mux.Dispatch(ctx, command.Split("USE t"))
 	_ = mux.Dispatch(ctx, command.Split("SET STATUS ON"))
 	_ = mux.Dispatch(ctx, command.Split(`SET MESSAGE TO "Hello"`))
 	_ = mux.Dispatch(ctx, command.Split(`@ 0, 0 SAY "x"`))
 	scr := ctx.Screen
+	statusRow, msgRow, ok := statusLayout(scr.Rows)
+	if !ok {
+		t.Fatal("layout")
+	}
 	bottom := ""
+	rev := 0
 	for c := 0; c < scr.Cols; c++ {
-		ch := scr.CellAt(scr.Rows-1, c).Ch
+		cell := scr.CellAt(statusRow, c)
+		if cell.Reverse {
+			rev++
+		}
+		ch := cell.Ch
 		if ch != 0 && ch != ' ' {
 			bottom += string(ch)
 		} else if bottom != "" {
@@ -53,12 +63,19 @@ func TestSETStatusDrawsAlias(t *testing.T) {
 		}
 	}
 	bottom = strings.TrimSpace(bottom)
-	if !strings.Contains(bottom, "T") || !strings.Contains(bottom, "Rec:") {
+	if !strings.Contains(bottom, "T") || !strings.Contains(bottom, "Rec:") ||
+		!strings.Contains(bottom, "Command") || !strings.ContainsRune(bottom, '║') {
 		t.Fatalf("status line %q", bottom)
+	}
+	if strings.Contains(bottom, "0.1.0") || strings.Contains(bottom, "Gobi") {
+		t.Fatalf("status bar must not show product version: %q", bottom)
+	}
+	if rev < scr.Cols/2 {
+		t.Fatalf("expected reverse status bar, reverse cells=%d", rev)
 	}
 	msg := ""
 	for c := 0; c < scr.Cols; c++ {
-		ch := scr.CellAt(scr.Rows-2, c).Ch
+		ch := scr.CellAt(msgRow, c).Ch
 		if ch != 0 {
 			msg += string(ch)
 		}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
+	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
 func TestAPPENDLineMode(t *testing.T) {
@@ -136,5 +137,63 @@ func TestEDITCtrlW(t *testing.T) {
 	_ = ctx.Active().LoadCurrent()
 	if strings.TrimSpace(ctx.Active().Record.Values[0].Str) != "BOB" {
 		t.Fatalf("got %q", ctx.Active().Record.Values[0].Str)
+	}
+}
+
+func TestEDITForWalksMatches(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{
+		{Name: "NAME", Type: 'C', Length: 4},
+		{Name: "AGE", Type: 'N', Length: 3, Decimals: 0},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "ANN"}, {Num: 10}}},
+		{Values: []dbf.Value{{Str: "BOB"}, {Num: 20}}},
+		{Values: []dbf.Value{{Str: "CYN"}, {Num: 20}}},
+	})
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	// On first match (BOB): Ctrl-Y clear NAME, type ZZ, Ctrl-W → next match (CYN): Esc
+	ctx.Stdin = strings.NewReader("\x19ZZ\x17" + string(rune(term.KeyEsc)))
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("USE t")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mux.Dispatch(ctx, command.Split("EDIT FOR AGE = 20")); err != nil {
+		t.Fatal(err)
+	}
+	r1, _ := ctx.Active().Table.Read(2)
+	if strings.TrimSpace(r1.Values[0].Str) != "ZZ" {
+		t.Fatalf("match 1 NAME: %q", r1.Values[0].Str)
+	}
+	r2, _ := ctx.Active().Table.Read(3)
+	if strings.TrimSpace(r2.Values[0].Str) != "CYN" {
+		t.Fatalf("match 2 should be unchanged: %q", r2.Values[0].Str)
+	}
+}
+
+func TestEDITUpDownFields(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{
+		{Name: "A", Type: 'C', Length: 2},
+		{Name: "B", Type: 'C', Length: 2},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "A1"}, {Str: "B1"}}},
+	})
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	// Down to field B, Ctrl-Y, type XX, Ctrl-W
+	in := "\x1b[B" + "\x19XX\x17"
+	ctx.Stdin = strings.NewReader(in)
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE t"))
+	if err := mux.Dispatch(ctx, command.Split("EDIT")); err != nil {
+		t.Fatal(err)
+	}
+	_ = ctx.Active().LoadCurrent()
+	if strings.TrimSpace(ctx.Active().Record.Values[0].Str) != "A1" {
+		t.Fatalf("A changed: %q", ctx.Active().Record.Values[0].Str)
+	}
+	if strings.TrimSpace(ctx.Active().Record.Values[1].Str) != "XX" {
+		t.Fatalf("B: %q", ctx.Active().Record.Values[1].Str)
 	}
 }

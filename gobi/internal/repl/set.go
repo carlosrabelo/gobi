@@ -9,6 +9,7 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/internal/config"
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
+	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
 func cmdSET(ctx *context.Context, cmd command.Command) error {
@@ -22,7 +23,7 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 	switch name {
 	case "TALK", "INTENSITY", "BELL", "EXACT", "DELETED", "ECHO", "STEP", "CARRY",
 		"CONFIRM", "ESCAPE", "CONSOLE", "DEBUG", "SAFETY", "PRINT", "FIXED", "HEADING",
-		"ALTERNATE", "DELIMITERS", "HELP":
+		"ALTERNATE", "DELIMITERS", "HELP", "EXCLUSIVE", "ENCRYPTION":
 		_, hasTO := cmd.Clauses["TO"]
 		if name == "ALTERNATE" && (hasTO || (len(args) >= 2 && strings.EqualFold(args[1], "TO"))) {
 			return setAlternateTO(ctx, to, args)
@@ -90,9 +91,11 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 		switch val {
 		case "AUTO":
 			ctx.Config.Screen = config.ScreenAuto
+			c, r := screenGeometry(ctx)
+			ensureScreen(ctx).Resize(c, r)
 		case "DEFAULT":
 			ctx.Config.Screen = config.ScreenDefault
-			ensureScreen(ctx).Resize(80, 24)
+			ensureScreen(ctx).Resize(term.DefaultCols, term.DefaultRows)
 		default:
 			return fail(ctx, "SET SCREEN requires AUTO or DEFAULT")
 		}
@@ -106,8 +109,13 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 		return setFormatTO(ctx, name)
 
 	case "COLOR":
-		if len(args) >= 2 && (strings.EqualFold(args[1], "ON") || strings.EqualFold(args[1], "OFF")) {
-			return failCode(ctx, 36, "SET COLOR %s is not available in Gobi", strings.ToUpper(args[1]))
+		if len(args) >= 2 && strings.EqualFold(args[1], "ON") {
+			ctx.Config.ColorOn = true
+			return nil
+		}
+		if len(args) >= 2 && strings.EqualFold(args[1], "OFF") {
+			ctx.Config.ColorOn = false
+			return nil
 		}
 		text := to
 		if text == "" && len(args) >= 2 && strings.EqualFold(args[1], "TO") {
@@ -202,12 +210,27 @@ func (m *Mux) cmdSET(ctx *context.Context, cmd command.Command) error {
 		return setFunction(ctx, args, to)
 	case "HISTORY", "DOHISTORY", "TYPEAHEAD", "STATUS", "SCOREBOARD", "MENUS", "MESSAGE", "MEMOWIDTH":
 		return setHistoryFlags(ctx, m, name, args, to)
-	case "CATALOG", "TITLE", "VIEW":
-		return failCode(ctx, 36, "SET %s is not available in Gobi", name)
+	case "CATALOG":
+		return setCatalog(ctx, args, to)
+	case "TITLE":
+		return setTitle(ctx, to, args)
+	case "VIEW":
+		name := to
+		if name == "" && len(args) >= 2 && strings.EqualFold(args[1], "TO") {
+			name = strings.Join(args[2:], " ")
+		}
+		return setViewTO(ctx, m, name)
 	case "PRINTER":
-		return failCode(ctx, 36, "SET PRINTER TO is not available in Gobi")
+		return setPrinterTO(ctx, to)
 	case "EXCLUSIVE", "ENCRYPTION":
-		return failCode(ctx, 36, "SET %s is not available in Gobi", name)
+		if len(args) < 2 {
+			return fail(ctx, "SET %s requires ON or OFF", name)
+		}
+		on, err := parseOnOff(args[1])
+		if err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		return setFlag(ctx, name, on)
 	}
 	return cmdSET(ctx, cmd)
 }
@@ -272,6 +295,10 @@ func setFlag(ctx *context.Context, name string, on bool) error {
 		c.Heading = on
 	case "HELP":
 		c.Help = on
+	case "EXCLUSIVE":
+		c.Exclusive = on
+	case "ENCRYPTION":
+		c.Encryption = on
 	}
 	return nil
 }
@@ -369,4 +396,28 @@ func parseOnOff(s string) (bool, error) {
 	default:
 		return false, errString("expected ON or OFF")
 	}
+}
+
+// setPrinterTO implements SET PRINTER TO [name] (spec 038).
+func setPrinterTO(ctx *context.Context, name string) error {
+	name = strings.TrimSpace(name)
+	if ctx.PrinterFile != nil {
+		_ = ctx.PrinterFile.Close()
+		ctx.PrinterFile = nil
+	}
+	ctx.Config.PrinterTo = ""
+	if name == "" {
+		return nil
+	}
+	path, err := ctx.Resolve(name)
+	if err != nil {
+		return fail(ctx, "cannot open printer %s", name)
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return fail(ctx, "cannot open printer %s", name)
+	}
+	ctx.PrinterFile = f
+	ctx.Config.PrinterTo = path
+	return nil
 }

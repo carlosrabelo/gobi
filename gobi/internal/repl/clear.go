@@ -1,7 +1,9 @@
 package repl
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -59,7 +61,8 @@ func cmdCHANGE(ctx *context.Context, cmd command.Command) error {
 	if !a.HasTable() {
 		return fail(ctx, "no database in use")
 	}
-	args := strings.TrimSpace(cmd.Args)
+	scope := parseScope(cmd)
+	args := strings.TrimSpace(scope.Rest)
 	up := strings.ToUpper(args)
 	if !strings.HasPrefix(up, "FIELD ") {
 		return fail(ctx, "CHANGE requires FIELD")
@@ -69,41 +72,65 @@ func cmdCHANGE(ctx *context.Context, cmd command.Command) error {
 	if len(names) == 0 {
 		return fail(ctx, "CHANGE requires a field")
 	}
-	if !a.Landed {
-		return fail(ctx, "no current record")
-	}
-	for _, name := range names {
-		fi := fieldIndex(a, strings.TrimSpace(name))
-		if fi < 0 {
-			return fail(ctx, "unknown field: %s", name)
+	count := a.RecCount()
+	start, end := scopeRange(count, a.Cursor, scope)
+	if scope.Kind == "" {
+		if !a.Landed {
+			return fail(ctx, "no current record")
 		}
-		f := a.Table.Header.Fields[fi]
-		cur := fieldDisplay(a.Record.Values[fi], f)
-		fmt.Fprintln(ctx.Out(), cur)
-		fmt.Fprint(ctx.Out(), "CHANGE? ")
-		from, err := readInteractiveLine(ctx)
-		if err != nil {
+		start, end = a.Cursor, a.Cursor
+	}
+	if end < start {
+		return nil
+	}
+	for n := start; n <= end; n++ {
+		a.Cursor = n
+		a.BOF = false
+		if err := a.LoadCurrent(); err != nil {
 			return fail(ctx, "%s", err.Error())
 		}
-		if from == "" {
+		if ctx.Config.Deleted && a.Record.Deleted {
 			continue
 		}
-		fmt.Fprint(ctx.Out(), "TO? ")
-		to, err := readInteractiveLine(ctx)
-		if err != nil {
-			return fail(ctx, "%s", err.Error())
+		for _, name := range names {
+			fi := fieldIndex(a, strings.TrimSpace(name))
+			if fi < 0 {
+				return fail(ctx, "unknown field: %s", name)
+			}
+			f := a.Table.Header.Fields[fi]
+			cur := fieldDisplay(a.Record.Values[fi], f)
+			fmt.Fprintln(ctx.Out(), cur)
+			fmt.Fprint(ctx.Out(), "CHANGE? ")
+			from, err := readInteractiveLine(ctx)
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil // leave CHANGE quietly (batch / redirected stdin)
+				}
+				return fail(ctx, "%s", err.Error())
+			}
+			if from == "" {
+				continue
+			}
+			fmt.Fprint(ctx.Out(), "TO? ")
+			to, err := readInteractiveLine(ctx)
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil
+				}
+				return fail(ctx, "%s", err.Error())
+			}
+			newVal := strings.Replace(cur, from, to, 1)
+			v, err := parseFieldInput(f, newVal)
+			if err != nil {
+				return fail(ctx, "%s", err.Error())
+			}
+			rec := a.Record
+			rec.Values[fi] = v
+			if err := a.Table.Write(a.Cursor, rec); err != nil {
+				return fail(ctx, "%s", err.Error())
+			}
+			a.Record = rec
 		}
-		newVal := strings.Replace(cur, from, to, 1)
-		v, err := parseFieldInput(f, newVal)
-		if err != nil {
-			return fail(ctx, "%s", err.Error())
-		}
-		rec := a.Record
-		rec.Values[fi] = v
-		if err := a.Table.Write(a.Cursor, rec); err != nil {
-			return fail(ctx, "%s", err.Error())
-		}
-		a.Record = rec
 	}
 	return syncAllIndexes(ctx)
 }

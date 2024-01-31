@@ -15,4 +15,7 @@ func TestCRLFWriterMapsLF(t *testing.T) {
 	if got := buf.String(); got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
+	if w.Unwrap() != &buf {
+		t.Fatal("Unwrap")
+	}
 }

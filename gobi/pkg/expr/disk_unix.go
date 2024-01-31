@@ -1,8 +1,8 @@
+//go:build unix
+
 package expr
 
-import (
-	"syscall"
-)
+import "syscall"
 
 func diskFreeBytes(path string) (uint64, error) {
 	var st syscall.Statfs_t

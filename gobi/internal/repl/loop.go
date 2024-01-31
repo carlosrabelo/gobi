@@ -10,6 +10,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
+	"github.com/carlosrabelo/gobi/gobi/pkg/hostterm"
 	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
@@ -45,11 +46,35 @@ func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 		}()
 	}
 
+	// Alternate screen: take over the display like DOS dBASE; restore host on exit.
+	// GOBI_NO_ALTSCREEN skips this for broken hosts / embedded terminals.
+	altCaps := hostterm.CapsOf(ctx.Stdout)
+	if hostterm.IsTerminalWriter(ctx.Stdout) {
+		if !ctx.Config.NoAltScreen {
+			_ = hostterm.EnterAltScreen(ctx.Out(), altCaps)
+			_ = hostterm.Clear(ctx.Out(), altCaps)
+			defer func() {
+				_ = hostterm.ResetScrollRegion(ctx.Out())
+				_ = hostterm.LeaveAltScreen(ctx.Out(), altCaps)
+			}()
+		}
+		// Bracketed paste: clipboard paste into raw-mode forms (modern terminals).
+		_ = hostterm.EnableBracketedPaste(ctx.Out())
+		defer func() { _ = hostterm.DisableBracketedPaste(ctx.Out()) }()
+	}
+
 	mux.hist = hist
 	if hist != nil {
 		hist.SetCap(ctx.Config.HistoryTo)
 	}
+	// Status bar appears as soon as the session starts, not only after CLEAR.
+	showSessionChrome(ctx, true)
+	firstPrompt := true
 	for {
+		if !firstPrompt {
+			placeDotPrompt(ctx)
+		}
+		firstPrompt = false
 		fmt.Fprint(ctx.Out(), ". ")
 		line, err := readDotLine(ctx, hist)
 		if errors.Is(err, io.EOF) {
@@ -66,7 +91,8 @@ func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 			continue
 		}
 		if len(line) > maxLine {
-			fmt.Fprintln(ctx.Stderr, "*** Line too long")
+			fmt.Fprintln(ctx.Out(), "*** Line too long")
+			showSessionChrome(ctx, false)
 			continue
 		}
 		if hist != nil && ctx.Config.History {
@@ -74,7 +100,8 @@ func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 		}
 		line, err = expandLineMacros(ctx, line)
 		if err != nil {
-			fmt.Fprintln(ctx.Stderr, "*** "+err.Error())
+			fmt.Fprintln(ctx.Out(), "*** "+err.Error())
+			showSessionChrome(ctx, false)
 			continue
 		}
 		cmd := command.Split(line)
@@ -85,6 +112,8 @@ func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 			}
 			return nil
 		}
+		// Refresh chrome; on errors the *** line stays in the work pane, then a new ". ".
+		showSessionChrome(ctx, false)
 		if err != nil {
 			continue
 		}
@@ -157,13 +186,14 @@ func readDotLine(ctx *context.Context, hist *History) (string, error) {
 		case k == term.KeyBackspace:
 			s := b.String()
 			if len(s) > 0 {
+				_, size := lastUTF8Rune(s)
 				b.Reset()
-				b.WriteString(s[:len(s)-1])
+				b.WriteString(s[:len(s)-size])
 				if echo {
 					fmt.Fprint(ctx.Out(), "\b \b")
 				}
 			}
-		case k >= 32 && k < 127:
+		case term.IsInputByte(k):
 			b.WriteByte(byte(k))
 			if echo {
 				fmt.Fprint(ctx.Out(), string(byte(k)))

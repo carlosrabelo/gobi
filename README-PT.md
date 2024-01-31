@@ -1,18 +1,20 @@
 # Gobi
 
-Interpretador dBase III Plus escrito em Go.
+Clone completo do dBase III Plus em Go, com shell do host e terminais Linux/Windows.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/badge/Go-1.21%2B-blue.svg)](https://go.dev/)
 
 ## Highlights
 
-- Sessão interativa dBase III Plus com o prompt clássico de ponto
+- Sessão completa dBase III Plus com o prompt clássico de ponto
 - Lê e grava tabelas `.dbf`, memos `.dbt`, índices `.ndx` e arquivos `.mem` do dBase III
 - Motor de expressões com o conjunto de funções do III Plus, datas e operadores de string
 - Dez áreas de trabalho, relações, filtros, procedimentos e arquivos de comando
 - Tela cheia com `@ SAY` / `@ GET`, `READ`, `EDIT` e `BROWSE`
-- Reescrita guiada por specs: o comportamento fica em `specs/` antes dos pacotes
+- Tamanho e capacidades do terminal hospedeiro em Linux e Windows; `RUN` / `!` usam o shell do host
+- HELP estruturado (categorias, uso, exemplos) e Assist estável em ecrã completo
+- Rebuild guiado por specs: `specs/` é o sílabo (prompt primeiro); o código pode ser recriado a partir dele
 
 ## Prerequisites
 
@@ -40,7 +42,10 @@ make run -- -e QUIT   # compila se preciso e executa bin/gobi
 ## Development
 
 ```bash
-make build            # grava bin/gobi
+make build            # grava bin/gobi neste host
+make build-linux      # bin/gobi-linux-amd64 (ARCH=arm64 opcional)
+make build-windows    # bin/gobi-windows-amd64.exe
+make build-all        # linux + windows amd64
 make run              # compila se preciso; executa bin/gobi (args depois de --)
 make install          # copia bin/gobi para ~/.local/bin (sem compilar)
 make install-system   # copia bin/gobi para /usr/local/bin (sem compilar)

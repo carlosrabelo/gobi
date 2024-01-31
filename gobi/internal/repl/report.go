@@ -274,9 +274,13 @@ func (p *printTracker) Write(b []byte) (int, error) {
 }
 
 func printSink(ctx *context.Context) io.Writer {
-	// Print sink is the process stdout (constitution); it is not gated by SET CONSOLE.
-	// Writes advance PCOL()/PROW() (032.4).
-	return &printTracker{ctx: ctx, w: ctx.Stdout}
+	// Default sink is stdout; SET PRINTER TO redirects to a host file (038).
+	// Writes advance PCOL()/PROW() (034).
+	w := io.Writer(ctx.Stdout)
+	if ctx.PrinterFile != nil {
+		w = ctx.PrinterFile
+	}
+	return &printTracker{ctx: ctx, w: w}
 }
 
 func cmdEJECT(ctx *context.Context, _ command.Command) error {

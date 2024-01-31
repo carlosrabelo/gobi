@@ -1,18 +1,20 @@
 # Gobi
 
-dBase III Plus interpreter written in Go.
+Complete dBase III Plus clone in Go, with host shell and Linux/Windows terminals.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go Version](https://img.shields.io/badge/Go-1.21%2B-blue.svg)](https://go.dev/)
 
 ## Highlights
 
-- Interactive dBase III Plus session with the classic dot prompt
+- Complete dBase III Plus session with the classic dot prompt
 - Reads and writes dBase III `.dbf` tables, `.dbt` memos, `.ndx` indexes, and `.mem` files
 - Expression engine with the III Plus function set, dates, and string operators
 - Ten work areas, relations, filters, procedures, and command files
 - Full-screen `@ SAY` / `@ GET`, `READ`, `EDIT`, and `BROWSE`
-- Spec-driven rewrite: behavior is defined under `specs/` before packages land
+- Host terminal size and capabilities on Linux and Windows; `RUN` / `!` use the host shell
+- Structured HELP (categories, usage, examples) and a calm full-screen Assist
+- Spec-driven rebuild: `specs/` is the syllabus (prompt-first); code can be recreated from it
 
 ## Prerequisites
 
@@ -41,7 +43,10 @@ bin/gobi demos/hello.prg   # sample tables and .prg files under demos/
 ## Development
 
 ```bash
-make build            # write bin/gobi
+make build            # write bin/gobi for this host
+make build-linux      # bin/gobi-linux-amd64 (ARCH=arm64 optional)
+make build-windows    # bin/gobi-windows-amd64.exe
+make build-all        # linux + windows amd64 cross-builds
 make run              # build if needed; run bin/gobi (args after --)
 make install          # copy bin/gobi to ~/.local/bin (no compile)
 make install-system   # copy bin/gobi to /usr/local/bin (no compile)

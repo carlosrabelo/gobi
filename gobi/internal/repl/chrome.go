@@ -77,6 +77,8 @@ func setHistoryFlags(ctx *context.Context, m *Mux, name string, args []string, t
 		switch name {
 		case "STATUS":
 			ctx.Config.Status = on
+			_ = ensureScreen(ctx)
+			_ = flushScreen(ctx)
 		case "SCOREBOARD":
 			ctx.Config.Scoreboard = on
 		case "MENUS":
@@ -88,10 +90,16 @@ func setHistoryFlags(ctx *context.Context, m *Mux, name string, args []string, t
 		if text == "" && len(args) >= 2 && strings.EqualFold(args[1], "TO") {
 			text = strings.Join(args[2:], " ")
 		}
+		text = strings.Trim(text, "\"'")
+		if text == "" {
+			text = defaultDotMessage
+		}
 		if len(text) > 79 {
 			text = text[:79]
 		}
 		ctx.Message = text
+		_ = ensureScreen(ctx)
+		showSessionChrome(ctx, false)
 		return nil
 	case "MEMOWIDTH":
 		n := 0

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/carlosrabelo/gobi/gobi/internal/version"
 )
 
 // ErrUnknownFunction means the name is not a built-in in this package.
@@ -976,7 +978,7 @@ func builtinVERSION(args []Value) (Value, error) {
 	if err := requireArity("VERSION", args, 0); err != nil {
 		return Value{}, err
 	}
-	return StringVal("GOBI 1.0"), nil
+	return StringVal(version.String()), nil
 }
 
 func builtinFKMAX(args []Value) (Value, error) {

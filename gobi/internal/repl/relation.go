@@ -91,11 +91,13 @@ func applyRelation(ctx *context.Context) error {
 
 func setFilter(ctx *context.Context, exprSrc string) error {
 	a := ctx.Active()
-	if strings.EqualFold(strings.TrimSpace(exprSrc), "FILE") ||
-		strings.HasPrefix(strings.ToUpper(strings.TrimSpace(exprSrc)), "FILE ") {
-		return failCode(ctx, 36, "SET FILTER TO FILE is not available in Gobi")
+	src := strings.TrimSpace(exprSrc)
+	up := strings.ToUpper(src)
+	if up == "FILE" || strings.HasPrefix(up, "FILE ") {
+		name := strings.TrimSpace(src[4:])
+		return setFilterToFile(ctx, name)
 	}
-	a.FilterExpr = strings.TrimSpace(exprSrc)
+	a.FilterExpr = src
 	return nil
 }
 

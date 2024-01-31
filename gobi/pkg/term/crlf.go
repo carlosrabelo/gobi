@@ -9,6 +9,15 @@ type CRLFWriter struct {
 	W io.Writer
 }
 
+// Unwrap returns the underlying writer so host size/caps probes can reach the
+// real *os.File after the interactive loop wraps stdout.
+func (c *CRLFWriter) Unwrap() io.Writer {
+	if c == nil {
+		return nil
+	}
+	return c.W
+}
+
 func (c *CRLFWriter) Write(p []byte) (int, error) {
 	if c == nil || c.W == nil {
 		return 0, io.ErrClosedPipe
