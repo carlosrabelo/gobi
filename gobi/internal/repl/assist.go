@@ -94,25 +94,36 @@ func (m *Mux) cmdASSIST(ctx *context.Context, cmd command.Command) error {
 		return fail(ctx, "ASSIST takes no arguments")
 	}
 	ctx.AssistOpen = true
+	ctx.StatusMode = StatusModeAssist
 	defer func() {
 		ctx.AssistOpen = false
+		ctx.StatusMode = ""
 		if scr := ctx.Screen; scr != nil {
 			_ = scr.ClearTerminal(ctx.Out())
 		}
+		_ = applyStatusScroll(ctx)
 	}()
 
 	scr := ensureScreen(ctx)
-	keys := term.NewReader(ctx.Stdin)
-	ctx.Keys = keys
+	if ctx.Keys == nil {
+		ctx.Keys = term.NewReader(ctx.Stdin)
+	}
+	keys := ctx.Keys
 	cat := 0
 	barScroll := 0
 	inSub := false
 	item := 0
 	msg := "Esc=leave  Left/Right=menu  Down=open"
 
+	drawAssistShell(ctx, scr, cat, barScroll, inSub, item, msg)
+	if err := flushScreenClear(ctx); err != nil {
+		return err
+	}
+	keys.DrainPendingLineEnds()
+
 	for {
 		drawAssistShell(ctx, scr, cat, barScroll, inSub, item, msg)
-		if err := flushScreenClear(ctx); err != nil {
+		if err := flushScreen(ctx); err != nil {
 			return err
 		}
 		k, err := keys.ReadKey()
@@ -563,7 +574,7 @@ func assistPrompt(ctx *context.Context, keys *term.Reader, label string) (text s
 				b.Reset()
 				b.WriteString(s[:len(s)-1])
 			}
-		case k >= 32 && k < 127 && b.Len() < 80:
+		case term.IsInputByte(k) && b.Len() < 80:
 			b.WriteByte(byte(k))
 		}
 	}
@@ -598,22 +609,23 @@ func assistEnsureCatVisible(cols, cat, scroll int) int {
 }
 
 func drawAssistShell(ctx *context.Context, scr *term.Screen, cat, barScroll int, inSub bool, item int, message string) {
-	scr.Clear()
+	// Blank rows via spaces (dirty present) instead of Screen.Clear + PresentClear.
+	for r := 0; r < scr.Rows; r++ {
+		scr.WriteString(r, 0, strings.Repeat(" ", scr.Cols), false)
+	}
 	rev := ctx.Config.Intensity
 	drawAssistBar(scr, cat, barScroll, rev)
 	if inSub {
 		drawAssistSubmenu(scr, cat, item, rev)
 	}
-	msgRow := scr.Rows - 2
-	statRow := scr.Rows - 1
 	if message == "" {
-		message = "Esc=leave"
+		message = "Esc=leave  Left/Right=menu  Down=open"
 	}
-	if len(message) > scr.Cols {
-		message = message[:scr.Cols]
-	}
-	scr.WriteString(msgRow, 0, message, false)
-	scr.WriteString(statRow, 0, assistStatusLine(ctx, scr.Cols), false)
+	prev := ctx.Message
+	ctx.Message = message
+	ctx.StatusMode = StatusModeAssist
+	paintStatusBand(ctx, StatusModeAssist, true) // ASSIST always shows the bar
+	ctx.Message = prev
 }
 
 func drawAssistBar(scr *term.Screen, cat, scroll int, reverseActive bool) {
@@ -638,9 +650,10 @@ func drawAssistBar(scr *term.Screen, cat, scroll int, reverseActive bool) {
 
 func drawAssistSubmenu(scr *term.Screen, cat, item int, reverseActive bool) {
 	items := assistMenu[cat].Items
-	maxRows := scr.Rows - 3
+	work := statusWorkRows(scr.Rows)
+	maxRows := work - 2 // below menu bar, above item-help row
 	if maxRows < 1 {
-		return
+		maxRows = 1
 	}
 	start := 0
 	if item >= maxRows {
@@ -655,7 +668,7 @@ func drawAssistSubmenu(scr *term.Screen, cat, item int, reverseActive bool) {
 		scr.WriteString(row, 0, label, reverseActive && i == item)
 	}
 	if item >= 0 && item < len(items) && items[item].Help != "" {
-		helpRow := scr.Rows - 3
+		helpRow := work - 1
 		if helpRow > 1 {
 			h := items[item].Help
 			if len(h) > scr.Cols {

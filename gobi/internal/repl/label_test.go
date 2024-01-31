@@ -55,17 +55,14 @@ func TestLABELForm(t *testing.T) {
 	}
 }
 
-func TestRefuseLOADStillClosed(t *testing.T) {
+func TestLOADMissingModuleErrors(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	var errBuf bytes.Buffer
 	ctx.Stderr = &errBuf
 	ctx.Stdout = &bytes.Buffer{}
 	mux := NewMux()
 	err := mux.Dispatch(ctx, command.Split("LOAD x"))
-	if err == nil || !strings.Contains(err.Error(), "not available") {
+	if err == nil || !strings.Contains(err.Error(), "cannot load") {
 		t.Fatalf("%v", err)
-	}
-	if ctx.LastError != 36 {
-		t.Fatalf("code %d", ctx.LastError)
 	}
 }

@@ -64,7 +64,11 @@ func cmdRELEASE(ctx *context.Context, cmd command.Command) error {
 	up := strings.ToUpper(args)
 	fields := strings.Fields(up)
 	if fields[0] == "MODULE" {
-		return failCode(ctx, 36, "RELEASE MODULE is not available in Gobi")
+		name := ""
+		if len(fields) > 1 {
+			name = strings.Join(fields[1:], " ")
+		}
+		return releaseModule(ctx, name)
 	}
 	if fields[0] == "ALL" {
 		if len(fields) == 1 {

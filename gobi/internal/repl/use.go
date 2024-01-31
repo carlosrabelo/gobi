@@ -21,6 +21,10 @@ func cmdUSE(ctx *context.Context, cmd command.Command) error {
 			return err
 		}
 	}
+	if name != "" {
+		a := ctx.Active()
+		catalogAddDBF(ctx, a.Path, a.Alias)
+	}
 	return nil
 }
 

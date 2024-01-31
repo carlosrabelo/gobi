@@ -127,6 +127,25 @@ func TestResolveDefaultAndPath(t *testing.T) {
 	}
 }
 
+func TestResolveUTF8HostPath(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "dados-ação")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(dir, "aqui.dbf"), []byte("x"))
+
+	ctx := New()
+	ctx.Config.Default = dir
+	got, err := ctx.Resolve("aqui.dbf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != filepath.Join(dir, "aqui.dbf") {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func mustWrite(t *testing.T, path string, data []byte) {
 	t.Helper()
 	if err := os.WriteFile(path, data, 0o644); err != nil {

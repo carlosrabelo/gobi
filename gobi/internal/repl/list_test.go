@@ -41,6 +41,17 @@ func TestLISTAllAndFieldList(t *testing.T) {
 	if !strings.Contains(got, "ANN") || !strings.Contains(got, "BOB") || !strings.Contains(got, "CYN") {
 		t.Fatalf("rows: %q", got)
 	}
+	// III Plus: fixed-width columns (NAME C4, AGE N3) — headers and values align.
+	colLines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	if len(colLines) < 2 {
+		t.Fatalf("expected header+rows: %q", got)
+	}
+	if colLines[0] != "Record# NAME AGE" {
+		t.Fatalf("column header: got %q want %q", colLines[0], "Record# NAME AGE")
+	}
+	if colLines[1] != "      1 ANN   10" {
+		t.Fatalf("column row: got %q", colLines[1])
+	}
 	a := ctx.Active()
 	if a.Cursor != 4 || a.Landed {
 		t.Fatalf("cursor after LIST: %d landed=%v", a.Cursor, a.Landed)

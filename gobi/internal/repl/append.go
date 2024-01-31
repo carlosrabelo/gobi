@@ -28,7 +28,7 @@ func (m *Mux) cmdAPPEND(ctx *context.Context, cmd command.Command) error {
 	if len(ctx.FormatLines) > 0 {
 		return m.formatForm(ctx, true)
 	}
-	return editForm(ctx, true)
+	return editForm(ctx, true, nil, 0)
 }
 
 func appendBlank(ctx *context.Context) error {

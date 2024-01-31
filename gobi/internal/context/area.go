@@ -38,6 +38,9 @@ type Area struct {
 	RelAlias   string // INTO alias
 	FieldList  []string
 	FieldsOn   bool
+
+	Locked   bool     // advisory lock held (038)
+	LockFile *os.File // underlying lock handle
 }
 
 // HasTable reports whether a DBF is open in the area.

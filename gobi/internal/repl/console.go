@@ -78,7 +78,7 @@ func cmdWAIT(ctx *context.Context, cmd command.Command) error {
 		ch := ""
 		if k == term.KeyEnter {
 			ch = "\r"
-		} else if k > 0 && k < 127 {
+		} else if term.IsInputByte(k) {
 			ch = string(byte(k))
 		}
 		if err := ctx.Symbols.Set(strings.Fields(to)[0], expr.StringVal(ch)); err != nil {

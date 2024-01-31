@@ -36,7 +36,7 @@ func TestCOUNTForTalkAndCursor(t *testing.T) {
 	if err := mux.Dispatch(ctx, command.Split("COUNT FOR AGE = 20")); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(out.String()) != "2" {
+	if strings.TrimSpace(out.String()) != "2 records" {
 		t.Fatalf("COUNT print: %q", out.String())
 	}
 	if ctx.Active().Cursor != 2 {
@@ -50,7 +50,7 @@ func TestCOUNTForTalkAndCursor(t *testing.T) {
 	if err := mux.Dispatch(ctx, command.Split("COUNT FOR AGE = 20 TO N")); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(out.String()) != "2" {
+	if strings.TrimSpace(out.String()) != "2 records" {
 		t.Fatalf("COUNT TO print: %q", out.String())
 	}
 	if len(ctx.PendingTO) != 1 || ctx.PendingTO[0] != "N" || ctx.PendingVals[0] != 2 {
@@ -99,7 +99,7 @@ func TestSUMAndAVERAGE(t *testing.T) {
 	if err := mux.Dispatch(ctx, command.Split("SUM AGE")); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(out.String()) != "90" {
+	if strings.TrimSpace(out.String()) != "sum = 90" {
 		t.Fatalf("SUM: %q", out.String())
 	}
 	if ctx.Active().Cursor != 3 {
@@ -121,7 +121,7 @@ func TestSUMAndAVERAGE(t *testing.T) {
 	if err := mux.Dispatch(ctx, command.Split("AVERAGE AGE")); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(out.String()) != "22.5" {
+	if strings.TrimSpace(out.String()) != "average = 22.5" {
 		t.Fatalf("AVERAGE: %q", out.String())
 	}
 
@@ -129,7 +129,7 @@ func TestSUMAndAVERAGE(t *testing.T) {
 	if err := mux.Dispatch(ctx, command.Split("SUM AGE FOR AGE > 100")); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(out.String()) != "0" {
+	if strings.TrimSpace(out.String()) != "sum = 0" {
 		t.Fatalf("SUM zero matches: %q", out.String())
 	}
 	if ctx.PendingVals[0] != 0 {
@@ -140,7 +140,7 @@ func TestSUMAndAVERAGE(t *testing.T) {
 	if err := mux.Dispatch(ctx, command.Split("AVERAGE AGE FOR AGE > 100")); err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(out.String()) != "0" {
+	if strings.TrimSpace(out.String()) != "average = 0" {
 		t.Fatalf("AVERAGE zero: %q", out.String())
 	}
 }

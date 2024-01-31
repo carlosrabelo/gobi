@@ -122,7 +122,10 @@ func (e *sessionEnv) Call(name string, args []expr.Value) (expr.Value, error) {
 		}
 		return expr.StringVal(fmt.Sprintf("F%d", n)), nil
 	case "FLOCK", "RLOCK", "LOCK":
-		return expr.Value{}, fmt.Errorf("%s is not available in Gobi", strings.ToUpper(name))
+		if len(args) != 0 {
+			return expr.Value{}, fmt.Errorf("%s: wrong number of arguments", strings.ToUpper(name))
+		}
+		return expr.LogicalVal(tryFileLock(e.ctx)), nil
 	}
 	return expr.CallBuiltin(name, args, e.ctx.ExprArea(), e)
 }

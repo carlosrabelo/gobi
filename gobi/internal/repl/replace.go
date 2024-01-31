@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
@@ -14,7 +15,8 @@ func cmdREPLACE(ctx *context.Context, cmd command.Command) error {
 	if !a.HasTable() {
 		return fail(ctx, "no database in use")
 	}
-	fieldName, exprSrc, err := parseReplaceArgs(cmd.Args)
+	scope := parseScope(cmd)
+	fieldName, exprSrc, err := parseReplaceArgs(scope.Rest)
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
@@ -42,7 +44,7 @@ func cmdREPLACE(ctx *context.Context, cmd command.Command) error {
 	env := newEnv(ctx)
 	f := a.Table.Header.Fields[fi]
 
-	if forExpr == nil && whileExpr == nil {
+	if scope.Kind == "" && forExpr == nil && whileExpr == nil {
 		if !a.Landed {
 			return fail(ctx, "no current record")
 		}
@@ -50,15 +52,23 @@ func cmdREPLACE(ctx *context.Context, cmd command.Command) error {
 	}
 
 	count := a.RecCount()
-	start := 1
-	if whileExpr != nil {
-		start = a.Cursor
-		if start < 1 {
-			start = 1
+	start, end := scopeRange(count, a.Cursor, scope)
+	if scope.Kind == "" {
+		start = 1
+		end = count
+		if whileExpr != nil {
+			start = a.Cursor
+			if start < 1 {
+				start = 1
+			}
 		}
 	}
+	if end < start {
+		return nil
+	}
 	last := 0
-	for n := start; n <= count; n++ {
+	changed := 0
+	for n := start; n <= end; n++ {
 		a.Cursor = n
 		a.BOF = false
 		if err := a.LoadCurrent(); err != nil {
@@ -89,11 +99,15 @@ func cmdREPLACE(ctx *context.Context, cmd command.Command) error {
 			return err
 		}
 		last = n
+		changed++
 	}
 	if last > 0 {
 		a.Cursor = last
 		a.BOF = false
 		_ = a.LoadCurrent()
+	}
+	if ctx.Config.Talk && (scope.Kind != "" || forExpr != nil || whileExpr != nil) {
+		fmt.Fprintf(ctx.Out(), "%d records replaced\n", changed)
 	}
 	return nil
 }

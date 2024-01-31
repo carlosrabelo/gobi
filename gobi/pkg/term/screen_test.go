@@ -44,3 +44,38 @@ func TestResizeClamp(t *testing.T) {
 		t.Fatal("out of range write")
 	}
 }
+
+func TestResizePreservesOverlap(t *testing.T) {
+	s := NewSize(80, 24)
+	s.Put(0, 0, 'A', true)
+	s.Put(5, 10, 'B', false)
+	s.Resize(120, 40)
+	if s.Cols != 120 || s.Rows != 40 {
+		t.Fatalf("size %dx%d", s.Cols, s.Rows)
+	}
+	if s.CellAt(0, 0).Ch != 'A' || !s.CellAt(0, 0).Reverse {
+		t.Fatalf("lost 0,0: %+v", s.CellAt(0, 0))
+	}
+	if s.CellAt(5, 10).Ch != 'B' {
+		t.Fatalf("lost 5,10: %+v", s.CellAt(5, 10))
+	}
+	if s.CellAt(39, 119).Ch != ' ' {
+		t.Fatal("new cell should be space")
+	}
+}
+
+func TestPresentClearHomesCursor(t *testing.T) {
+	s := NewSize(40, 10)
+	s.Put(0, 0, 'X', false)
+	var out bytes.Buffer
+	if err := s.PresentClear(&out); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.HasSuffix(got, "\x1b[H") {
+		t.Fatalf("expected home after clear: %q", got)
+	}
+	if s.NextRow != 0 || s.NextCol != 0 {
+		t.Fatalf("cursor %d,%d", s.NextRow, s.NextCol)
+	}
+}

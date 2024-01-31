@@ -8,7 +8,7 @@ func TestProgramFunctionsAcceptance(t *testing.T) {
 		t.Fatal("ISALPHA")
 	}
 	got = mustEval(t, "VERSION()", &testEnv{})
-	if got.Str != "GOBI 1.0" {
+	if got.Str != "Gobi 0.1.0" {
 		t.Fatalf("VERSION %q", got.Str)
 	}
 	got = mustEval(t, "FKMAX()", &testEnv{})

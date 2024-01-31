@@ -7,40 +7,43 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
 	"github.com/carlosrabelo/gobi/gobi/pkg/help"
+	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
 func (m *Mux) cmdHELP(ctx *context.Context, cmd command.Command) error {
 	args := strings.TrimSpace(cmd.Args)
+	width := helpWidth(ctx)
+
 	if args == "" {
-		verbs := make([]string, 0, len(m.handlers))
-		for v := range m.handlers {
-			if v == "*" || v == "??" || v == "?" {
-				continue
-			}
-			verbs = append(verbs, v)
+		if term.IsTerminalWriter(ctx.Stdout) {
+			return m.helpBrowser(ctx, "")
 		}
-		for i := 0; i < len(verbs); i++ {
-			for j := i + 1; j < len(verbs); j++ {
-				if verbs[j] < verbs[i] {
-					verbs[i], verbs[j] = verbs[j], verbs[i]
-				}
-			}
-		}
-		for _, v := range verbs {
-			fmt.Fprintln(ctx.Out(), v)
-		}
+		fmt.Fprint(ctx.Out(), help.FormatCatalog(width))
 		return nil
 	}
+
 	topic := strings.ToUpper(strings.TrimSpace(args))
-	text, ok := help.Text(topic)
+	t, ok := help.Lookup(topic)
 	if !ok {
-		// Fall back to the first word (e.g. HELP USE).
-		verb := strings.Fields(topic)[0]
-		text, ok = help.Text(verb)
+		fields := strings.Fields(topic)
+		if len(fields) == 0 {
+			return fail(ctx, "no help for %s", topic)
+		}
+		t, ok = help.Lookup(fields[0])
 		if !ok {
 			return fail(ctx, "no help for %s", topic)
 		}
 	}
-	fmt.Fprintln(ctx.Out(), text)
+	if term.IsTerminalWriter(ctx.Stdout) {
+		return m.helpBrowser(ctx, t.Name)
+	}
+	fmt.Fprint(ctx.Out(), help.FormatTopic(t, width))
 	return nil
+}
+
+func helpWidth(ctx *context.Context) int {
+	if ctx.Screen != nil && ctx.Screen.Cols >= 40 {
+		return ctx.Screen.Cols
+	}
+	return 80
 }

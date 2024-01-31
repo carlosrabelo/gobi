@@ -36,6 +36,21 @@ func TestASSISTShellEscLeaves(t *testing.T) {
 	}
 }
 
+// Leftover LF after typing ASSIST+Enter must not open a submenu (one Esc leaves).
+func TestASSISTEscLeavesDespiteTrailingLF(t *testing.T) {
+	ctx := testCtx(t, t.TempDir())
+	ctx.Stdout = &bytes.Buffer{}
+	ctx.Stderr = &bytes.Buffer{}
+	ctx.Stdin = strings.NewReader("\n" + string(rune(term.KeyEsc)))
+	mux := NewMux()
+	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.AssistOpen {
+		t.Fatal("AssistOpen still set after one Esc")
+	}
+}
+
 func TestASSISTNavigationSubmenu(t *testing.T) {
 	ctx := testCtx(t, t.TempDir())
 	ctx.Stdout = &bytes.Buffer{}
@@ -43,8 +58,8 @@ func TestASSISTNavigationSubmenu(t *testing.T) {
 	// Right to Create, Down open, letter D jumps? Create items Database/From.
 	// Down opens Set Up submenu, Esc back, Esc leave.
 	ctx.Stdin = strings.NewReader(
-		string(rune(term.KeyRight)) + // Create
-			string(rune(term.KeyDown)) + // open
+		"\x1b[C" + // Create
+			"\x1b[B" + // open
 			string(rune(term.KeyEsc)) + // back
 			string(rune(term.KeyEsc)), // leave
 	)
@@ -66,7 +81,7 @@ func TestASSISTUseFromSetUp(t *testing.T) {
 	ctx.Stdout = &bytes.Buffer{}
 	ctx.Stderr = &bytes.Buffer{}
 	// Set Up is first; Down open; Enter Database file; type c; Enter; Esc Esc leave.
-	in := string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) + "c" + string(rune(term.KeyEnter)) +
+	in := "\x1b[B" + string(rune(term.KeyEnter)) + "c" + string(rune(term.KeyEnter)) +
 		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
 	ctx.Stdin = strings.NewReader(in)
 	mux := NewMux()
@@ -89,8 +104,8 @@ func TestASSISTDirFromTools(t *testing.T) {
 	ctx.Stderr = &bytes.Buffer{}
 	mux := NewMux()
 	// Tools is index 7: Right×7, Down, Enter Dir, Esc Esc
-	in := strings.Repeat(string(rune(term.KeyRight)), 7) +
-		string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) +
+	in := strings.Repeat("\x1b[C", 7) +
+		"\x1b[B" + string(rune(term.KeyEnter)) +
 		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
 	ctx.Stdin = strings.NewReader(in)
 	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
@@ -113,8 +128,8 @@ func TestASSISTListFromRetrieve(t *testing.T) {
 	mux := NewMux()
 	_ = mux.Dispatch(ctx, command.Split("USE c"))
 	// Retrieve is index 4: Right×4, Down, Enter List, Esc Esc
-	in := strings.Repeat(string(rune(term.KeyRight)), 4) +
-		string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) +
+	in := strings.Repeat("\x1b[C", 4) +
+		"\x1b[B" + string(rune(term.KeyEnter)) +
 		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
 	ctx.Stdin = strings.NewReader(in)
 	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
@@ -139,8 +154,8 @@ func TestASSISTGotoFromPosition(t *testing.T) {
 	mux := NewMux()
 	_ = mux.Dispatch(ctx, command.Split("USE c"))
 	// Position is index 3: Right×3, Down, Down (Skip is 2nd? Goto is first), Enter, "2", Enter, Esc Esc
-	in := strings.Repeat(string(rune(term.KeyRight)), 3) +
-		string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) + "2" + string(rune(term.KeyEnter)) +
+	in := strings.Repeat("\x1b[C", 3) +
+		"\x1b[B" + string(rune(term.KeyEnter)) + "2" + string(rune(term.KeyEnter)) +
 		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
 	ctx.Stdin = strings.NewReader(in)
 	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
@@ -160,7 +175,7 @@ func TestASSISTPromptCancel(t *testing.T) {
 	ctx.Stdout = &bytes.Buffer{}
 	ctx.Stderr = &bytes.Buffer{}
 	// Open Database file prompt then Esc cancel; leave Assist.
-	in := string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) + string(rune(term.KeyEsc)) +
+	in := "\x1b[B" + string(rune(term.KeyEnter)) + string(rune(term.KeyEsc)) +
 		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
 	ctx.Stdin = strings.NewReader(in)
 	mux := NewMux()
@@ -195,9 +210,9 @@ func TestASSISTHelpAndExitQuit(t *testing.T) {
 	if strings.Contains(out.String(), "not available") {
 		t.Fatalf("HELP still refuses: %q", out.String())
 	}
-	// Exit category: Right×8, Down, Down (Quit to DOS is 2nd item), Enter
-	in := strings.Repeat(string(rune(term.KeyRight)), 8) +
-		string(rune(term.KeyDown)) + string(rune(term.KeyDown)) + string(rune(term.KeyEnter))
+	// Exit category: Right×8, Down, Down (Quit is 2nd item), Enter
+	in := strings.Repeat("\x1b[C", 8) +
+		"\x1b[B" + "\x1b[B" + string(rune(term.KeyEnter))
 	ctx.Stdin = strings.NewReader(in)
 	err := mux.Dispatch(ctx, command.Split("ASSIST"))
 	if err != ErrQuit {
@@ -218,8 +233,8 @@ func TestASSISTModifyStructureTakesScreen(t *testing.T) {
 	mux := NewMux()
 	_ = mux.Dispatch(ctx, command.Split("USE c"))
 	// Modify is index 6: Right×6, Down, Enter Structure; keep NAME only; Esc leave Assist.
-	in := strings.Repeat(string(rune(term.KeyRight)), 6) +
-		string(rune(term.KeyDown)) + string(rune(term.KeyEnter)) +
+	in := strings.Repeat("\x1b[C", 6) +
+		"\x1b[B" + string(rune(term.KeyEnter)) +
 		"NAME\nC\n4\n0\n\n" +
 		string(rune(term.KeyEsc)) + string(rune(term.KeyEsc))
 	ctx.Stdin = strings.NewReader(in)

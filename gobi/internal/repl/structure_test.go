@@ -35,8 +35,11 @@ func TestDISPLAYSTRUCTURE(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	if !strings.Contains(got, "NAME") || !strings.Contains(got, " C ") {
-		t.Fatalf("missing C field line: %q", got)
+	if !strings.Contains(got, "NAME") || !strings.Contains(got, "Character") {
+		t.Fatalf("missing Character field line: %q", got)
+	}
+	if !strings.Contains(got, "Structure for database:") || !strings.Contains(got, "** Total **") {
+		t.Fatalf("missing III Plus STRUCTURE framing: %q", got)
 	}
 	if !strings.Contains(got, "cust.dbf") {
 		t.Fatalf("missing file name: %q", got)

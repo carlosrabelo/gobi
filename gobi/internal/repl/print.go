@@ -45,7 +45,7 @@ func printExprs(ctx *context.Context, args string, newline bool) error {
 		if err != nil {
 			return fail(ctx, "%s", err.Error())
 		}
-		out = append(out, formatDisplayValue(ctx, v))
+		out = append(out, formatQuestionValue(ctx, tree, v))
 	}
 	writeScreenLine(ctx, strings.Join(out, " "), newline)
 	return nil
@@ -54,6 +54,27 @@ func printExprs(ctx *context.Context, args string, newline bool) error {
 func formatDisplayValue(ctx *context.Context, v expr.Value) string {
 	if v.Kind == expr.KindNumber && ctx.Config.Fixed {
 		return strconv.FormatFloat(v.Num, 'f', ctx.Config.Decimals, 64)
+	}
+	return v.String()
+}
+
+// formatQuestionValue formats ? / ?? output. A bare numeric field uses the
+// field's Decimals (III Plus); SET FIXED still wins when on.
+func formatQuestionValue(ctx *context.Context, tree expr.Expression, v expr.Value) string {
+	if v.Kind == expr.KindNumber && ctx.Config.Fixed {
+		return strconv.FormatFloat(v.Num, 'f', ctx.Config.Decimals, 64)
+	}
+	if v.Kind == expr.KindNumber {
+		if id, ok := tree.(*expr.IdentNode); ok {
+			a := ctx.Active()
+			if a.HasTable() {
+				fi := fieldIndex(a, id.Name)
+				if fi >= 0 && a.Table.Header.Fields[fi].Type == 'N' {
+					d := int(a.Table.Header.Fields[fi].Decimals)
+					return strconv.FormatFloat(v.Num, 'f', d, 64)
+				}
+			}
+		}
 	}
 	return v.String()
 }

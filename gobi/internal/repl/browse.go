@@ -1,13 +1,13 @@
 package repl
 
 import (
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
+	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
 	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
@@ -38,8 +38,13 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 	}
 
 	scr := ensureScreen(ctx)
-	defer func() { _ = scr.ClearTerminal(ctx.Out()) }()
-	keys := term.NewReader(ctx.Stdin)
+	ctx.StatusMode = StatusModeBrowse
+	defer func() { _ = leaveFullScreen(ctx) }()
+	if ctx.Keys == nil {
+		ctx.Keys = term.NewReader(ctx.Stdin)
+	}
+	keys := ctx.Keys
+	keys.DrainPendingLineEnds()
 	rec := a.Cursor
 	if rec < 1 {
 		rec = 1
@@ -48,19 +53,14 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 	hScroll := 0
 	editing := false
 	editBuf := ""
-
-	status := func() {
-		name := fields[cols[col]].Name
-		mark := " "
-		if editing {
-			mark = "*"
-		}
-		line := fmt.Sprintf("Rec:%d %s%s", rec, name, mark)
-		scr.WriteString(scr.Rows-1, 0, padRight(line, scr.Cols), false)
-	}
+	firstPaint := true
 
 	redraw := func() {
-		scr.Clear()
+		blank := strings.Repeat(" ", scr.Cols)
+		work := statusWorkRows(scr.Rows)
+		for r := 0; r < work; r++ {
+			scr.WriteString(r, 0, blank, false)
+		}
 		_ = opts.lock
 		startCol := hScroll
 		if startCol >= len(cols) {
@@ -69,13 +69,7 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 		x := 0
 		for ci := startCol; ci < len(cols) && x < scr.Cols; ci++ {
 			fi := cols[ci]
-			w := int(fields[fi].Length)
-			if opts.width > 0 && w > opts.width {
-				w = opts.width
-			}
-			if w < 1 {
-				w = 1
-			}
+			w := browseColWidth(fields[fi], opts.width)
 			hdr := fields[fi].Name
 			if len(hdr) > w {
 				hdr = hdr[:w]
@@ -83,13 +77,15 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 			scr.WriteString(0, x, padRight(hdr, w), false)
 			x += w + 1
 		}
-		maxRows := scr.Rows - 2
+		maxRows := work - 1
+		if maxRows < 1 {
+			maxRows = 1
+		}
 		for row := 0; row < maxRows; row++ {
 			rn := rec - maxRows/2 + row
 			if rn < 1 || rn > a.RecCount() {
 				continue
 			}
-			_ = a.Table // read without moving cursor permanently
 			r, err := a.Table.Read(rn)
 			if err != nil {
 				continue
@@ -97,11 +93,11 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 			x := 0
 			for ci := startCol; ci < len(cols) && x < scr.Cols; ci++ {
 				fi := cols[ci]
-				w := int(fields[fi].Length)
-				if opts.width > 0 && w > opts.width {
-					w = opts.width
-				}
+				w := browseColWidth(fields[fi], opts.width)
 				text := fieldDisplay(r.Values[fi], fields[fi])
+				if fields[fi].Type == 'M' {
+					text = memoBrowseLabel(a, r.Values[fi])
+				}
 				if rn == rec && ci == col && editing {
 					text = editBuf
 				}
@@ -113,8 +109,51 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 				x += w + 1
 			}
 		}
-		status()
-		_ = flushScreenClear(ctx)
+		name := fields[cols[col]].Name
+		if editing {
+			ctx.Message = name + " *"
+		} else {
+			ctx.Message = name
+		}
+		paintStatusBand(ctx, StatusModeBrowse, true)
+		if firstPaint {
+			_ = flushScreenClear(ctx)
+			firstPaint = false
+		} else {
+			_ = flushScreen(ctx)
+		}
+	}
+
+	startCellEdit := func() error {
+		fi := cols[col]
+		if opts.freeze != "" && !strings.EqualFold(fields[fi].Name, opts.freeze) {
+			return nil
+		}
+		r, err := a.Table.Read(rec)
+		if err != nil {
+			return err
+		}
+		if fields[fi].Type == 'M' {
+			text := memoFieldText(a, r.Values[fi])
+			newText, ok, err := editMemoBuffer(ctx, fields[fi].Name, text)
+			firstPaint = true // memo left the screen
+			if err != nil {
+				return err
+			}
+			if ok {
+				if err := writeMemoField(a, &r, fi, newText); err != nil {
+					return err
+				}
+				_ = a.Table.Write(rec, r)
+				_ = syncAllIndexes(ctx)
+			}
+			redraw()
+			return nil
+		}
+		editBuf = strings.TrimRight(fieldDisplay(r.Values[fi], fields[fi]), " ")
+		editing = true
+		redraw()
+		return nil
 	}
 
 	redraw()
@@ -150,11 +189,8 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 					redraw()
 				}
 			default:
-				if k >= 32 && k < 127 {
-					w := int(fields[cols[col]].Length)
-					if opts.width > 0 && w > opts.width {
-						w = opts.width
-					}
+				if term.IsInputByte(k) {
+					w := browseColWidth(fields[cols[col]], opts.width)
 					if len(editBuf) < w {
 						editBuf += string(byte(k))
 						redraw()
@@ -202,17 +238,17 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 				redraw()
 			}
 		case term.KeyEnter:
-			if opts.freeze != "" && !strings.EqualFold(fields[cols[col]].Name, opts.freeze) {
-				continue
+			if err := startCellEdit(); err != nil {
+				return fail(ctx, "%s", err.Error())
 			}
-			r, _ := a.Table.Read(rec)
-			editBuf = strings.TrimRight(fieldDisplay(r.Values[cols[col]], fields[cols[col]]), " ")
-			editing = true
-			redraw()
 		default:
-			if k >= 32 && k < 127 {
-				if opts.noAppend && false {
-					_ = opts
+			if term.IsInputByte(k) {
+				fi := cols[col]
+				if fields[fi].Type == 'M' {
+					if err := startCellEdit(); err != nil {
+						return fail(ctx, "%s", err.Error())
+					}
+					continue
 				}
 				editBuf = string(byte(k))
 				editing = true
@@ -220,6 +256,20 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 			}
 		}
 	}
+}
+
+func browseColWidth(f dbf.Field, widthCap int) int {
+	w := int(f.Length)
+	if f.Type == 'M' && w < 4 {
+		w = 4
+	}
+	if widthCap > 0 && w > widthCap {
+		w = widthCap
+	}
+	if w < 1 {
+		w = 1
+	}
+	return w
 }
 
 type browseOpts struct {

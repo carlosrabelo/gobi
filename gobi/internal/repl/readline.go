@@ -5,10 +5,23 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
+
+// lastUTF8Rune returns the last rune and its byte size in s (1 if invalid).
+func lastUTF8Rune(s string) (r rune, size int) {
+	r, size = utf8.DecodeLastRuneInString(s)
+	if r == utf8.RuneError && size == 1 {
+		return r, 1
+	}
+	if size <= 0 {
+		return 0, 1
+	}
+	return r, size
+}
 
 // readInteractiveLine reads one line via the session key reader.
 // Enter (CR or LF) ends the line. When stdin is a terminal, bytes are echoed
@@ -37,8 +50,9 @@ func readInteractiveLine(ctx *context.Context) (string, error) {
 		case k == term.KeyBackspace:
 			s := b.String()
 			if len(s) > 0 {
+				_, size := lastUTF8Rune(s)
 				b.Reset()
-				b.WriteString(s[:len(s)-1])
+				b.WriteString(s[:len(s)-size])
 				if echo {
 					fmt.Fprint(ctx.Out(), "\b \b")
 				}
@@ -49,7 +63,7 @@ func readInteractiveLine(ctx *context.Context) (string, error) {
 				fmt.Fprintln(ctx.Out())
 			}
 			return "", nil
-		case k >= 32 && k < 127:
+		case term.IsInputByte(k):
 			b.WriteByte(byte(k))
 			if echo {
 				fmt.Fprint(ctx.Out(), string(byte(k)))

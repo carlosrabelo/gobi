@@ -2,10 +2,12 @@ package repl
 
 import (
 	"bytes"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
+	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
 )
 
 func TestSETFixedDecimalsOnQuestionAndSTR(t *testing.T) {
@@ -82,5 +84,24 @@ func TestQuestionAndDouble(t *testing.T) {
 	}
 	if out.String() != "1 2\n" {
 		t.Fatalf("? commas: %q", out.String())
+	}
+}
+
+func TestQuestionUsesFieldDecimals(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "c.dbf"), []dbf.Field{
+		{Name: "BALANCE", Type: 'N', Length: 10, Decimals: 2},
+	}, []dbf.Record{{Values: []dbf.Value{{Num: 120.5}}}})
+	ctx := testCtx(t, dir)
+	var out bytes.Buffer
+	ctx.Stdout = &out
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE c"))
+	out.Reset()
+	if err := mux.Dispatch(ctx, command.Split("? BALANCE")); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out.String()) != "120.50" {
+		t.Fatalf("want 120.50 got %q", out.String())
 	}
 }

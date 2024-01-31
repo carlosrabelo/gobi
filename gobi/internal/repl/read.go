@@ -124,7 +124,7 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 				_ = flushScreen(ctx)
 			}
 		default:
-			if k >= 32 && k < 127 {
+			if term.IsInputByte(k) {
 				g := m.gets[cur]
 				ch := byte(k)
 				if g.PicUpper {

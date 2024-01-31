@@ -58,3 +58,62 @@ func TestReadKeyBareEsc(t *testing.T) {
 		t.Fatalf("got %d want %d", got, KeyEsc)
 	}
 }
+
+func TestReadKeyBracketedPaste(t *testing.T) {
+	// ESC [ 200 ~ hello ESC [ 201 ~ then 'x'
+	in := "\x1b[200~hello\x1b[201~x"
+	r := NewReader(strings.NewReader(in))
+	want := []int{int('h'), int('e'), int('l'), int('l'), int('o'), int('x')}
+	for i, w := range want {
+		got, err := r.ReadKey()
+		if err != nil {
+			t.Fatalf("%d: %v", i, err)
+		}
+		if got != w {
+			t.Fatalf("%d: got %d want %d", i, got, w)
+		}
+	}
+}
+
+func TestReadKeyBracketedPasteNewlinesToSpaces(t *testing.T) {
+	in := "\x1b[200~a\nb\x1b[201~"
+	r := NewReader(strings.NewReader(in))
+	want := []int{int('a'), int(' '), int('b')}
+	for i, w := range want {
+		got, err := r.ReadKey()
+		if err != nil {
+			t.Fatalf("%d: %v", i, err)
+		}
+		if got != w {
+			t.Fatalf("%d: got %d want %d", i, got, w)
+		}
+	}
+}
+
+func TestIsInputByte(t *testing.T) {
+	if !IsInputByte(int('A')) || !IsInputByte(0xc3) || IsInputByte(KeyBackspace) || IsInputByte(KeyUp) {
+		t.Fatal("IsInputByte range wrong")
+	}
+}
+
+func TestDrainPendingLineEnds(t *testing.T) {
+	r := NewReader(strings.NewReader("\r\n\x1b"))
+	r.DrainPendingLineEnds()
+	got, err := r.ReadKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != KeyEsc {
+		t.Fatalf("got %d want Esc; leftover line ends were not drained", got)
+	}
+	// Non line-ending must stay available.
+	r2 := NewReader(strings.NewReader("x"))
+	r2.DrainPendingLineEnds()
+	got, err = r2.ReadKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != int('x') {
+		t.Fatalf("got %d want 'x'", got)
+	}
+}

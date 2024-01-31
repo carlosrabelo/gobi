@@ -13,13 +13,17 @@ import (
 )
 
 func cmdCREATE(ctx *context.Context, cmd command.Command) error {
-	if err := refuseCreateModify(ctx, cmd, "CREATE"); err != nil {
+	if handled, err := createDesignerCmd(ctx, cmd); handled {
 		return err
 	}
 	args := strings.TrimSpace(cmd.Args)
 	from := strings.TrimSpace(cmd.Clauses["FROM"])
 	if from != "" {
 		name := args
+		// CREATE name FROM other — strip trailing FROM clause text if present in Args.
+		if i := strings.Index(strings.ToUpper(name), " FROM "); i >= 0 {
+			name = strings.TrimSpace(name[:i])
+		}
 		if name == "" {
 			return fail(ctx, "CREATE FROM requires a name")
 		}

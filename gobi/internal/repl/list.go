@@ -2,7 +2,9 @@ package repl
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
@@ -17,7 +19,7 @@ func (m *Mux) cmdLIST(ctx *context.Context, cmd command.Command) error {
 		return displayStructure(ctx)
 	}
 	if strings.EqualFold(args, "USERS") {
-		return failCode(ctx, 36, "LIST USERS is not available in Gobi")
+		return nil // local session: no-op (038)
 	}
 	if strings.HasPrefix(up, "FILES") || strings.HasPrefix(up, "STATUS") || strings.EqualFold(args, "MEMORY") || strings.HasPrefix(up, "HISTORY") {
 		if strings.EqualFold(args, "MEMORY") {
@@ -41,7 +43,7 @@ func (m *Mux) cmdDISPLAY(ctx *context.Context, cmd command.Command) error {
 		return displayStructure(ctx)
 	}
 	if strings.EqualFold(args, "USERS") {
-		return failCode(ctx, 36, "DISPLAY USERS is not available in Gobi")
+		return nil // local session: no-op (038)
 	}
 	if strings.EqualFold(args, "MEMORY") {
 		return printMemory(ctx)
@@ -66,23 +68,52 @@ func (m *Mux) cmdDISPLAY(ctx *context.Context, cmd command.Command) error {
 }
 
 func displayStatus(ctx *context.Context) error {
-	fmt.Fprintf(ctx.Out(), "Area: %d\n", ctx.ActiveArea)
+	fmt.Fprintf(ctx.Out(), "Currently Selected Database:\n")
+	fmt.Fprintf(ctx.Out(), "Select area: %2d\n", ctx.ActiveArea)
 	for i := 1; i <= context.AreaCount; i++ {
 		a := ctx.Areas[i]
 		if !a.HasTable() {
 			continue
 		}
-		fmt.Fprintf(ctx.Out(), "  %d: %s", i, a.Path)
-		for _, n := range a.NDX {
-			if n != "" {
-				fmt.Fprintf(ctx.Out(), " %s", n)
-			}
+		alias := a.Alias
+		if alias == "" {
+			alias = "(none)"
+		}
+		fmt.Fprintf(ctx.Out(), "  Area %2d  %-10s  %s\n", i, alias, a.Path)
+		fmt.Fprintf(ctx.Out(), "    Recno  %d / %d", a.Cursor, a.RecCount())
+		if a.Record.Deleted {
+			fmt.Fprint(ctx.Out(), "  Deleted")
 		}
 		fmt.Fprintln(ctx.Out())
+		ndxPrinted := false
+		for _, n := range a.NDX {
+			if n == "" {
+				continue
+			}
+			if !ndxPrinted {
+				fmt.Fprint(ctx.Out(), "    Index ")
+				ndxPrinted = true
+			} else {
+				fmt.Fprint(ctx.Out(), "          ")
+			}
+			fmt.Fprintln(ctx.Out(), n)
+		}
+		if a.FilterExpr != "" {
+			fmt.Fprintf(ctx.Out(), "    Filter %s\n", a.FilterExpr)
+		}
+		if a.RelExpr != "" {
+			fmt.Fprintf(ctx.Out(), "    Relation %s\n", a.RelExpr)
+		}
 	}
 	c := ctx.Config
-	fmt.Fprintf(ctx.Out(), "TALK=%v INTENSITY=%v BELL=%v SAFETY=%v EXACT=%v DELETED=%v\n",
-		c.Talk, c.Intensity, c.Bell, c.Safety, c.Exact, c.Deleted)
+	fmt.Fprintln(ctx.Out(), "SET options:")
+	fmt.Fprintf(ctx.Out(), "  TALK=%v  INTENSITY=%v  BELL=%v  SAFETY=%v\n", c.Talk, c.Intensity, c.Bell, c.Safety)
+	fmt.Fprintf(ctx.Out(), "  EXACT=%v  DELETED=%v  HEADING=%v  CONFIRM=%v\n", c.Exact, c.Deleted, c.Heading, c.Confirm)
+	fmt.Fprintf(ctx.Out(), "  ESCAPE=%v  CONSOLE=%v  PRINT=%v  FIXED=%v\n", c.Escape, c.Console, c.Print, c.Fixed)
+	fmt.Fprintf(ctx.Out(), "  DEFAULT=%s\n", c.Default)
+	if c.Path != "" {
+		fmt.Fprintf(ctx.Out(), "  PATH=%s\n", c.Path)
+	}
 	return nil
 }
 
@@ -109,7 +140,8 @@ func listRecords(ctx *context.Context, cmd command.Command, opts listOpts) error
 	if !a.HasTable() {
 		return fail(ctx, "no database in use")
 	}
-	cols, err := parseColumns(ctx, cmd.Args)
+	scope := parseScope(cmd)
+	cols, err := parseColumns(ctx, scope.Rest)
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
@@ -122,11 +154,16 @@ func listRecords(ctx *context.Context, cmd command.Command, opts listOpts) error
 		return fail(ctx, "%s", err.Error())
 	}
 	env := newEnv(ctx)
-	printHeader(ctx, cols)
+	printHeader(ctx, cols, scope.Off)
 
 	count := a.RecCount()
 	seq := make([]int, 0, count)
-	if opts.fromOne && len(a.IndexOrder) > 0 && whileExpr == nil {
+	if scope.Kind != "" {
+		start, end := scopeRange(count, a.Cursor, scope)
+		for n := start; n <= end; n++ {
+			seq = append(seq, n)
+		}
+	} else if opts.fromOne && len(a.IndexOrder) > 0 && whileExpr == nil {
 		seq = append(seq, a.IndexOrder...)
 	} else {
 		start := 1
@@ -187,7 +224,7 @@ func listRecords(ctx *context.Context, cmd command.Command, opts listOpts) error
 		if a.FieldsOn && len(a.FieldList) > 0 && len(cols) == 0 {
 			useCols = fieldListColumns(a)
 		}
-		if err := printDataLine(ctx, env, useCols, n); err != nil {
+		if err := printDataLine(ctx, env, useCols, n, scope.Off); err != nil {
 			return fail(ctx, "%s", err.Error())
 		}
 		printed++
@@ -291,52 +328,149 @@ func parseColumns(ctx *context.Context, args string) ([]column, error) {
 	return cols, nil
 }
 
-func printHeader(ctx *context.Context, cols []column) {
+func printHeader(ctx *context.Context, cols []column, off bool) {
 	if !ctx.Config.Heading {
 		return
 	}
+	a := ctx.Active()
 	var b strings.Builder
-	b.WriteString("Record#")
-	for _, c := range cols {
-		b.WriteByte(' ')
-		b.WriteString(c.title)
+	if !off {
+		b.WriteString("Record#")
+	}
+	for i, c := range cols {
+		w := listColWidth(a, c)
+		title := c.title
+		if len(title) > w {
+			title = title[:w]
+		}
+		if !off || i > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(padRight(title, w))
 	}
 	writeScreenLine(ctx, b.String(), true)
 }
 
-func printDataLine(ctx *context.Context, env expr.Env, cols []column, recNo int) error {
+func printDataLine(ctx *context.Context, env expr.Env, cols []column, recNo int, off bool) error {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%7d", recNo)
+	if !off {
+		fmt.Fprintf(&b, "%7d", recNo)
+	}
 	a := ctx.Active()
 	var memoExtra []string
-	for _, c := range cols {
+	for i, c := range cols {
+		w := listColWidth(a, c)
 		var s string
 		if c.expr != nil {
 			v, err := expr.Eval(c.expr, env)
 			if err != nil {
 				return err
 			}
-			s = v.String()
+			s = padRight(v.String(), w)
 		} else {
 			f := a.Table.Header.Fields[c.field]
-			if f.Type == 'M' && !a.Record.Values[c.field].Empty {
-				lines := wrapMemo(a.Record.Values[c.field].Str, ctx.Config.MemoWidth)
+			v := a.Record.Values[c.field]
+			if f.Type == 'M' && !v.Empty {
+				lines := wrapMemo(v.Str, ctx.Config.MemoWidth)
 				if len(lines) > 0 {
-					s = lines[0]
+					s = padRight(lines[0], w)
 					memoExtra = append(memoExtra, lines[1:]...)
+				} else {
+					s = padRight("", w)
 				}
 			} else {
-				s = fieldString(f, a.Record.Values[c.field])
+				s = formatListField(ctx, f, v, w)
 			}
 		}
-		b.WriteByte(' ')
+		if !off || i > 0 {
+			b.WriteByte(' ')
+		}
 		b.WriteString(s)
 	}
 	writeScreenLine(ctx, b.String(), true)
+	pad := "        "
+	if off {
+		pad = ""
+	}
 	for _, ln := range memoExtra {
-		writeScreenLine(ctx, "        "+ln, true)
+		writeScreenLine(ctx, pad+ln, true)
 	}
 	return nil
+}
+
+// listColWidth is the III Plus LIST/DISPLAY column width (DBF field length).
+func listColWidth(a *context.Area, c column) int {
+	if c.expr != nil || c.field < 0 || a.Table == nil {
+		// Expression columns: at least the heading width (values pad to match).
+		if n := len(c.title); n > 0 {
+			return n
+		}
+		return 10
+	}
+	w := int(a.Table.Header.Fields[c.field].Length)
+	if w < 1 {
+		w = 1
+	}
+	return w
+}
+
+// formatListField renders one DBF field into a fixed-width LIST cell.
+func formatListField(ctx *context.Context, f dbf.Field, v dbf.Value, w int) string {
+	switch f.Type {
+	case 'N':
+		return formatListNumber(v.Num, w, int(f.Decimals))
+	case 'L':
+		if v.Log {
+			return padRight("T", w)
+		}
+		return padRight("F", w)
+	case 'D':
+		if v.Empty {
+			return padRight("", w)
+		}
+		dv := expr.EmptyDateVal()
+		if t, err := parseYYYYMMDD(strings.TrimSpace(v.Str)); err == nil {
+			dv = expr.DateVal(t)
+		}
+		order := expr.DateAmerican
+		century := false
+		if ctx.Config != nil {
+			if ctx.Config.DateOrder != "" {
+				order = ctx.Config.DateOrder
+			}
+			century = ctx.Config.Century
+		}
+		return padRight(expr.FormatDate(dv, order, century), w)
+	case 'M':
+		return padRight("", w)
+	default: // 'C'
+		return padRight(v.Str, w)
+	}
+}
+
+func formatListNumber(n float64, width, decimals int) string {
+	if width < 1 {
+		width = 1
+	}
+	if decimals < 0 {
+		decimals = 0
+	}
+	s := strconv.FormatFloat(n, 'f', decimals, 64)
+	if len(s) > width {
+		return strings.Repeat("*", width)
+	}
+	return padLeft(s, width)
+}
+
+func padLeft(s string, n int) string {
+	if len(s) >= n {
+		return s[len(s)-n:]
+	}
+	return strings.Repeat(" ", n-len(s)) + s
+}
+
+func parseYYYYMMDD(s string) (time.Time, error) {
+	return time.ParseInLocation("20060102", s, time.Local)
 }
 
 func wrapMemo(s string, width int) []string {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/command"
@@ -25,6 +26,8 @@ func cmdDIR(ctx *context.Context, cmd command.Command) error {
 	if err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
+	// III Plus–style columns: name, records, bytes, last update.
+	fmt.Fprintf(ctx.Out(), "%-16s %8s %10s  %s\n", "File", "Records", "Bytes", "Last Update")
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -39,15 +42,29 @@ func cmdDIR(ctx *context.Context, cmd command.Command) error {
 			continue
 		}
 		recs := int64(0)
+		updated := info.ModTime()
 		if f, err := os.Open(path); err == nil {
 			if tab, err := dbf.Open(f); err == nil {
 				recs = int64(tab.Header.RecordCount)
+				if t, ok := dbfHeaderDate(tab.Header); ok {
+					updated = t
+				}
 			}
 			f.Close()
 		}
-		fmt.Fprintf(ctx.Out(), "%s  %d  %d\n", name, info.Size(), recs)
+		fmt.Fprintf(ctx.Out(), "%-16s %8d %10d  %s\n",
+			name, recs, info.Size(), updated.Format("01/02/06"))
 	}
 	return nil
+}
+
+func dbfHeaderDate(h dbf.Header) (time.Time, bool) {
+	if h.Year == 0 && h.Month == 0 && h.Day == 0 {
+		return time.Time{}, false
+	}
+	y := 1900 + int(h.Year)
+	t := time.Date(y, time.Month(h.Month), int(h.Day), 0, 0, 0, 0, time.Local)
+	return t, true
 }
 
 func cmdRENAME(ctx *context.Context, cmd command.Command) error {
