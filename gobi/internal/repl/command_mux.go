@@ -111,6 +111,8 @@ func (m *CommandMux) registerAll() {
 	m.register("FIND", handleFind)
 	m.register("SEEK", handleSeek)
 	m.register("SORT", handleSort)
+	m.register("CLEAR", handleClear)
+	m.register("SET", handleSet)
 }
 
 func stubHandler(verb string) HandlerFunc {
