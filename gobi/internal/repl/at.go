@@ -16,7 +16,7 @@ func handleAt(ctx *context.Context, cmd Command) error {
 	}
 
 	if _, _, ok := splitAtKeyword(args, "GET"); ok {
-		return fmt.Errorf("*** @ GET is not yet implemented")
+		return handleAtGet(ctx, cmd)
 	}
 	if _, _, ok := splitAtKeyword(args, "SAY"); ok {
 		return handleAtSay(ctx, cmd)

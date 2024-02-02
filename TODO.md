@@ -142,7 +142,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] Double-buffered terminal frame writer
 - [x] `CLEAR` command clearing screen buffer
 - [x] `@ SAY` printing expression string at coordinates
-- [ ] `@ GET` registering interactive input fields
+- [x] `@ GET` registering interactive input fields
 - [ ] `READ` loop handling user editing, Tab, and field validation
 - [ ] Interactive `APPEND` screen generation
 - [ ] Interactive `EDIT` record screen generation
