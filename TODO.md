@@ -141,7 +141,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] Terminal raw-mode keyboard capture adapter
 - [x] Double-buffered terminal frame writer
 - [x] `CLEAR` command clearing screen buffer
-- [ ] `@ SAY` printing expression string at coordinates
+- [x] `@ SAY` printing expression string at coordinates
 - [ ] `@ GET` registering interactive input fields
 - [ ] `READ` loop handling user editing, Tab, and field validation
 - [ ] Interactive `APPEND` screen generation

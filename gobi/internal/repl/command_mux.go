@@ -113,6 +113,7 @@ func (m *CommandMux) registerAll() {
 	m.register("SORT", handleSort)
 	m.register("CLEAR", handleClear)
 	m.register("SET", handleSet)
+	m.register("@", handleAt)
 }
 
 func stubHandler(verb string) HandlerFunc {
