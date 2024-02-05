@@ -96,6 +96,17 @@ func TestIsInputByte(t *testing.T) {
 	}
 }
 
+func TestReadKeyInsert(t *testing.T) {
+	r := NewReader(strings.NewReader("\x1b[2~"))
+	got, err := r.ReadKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != KeyIns {
+		t.Fatalf("got %d want KeyIns", got)
+	}
+}
+
 func TestDrainPendingLineEnds(t *testing.T) {
 	r := NewReader(strings.NewReader("\r\n\x1b"))
 	r.DrainPendingLineEnds()

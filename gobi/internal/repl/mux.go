@@ -204,16 +204,16 @@ func (m *Mux) dispatchLine(ctx *context.Context, cmd command.Command, retryLine 
 		}
 		return err
 	}
+	ctx.KeyRead = false // interactive verbs set true while they own the keyboard
+	stopPump := startTypeaheadPump(ctx)
 	err := h(ctx, cmd)
+	stopPump()
+	ctx.KeyRead = false
 	if err != nil {
 		return m.handleError(ctx, err, retryLine)
 	}
-	if ctx.OnKey != "" && !ctx.InHandler && ctx.Keys != nil {
-		if k := ctx.Keys.Inkey(); k != 0 {
-			// put back conceptually by leaving in typeahead later; run handler once
-			_ = m.Dispatch(ctx, command.Split(ctx.OnKey))
-		}
-	}
+	// ON KEY is handled by maybeOnKey after each program line (keeps the key in
+	// typeahead). Interactive prompt relies on the same helper when needed.
 	return nil
 }
 

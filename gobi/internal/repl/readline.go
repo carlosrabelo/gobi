@@ -30,6 +30,7 @@ func readInteractiveLine(ctx *context.Context) (string, error) {
 	if ctx.Keys == nil {
 		ctx.Keys = term.NewReader(ctx.Stdin)
 	}
+	drainTypeaheadIntoKeys(ctx)
 	keys := ctx.Keys
 	echo := term.IsTerminal(ctx.Stdin)
 	var b strings.Builder
@@ -77,5 +78,6 @@ func readInteractiveKey(ctx *context.Context) (int, error) {
 	if ctx.Keys == nil {
 		ctx.Keys = term.NewReader(ctx.Stdin)
 	}
+	drainTypeaheadIntoKeys(ctx)
 	return ctx.Keys.ReadKey()
 }

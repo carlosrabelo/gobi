@@ -17,7 +17,11 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 		return nil
 	}
 	keep := strings.Contains(strings.ToUpper(cmd.Args), "SAVE")
-	keys := term.NewReader(ctx.Stdin)
+	// Fresh reader from current Stdin (tests replace Stdin between READs), then
+	// feed any typeahead collected while a prior command ran.
+	ctx.Keys = term.NewReader(ctx.Stdin)
+	drainTypeaheadIntoKeys(ctx)
+	keys := ctx.Keys
 	values := make([]string, len(m.gets))
 	for i, g := range m.gets {
 		values[i] = strings.TrimRight(getValueText(ctx, g), " ")
@@ -123,6 +127,10 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 				drawGET(cur, true)
 				_ = flushScreen(ctx)
 			}
+		case term.KeyIns:
+			ctx.InsertMode = !ctx.InsertMode
+			paintChrome(ctx)
+			_ = flushScreen(ctx)
 		default:
 			if term.IsInputByte(k) {
 				g := m.gets[cur]
@@ -148,12 +156,14 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 				if g.Scroll > 0 {
 					maxLen = 254
 				}
-				if len(values[cur]) < maxLen {
-					values[cur] += string(ch)
+				before := values[cur]
+				values[cur] = applyInputByte(values[cur], ch, maxLen, ctx.InsertMode)
+				if values[cur] != before || len(before) < maxLen {
 					drawGET(cur, true)
 					_ = flushScreen(ctx)
 					// SET CONFIRM OFF: a full GET advances without Enter (023.6).
-					if !ctx.Config.Confirm && g.Scroll == 0 && len(values[cur]) >= g.Width {
+					if !ctx.Config.Confirm && g.Scroll == 0 && len(values[cur]) >= g.Width &&
+						(ctx.InsertMode || len(before) < g.Width) {
 						if g.HasRange && !valueInRange(ctx, g, values[cur]) {
 							if ctx.Config.Bell {
 								_, _ = ctx.Out().Write([]byte{7})

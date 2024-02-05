@@ -227,6 +227,7 @@ func (m *Mux) cmdREADWithFormat(ctx *context.Context, cmd command.Command) error
 // targets nil = free record navigation; non-nil = walk that list (FOR/WHILE/scope).
 func editForm(ctx *context.Context, appendMode bool, targets []int, targetIdx int) error {
 	ctx.KeyRead = true
+	drainTypeaheadIntoKeys(ctx)
 	a := ctx.Active()
 	fields := a.Table.Header.Fields
 	scr := ensureScreen(ctx)
@@ -512,6 +513,9 @@ func editForm(ctx *context.Context, appendMode bool, targets []int, targetIdx in
 					return nil
 				}
 				goto outer
+			case term.KeyIns:
+				ctx.InsertMode = !ctx.InsertMode
+				paintForm()
 			case term.KeyCtrlU:
 				if !appendMode {
 					a.Record.Deleted = !a.Record.Deleted
@@ -559,13 +563,12 @@ func editForm(ctx *context.Context, appendMode bool, targets []int, targetIdx in
 						continue
 					}
 					w := int(fields[cur].Length)
-					if len(values[cur]) < w {
-						values[cur] += string(byte(k))
+					before := values[cur]
+					values[cur] = applyInputByte(values[cur], byte(k), w, ctx.InsertMode)
+					paintForm()
+					if !ctx.Config.Confirm && len(values[cur]) >= w && (ctx.InsertMode || len(before) < w) {
+						cur = (cur + 1) % len(fields)
 						paintForm()
-						if !ctx.Config.Confirm && len(values[cur]) >= w {
-							cur = (cur + 1) % len(fields)
-							paintForm()
-						}
 					}
 				}
 			}

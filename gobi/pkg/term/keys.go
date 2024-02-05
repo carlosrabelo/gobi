@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -26,6 +27,7 @@ const (
 	KeyDown      = 328 // CSI/SS3; INKEY reports 24 (same as Ctrl-X)
 	KeyLeft      = 329 // CSI/SS3; INKEY reports 19
 	KeyRight     = 330 // CSI/SS3; INKEY reports 4
+	KeyIns       = 331 // CSI 2 ~; toggles insert/overwrite
 	KeyPgUp      = 29
 	KeyPgDn      = 30
 	KeyF1        = 315
@@ -62,6 +64,7 @@ const escInterByte = 25 * time.Millisecond
 
 // Reader reads keys from a byte stream (tests inject bytes; terminals use raw mode).
 type Reader struct {
+	mu   sync.Mutex
 	r    io.Reader
 	buf  []byte
 	file *os.File // optional; enables Esc inter-byte deadline / poll
@@ -76,10 +79,29 @@ func NewReader(r io.Reader) *Reader {
 	return kr
 }
 
+// PushFront queues b so the next ReadKey/TryInputByte sees it first.
+func (kr *Reader) PushFront(b byte) {
+	kr.mu.Lock()
+	defer kr.mu.Unlock()
+	kr.unread(b)
+}
+
+// TryInputByte returns one pending input byte without blocking.
+// Fails (ok=false) when another ReadKey holds the reader or no data is ready.
+func (kr *Reader) TryInputByte() (byte, bool) {
+	if !kr.mu.TryLock() {
+		return 0, false
+	}
+	defer kr.mu.Unlock()
+	return kr.tryNonblockByte()
+}
+
 // DrainPendingLineEnds discards CR/LF still sitting on the input after the
 // prompt consumed Enter. Full-screen UIs (ASSIST) must call this on entry so a
 // leftover LF is not read as KeyEnter and does not open a submenu.
 func (kr *Reader) DrainPendingLineEnds() {
+	kr.mu.Lock()
+	defer kr.mu.Unlock()
 	for {
 		b, ok := kr.tryNonblockByte()
 		if !ok {
@@ -107,6 +129,12 @@ func (kr *Reader) DrainPendingLineEnds() {
 
 // ReadKey returns the next logical key as an INKEY-style number.
 func (kr *Reader) ReadKey() (int, error) {
+	kr.mu.Lock()
+	defer kr.mu.Unlock()
+	return kr.readKeyLocked()
+}
+
+func (kr *Reader) readKeyLocked() (int, error) {
 	b, err := kr.readByte()
 	if err != nil {
 		return 0, err
@@ -208,7 +236,7 @@ func (kr *Reader) ReadKey() (int, error) {
 						return kr.consumeBracketedPaste()
 					}
 					if num == 201 {
-						return kr.ReadKey() // stray end — ignore
+						return kr.readKeyLocked() // stray end — ignore
 					}
 					if n, ok := fkeyFromCSI(num); ok {
 						return n, nil
@@ -232,8 +260,10 @@ func (kr *Reader) ReadKey() (int, error) {
 }
 
 func fkeyFromCSI(n int) (int, bool) {
-	// xterm: 5/6 = PgUp/PgDn; 11–15 F1–F5, 17–21 F6–F10, 23–24 F11–F12
+	// xterm: 2 = Ins; 5/6 = PgUp/PgDn; 11–15 F1–F5, 17–21 F6–F10, 23–24 F11–F12
 	switch n {
+	case 2:
+		return KeyIns, true
 	case 5:
 		return KeyPgUp, true
 	case 6:
@@ -252,21 +282,23 @@ func fkeyFromCSI(n int) (int, bool) {
 // Inkey returns the next waiting key without blocking. If the underlying reader
 // is not ready, returns 0. For test streams with buffered unread data, consumes one key.
 func (kr *Reader) Inkey() int {
+	if !kr.mu.TryLock() {
+		return 0
+	}
+	defer kr.mu.Unlock()
 	if len(kr.buf) > 0 {
-		k, err := kr.ReadKey()
+		k, err := kr.readKeyLocked()
 		if err != nil {
 			return 0
 		}
 		return InkeyNumber(k)
 	}
-	// Non-blocking: try a one-byte read via type assert when possible.
 	type sized interface{ Len() int }
 	if s, ok := kr.r.(sized); ok && s.Len() == 0 {
 		return 0
 	}
-	// Best effort: if Read would block we cannot know; tests preload via strings.Reader.
 	if s, ok := kr.r.(interface{ Len() int }); ok && s.Len() > 0 {
-		k, err := kr.ReadKey()
+		k, err := kr.readKeyLocked()
 		if err != nil {
 			return 0
 		}
@@ -404,8 +436,5 @@ func (kr *Reader) consumeBracketedPaste() (int, error) {
 	for i := len(pasted) - 1; i >= 0; i-- {
 		kr.unread(pasted[i])
 	}
-	if len(pasted) == 0 {
-		return kr.ReadKey()
-	}
-	return kr.ReadKey()
+	return kr.readKeyLocked()
 }

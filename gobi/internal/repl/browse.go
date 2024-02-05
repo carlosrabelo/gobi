@@ -13,6 +13,7 @@ import (
 
 func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 	ctx.KeyRead = true
+	drainTypeaheadIntoKeys(ctx)
 	a := ctx.Active()
 	if !a.HasTable() {
 		return fail(ctx, "no database in use")
@@ -36,6 +37,13 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 	if len(cols) == 0 {
 		return fail(ctx, "no fields to browse")
 	}
+	lockN := opts.lock
+	if lockN < 0 {
+		lockN = 0
+	}
+	if lockN > len(cols) {
+		lockN = len(cols)
+	}
 
 	scr := ensureScreen(ctx)
 	ctx.StatusMode = StatusModeBrowse
@@ -45,15 +53,48 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 	}
 	keys := ctx.Keys
 	keys.DrainPendingLineEnds()
-	rec := a.Cursor
-	if rec < 1 {
-		rec = 1
+
+	browseSeq := func() []int {
+		if len(a.IndexOrder) > 0 {
+			out := make([]int, len(a.IndexOrder))
+			copy(out, a.IndexOrder)
+			return out
+		}
+		n := a.RecCount()
+		out := make([]int, n)
+		for i := 0; i < n; i++ {
+			out[i] = i + 1
+		}
+		return out
+	}
+	seq := browseSeq()
+	pos := 0
+	if a.Cursor >= 1 {
+		for i, rn := range seq {
+			if rn == a.Cursor {
+				pos = i
+				break
+			}
+		}
 	}
 	col := 0
-	hScroll := 0
+	hScroll := 0 // offset into unlocked columns (cols[lockN:])
 	editing := false
 	editBuf := ""
 	firstPaint := true
+
+	physical := func() int {
+		if len(seq) == 0 {
+			return 1
+		}
+		if pos < 0 {
+			pos = 0
+		}
+		if pos >= len(seq) {
+			pos = len(seq) - 1
+		}
+		return seq[pos]
+	}
 
 	redraw := func() {
 		blank := strings.Repeat(" ", scr.Cols)
@@ -61,53 +102,62 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 		for r := 0; r < work; r++ {
 			scr.WriteString(r, 0, blank, false)
 		}
-		_ = opts.lock
-		startCol := hScroll
-		if startCol >= len(cols) {
-			startCol = len(cols) - 1
-		}
-		x := 0
-		for ci := startCol; ci < len(cols) && x < scr.Cols; ci++ {
-			fi := cols[ci]
-			w := browseColWidth(fields[fi], opts.width)
-			hdr := fields[fi].Name
-			if len(hdr) > w {
-				hdr = hdr[:w]
-			}
-			scr.WriteString(0, x, padRight(hdr, w), false)
-			x += w + 1
-		}
-		maxRows := work - 1
-		if maxRows < 1 {
-			maxRows = 1
-		}
-		for row := 0; row < maxRows; row++ {
-			rn := rec - maxRows/2 + row
-			if rn < 1 || rn > a.RecCount() {
-				continue
-			}
-			r, err := a.Table.Read(rn)
-			if err != nil {
-				continue
-			}
-			x := 0
-			for ci := startCol; ci < len(cols) && x < scr.Cols; ci++ {
+		paintCols := func(row, rn, x int, header bool) int {
+			paintOne := func(ci int) {
+				if x >= scr.Cols {
+					return
+				}
 				fi := cols[ci]
 				w := browseColWidth(fields[fi], opts.width)
-				text := fieldDisplay(r.Values[fi], fields[fi])
-				if fields[fi].Type == 'M' {
-					text = memoBrowseLabel(a, r.Values[fi])
-				}
-				if rn == rec && ci == col && editing {
-					text = editBuf
+				var text string
+				if header {
+					text = fields[fi].Name
+				} else {
+					r, err := a.Table.Read(rn)
+					if err != nil {
+						text = ""
+					} else {
+						text = fieldDisplay(r.Values[fi], fields[fi])
+						if fields[fi].Type == 'M' {
+							text = memoBrowseLabel(a, r.Values[fi])
+						}
+						if rn == physical() && ci == col && editing {
+							text = editBuf
+						}
+					}
 				}
 				if len(text) > w {
 					text = text[:w]
 				}
-				rev := rn == rec && ci == col
-				scr.WriteString(row+1, x, padRight(text, w), rev && ctx.Config.Intensity)
+				rev := !header && rn == physical() && ci == col
+				scr.WriteString(row, x, padRight(text, w), rev && ctx.Config.Intensity)
 				x += w + 1
 			}
+			for ci := 0; ci < lockN; ci++ {
+				paintOne(ci)
+			}
+			for ci := lockN + hScroll; ci < len(cols); ci++ {
+				paintOne(ci)
+			}
+			return x
+		}
+		_ = paintCols(0, 0, 0, true)
+		maxRows := work - 1
+		if !opts.noMenu {
+			if rem := menuReminder(ctx); rem != "" && work > 2 {
+				scr.WriteString(work-1, 0, padRight(rem, scr.Cols), false)
+				maxRows = work - 2
+			}
+		}
+		if maxRows < 1 {
+			maxRows = 1
+		}
+		for row := 0; row < maxRows; row++ {
+			si := pos - maxRows/2 + row
+			if si < 0 || si >= len(seq) {
+				continue
+			}
+			_ = paintCols(row+1, seq[si], 0, false)
 		}
 		name := fields[cols[col]].Name
 		if editing {
@@ -124,11 +174,36 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 		}
 	}
 
+	ensureColVisible := func() {
+		if col < lockN {
+			return
+		}
+		u := col - lockN
+		if u < hScroll {
+			hScroll = u
+		}
+		// Keep a few unlocked columns in view.
+		if u >= hScroll+3 {
+			hScroll = u - 2
+		}
+		maxH := len(cols) - lockN - 1
+		if maxH < 0 {
+			maxH = 0
+		}
+		if hScroll > maxH {
+			hScroll = maxH
+		}
+		if hScroll < 0 {
+			hScroll = 0
+		}
+	}
+
 	startCellEdit := func() error {
 		fi := cols[col]
 		if opts.freeze != "" && !strings.EqualFold(fields[fi].Name, opts.freeze) {
 			return nil
 		}
+		rec := physical()
 		r, err := a.Table.Read(rec)
 		if err != nil {
 			return err
@@ -136,7 +211,7 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 		if fields[fi].Type == 'M' {
 			text := memoFieldText(a, r.Values[fi])
 			newText, ok, err := editMemoBuffer(ctx, fields[fi].Name, text)
-			firstPaint = true // memo left the screen
+			firstPaint = true
 			if err != nil {
 				return err
 			}
@@ -146,6 +221,23 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 				}
 				_ = a.Table.Write(rec, r)
 				_ = syncAllIndexes(ctx)
+				if len(a.NDX) > 0 && a.NDX[0] != "" {
+					_ = rebuildIndexOrder(ctx)
+					oldPhys := rec
+					seq = browseSeq()
+					if opts.noFollow {
+						if pos >= len(seq) && len(seq) > 0 {
+							pos = len(seq) - 1
+						}
+					} else {
+						for i, rn := range seq {
+							if rn == oldPhys {
+								pos = i
+								break
+							}
+						}
+					}
+				}
 			}
 			redraw()
 			return nil
@@ -156,16 +248,73 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 		return nil
 	}
 
+	commitCell := func() {
+		fi := cols[col]
+		rec := physical()
+		v, err := parseFieldInput(fields[fi], editBuf)
+		if err == nil {
+			r, _ := a.Table.Read(rec)
+			r.Values[fi] = v
+			_ = a.Table.Write(rec, r)
+			_ = syncAllIndexes(ctx)
+			if len(a.NDX) > 0 && a.NDX[0] != "" {
+				_ = rebuildIndexOrder(ctx)
+				oldPhys := rec
+				seq = browseSeq()
+				if opts.noFollow {
+					if pos >= len(seq) && len(seq) > 0 {
+						pos = len(seq) - 1
+					}
+				} else {
+					for i, rn := range seq {
+						if rn == oldPhys {
+							pos = i
+							break
+						}
+					}
+				}
+			}
+		}
+		editing = false
+		redraw()
+	}
+
+	appendBottom := func() error {
+		if opts.noAppend {
+			return nil
+		}
+		if uint64(a.RecCount()) >= maxRecords {
+			return fail(ctx, "record count limit exceeded")
+		}
+		blank := dbf.Record{Values: make([]dbf.Value, len(fields))}
+		if err := a.Table.Append(blank); err != nil {
+			return fail(ctx, "%s", err.Error())
+		}
+		_ = appendIndexKeys(ctx, a.RecCount())
+		if len(a.NDX) > 0 && a.NDX[0] != "" {
+			_ = rebuildIndexOrder(ctx)
+		}
+		seq = browseSeq()
+		pos = len(seq) - 1
+		redraw()
+		return nil
+	}
+
 	redraw()
 	for {
 		k, err := keys.ReadKey()
 		if err != nil {
 			if err == io.EOF {
-				a.Cursor = rec
+				a.Cursor = physical()
 				_ = a.LoadCurrent()
 				return nil
 			}
 			return fail(ctx, "%s", err.Error())
+		}
+		if k == term.KeyIns {
+			ctx.InsertMode = !ctx.InsertMode
+			redraw()
+			continue
 		}
 		if editing {
 			switch k {
@@ -173,16 +322,7 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 				editing = false
 				redraw()
 			case term.KeyEnter:
-				fi := cols[col]
-				v, err := parseFieldInput(fields[fi], editBuf)
-				if err == nil {
-					r, _ := a.Table.Read(rec)
-					r.Values[fi] = v
-					_ = a.Table.Write(rec, r)
-					_ = syncAllIndexes(ctx)
-				}
-				editing = false
-				redraw()
+				commitCell()
 			case term.KeyBackspace:
 				if len(editBuf) > 0 {
 					editBuf = editBuf[:len(editBuf)-1]
@@ -191,46 +331,43 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 			default:
 				if term.IsInputByte(k) {
 					w := browseColWidth(fields[cols[col]], opts.width)
-					if len(editBuf) < w {
-						editBuf += string(byte(k))
-						redraw()
-					}
+					editBuf = applyInputByte(editBuf, byte(k), w, ctx.InsertMode)
+					redraw()
 				}
 			}
 			continue
 		}
 		switch k {
 		case term.KeyEsc, term.KeyCtrlQ:
-			a.Cursor = rec
+			a.Cursor = physical()
 			_ = a.LoadCurrent()
 			return nil
 		case term.KeyRight:
 			if col < len(cols)-1 {
 				col++
-				if col >= hScroll+3 {
-					hScroll++
-				}
+				ensureColVisible()
 				redraw()
 			}
 		case term.KeyLeft:
 			if col > 0 {
 				col--
-				if col < hScroll {
-					hScroll = col
-				}
+				ensureColVisible()
 				redraw()
 			}
 		case term.KeyDown:
-			if rec < a.RecCount() {
-				rec++
+			if pos < len(seq)-1 {
+				pos++
 				redraw()
+			} else if err := appendBottom(); err != nil {
+				return err
 			}
 		case term.KeyUp:
-			if rec > 1 {
-				rec--
+			if pos > 0 {
+				pos--
 				redraw()
 			}
 		case term.KeyCtrlU:
+			rec := physical()
 			r, err := a.Table.Read(rec)
 			if err == nil {
 				r.Deleted = !r.Deleted
@@ -248,6 +385,9 @@ func cmdBROWSE(ctx *context.Context, cmd command.Command) error {
 					if err := startCellEdit(); err != nil {
 						return fail(ctx, "%s", err.Error())
 					}
+					continue
+				}
+				if opts.freeze != "" && !strings.EqualFold(fields[fi].Name, opts.freeze) {
 					continue
 				}
 				editBuf = string(byte(k))
@@ -284,7 +424,6 @@ type browseOpts struct {
 
 func parseBrowseOpts(args string) browseOpts {
 	var o browseOpts
-	up := strings.ToUpper(args)
 	toks := strings.Fields(args)
 	for i := 0; i < len(toks); i++ {
 		t := strings.ToUpper(toks[i])
@@ -326,7 +465,6 @@ func parseBrowseOpts(args string) browseOpts {
 			}
 		}
 	}
-	_ = up
 	return o
 }
 
@@ -335,4 +473,22 @@ func padRight(s string, n int) string {
 		return s[:n]
 	}
 	return s + strings.Repeat(" ", n-len(s))
+}
+
+// applyInputByte appends or overwrites according to InsertMode (III Plus Ins).
+func applyInputByte(buf string, ch byte, max int, insert bool) string {
+	if max < 1 {
+		return buf
+	}
+	if insert {
+		if len(buf) < max {
+			return buf + string(ch)
+		}
+		return buf
+	}
+	// Overwrite: replace last byte when full, else append.
+	if len(buf) >= max {
+		return buf[:max-1] + string(ch)
+	}
+	return buf + string(ch)
 }

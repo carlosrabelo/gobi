@@ -32,13 +32,7 @@ func (m *Mux) cmdINSERT(ctx *context.Context, cmd command.Command) error {
 		}
 	}
 	fields := a.Table.Header.Fields
-	var rec dbf.Record
-	if blank {
-		rec = dbf.Record{Values: make([]dbf.Value, len(fields))}
-	} else {
-		// one blank for tests / non-interactive: treat like BLANK when no tty prompts
-		rec = dbf.Record{Values: make([]dbf.Value, len(fields))}
-	}
+	rec := dbf.Record{Values: make([]dbf.Value, len(fields))}
 	if err := insertAt(ctx, pos, rec); err != nil {
 		return err
 	}
@@ -47,10 +41,14 @@ func (m *Mux) cmdINSERT(ctx *context.Context, cmd command.Command) error {
 	if err := a.LoadCurrent(); err != nil {
 		return err
 	}
-	if len(ctx.FormatLines) > 0 && !blank {
+	if blank {
+		return nil
+	}
+	// Non-BLANK INSERT opens the full-screen form on the new row (III Plus).
+	if len(ctx.FormatLines) > 0 {
 		return m.formatForm(ctx, false)
 	}
-	return nil
+	return editForm(ctx, false, nil, 0)
 }
 
 func insertAt(ctx *context.Context, pos int, rec dbf.Record) error {
