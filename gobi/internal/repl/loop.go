@@ -112,6 +112,11 @@ func RunWithHistory(ctx *context.Context, mux *Mux, hist *History) error {
 			}
 			return nil
 		}
+		if err == nil {
+			if onErr := maybeOnKey(ctx, mux); onErr != nil && !errors.Is(onErr, ErrQuit) {
+				err = onErr
+			}
+		}
 		// Refresh chrome; on errors the *** line stays in the work pane, then a new ". ".
 		showSessionChrome(ctx, false)
 		if err != nil {
@@ -127,6 +132,7 @@ func readDotLine(ctx *context.Context, hist *History) (string, error) {
 	if ctx.Keys == nil {
 		ctx.Keys = term.NewReader(ctx.Stdin)
 	}
+	drainTypeaheadIntoKeys(ctx)
 	keys := ctx.Keys
 	echo := term.IsTerminal(ctx.Stdin)
 	var b strings.Builder

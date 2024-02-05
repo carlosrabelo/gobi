@@ -1,4 +1,4 @@
-//go:build !unix
+//go:build !unix && !windows
 
 package hostterm
 
@@ -9,8 +9,8 @@ var (
 	resizeFns []func(cols, rows int)
 )
 
-// OnResize registers fn for host window size changes. On non-Unix hosts this
-// stores the callback for NotifyResizeForTest / future console resize wiring.
+// OnResize registers fn for host window size changes. Unsupported hosts only
+// store the callback for NotifyResizeForTest.
 func OnResize(fd int, fn func(cols, rows int)) {
 	if fn == nil {
 		return

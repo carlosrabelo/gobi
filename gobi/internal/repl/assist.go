@@ -23,16 +23,23 @@ type assistCat struct {
 	Items []assistItem
 }
 
-// assistMenu is the Assist category bar and submenus (037). Refused designers omitted.
+// assistMenu is the Assist category bar and submenus (039 + designers from 040).
 var assistMenu = []assistCat{
 	{Name: "Set Up", Items: []assistItem{
 		{Label: "Database file", Help: "USE a table", Action: "use"},
 		{Label: "Index file", Help: "SET INDEX TO", Action: "setindex"},
 		{Label: "Default drive/directory", Help: "SET DEFAULT TO", Action: "setdefault"},
+		{Label: "View", Help: "SET VIEW TO", Action: "setview"},
+		{Label: "Catalog", Help: "SET CATALOG TO", Action: "setcatalog"},
 	}},
 	{Name: "Create", Items: []assistItem{
 		{Label: "Database file", Help: "CREATE a table", Action: "create"},
 		{Label: "From file", Help: "CREATE FROM", Action: "createfrom"},
+		{Label: "Query", Help: "CREATE QUERY", Action: "createquery"},
+		{Label: "Screen", Help: "CREATE SCREEN", Action: "createscreen"},
+		{Label: "View", Help: "CREATE VIEW", Action: "createview"},
+		{Label: "Report", Help: "CREATE REPORT", Action: "createreport"},
+		{Label: "Label", Help: "CREATE LABEL", Action: "createlabel"},
 	}},
 	{Name: "Update", Items: []assistItem{
 		{Label: "Append", Help: "APPEND", Action: "append"},
@@ -73,6 +80,11 @@ var assistMenu = []assistCat{
 	{Name: "Modify", Items: []assistItem{
 		{Label: "Structure", Help: "MODIFY STRUCTURE", Action: "modstruct"},
 		{Label: "Command file", Help: "MODIFY COMMAND", Action: "modcmd"},
+		{Label: "Report", Help: "MODIFY REPORT", Action: "modreport"},
+		{Label: "Label", Help: "MODIFY LABEL", Action: "modlabel"},
+		{Label: "Query", Help: "MODIFY QUERY", Action: "modquery"},
+		{Label: "Screen", Help: "MODIFY SCREEN", Action: "modscreen"},
+		{Label: "View", Help: "MODIFY VIEW", Action: "modview"},
 	}},
 	{Name: "Tools", Items: []assistItem{
 		{Label: "Dir", Help: "DIR", Action: "dir"},
@@ -95,9 +107,11 @@ func (m *Mux) cmdASSIST(ctx *context.Context, cmd command.Command) error {
 	}
 	ctx.AssistOpen = true
 	ctx.StatusMode = StatusModeAssist
+	ctx.KeyRead = true
 	defer func() {
 		ctx.AssistOpen = false
 		ctx.StatusMode = ""
+		ctx.KeyRead = false
 		if scr := ctx.Screen; scr != nil {
 			_ = scr.ClearTerminal(ctx.Out())
 		}
@@ -108,6 +122,7 @@ func (m *Mux) cmdASSIST(ctx *context.Context, cmd command.Command) error {
 	if ctx.Keys == nil {
 		ctx.Keys = term.NewReader(ctx.Stdin)
 	}
+	drainTypeaheadIntoKeys(ctx)
 	keys := ctx.Keys
 	cat := 0
 	barScroll := 0
@@ -248,6 +263,24 @@ func (m *Mux) runAssistAction(ctx *context.Context, keys *term.Reader, action st
 			return false, nil, "cancelled"
 		}
 		return m.assistDispatch(ctx, "SET DEFAULT TO "+strings.TrimSpace(path))
+	case "setview":
+		name, ok, err := assistPrompt(ctx, keys, "SET VIEW TO name:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(name) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "SET VIEW TO "+strings.TrimSpace(name))
+	case "setcatalog":
+		name, ok, err := assistPrompt(ctx, keys, "SET CATALOG TO name:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(name) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, "SET CATALOG TO "+strings.TrimSpace(name))
 	case "create":
 		name, ok, err := assistPrompt(ctx, keys, "New database:")
 		if err != nil {
@@ -484,6 +517,28 @@ func (m *Mux) runAssistAction(ctx *context.Context, keys *term.Reader, action st
 			return false, nil, "cancelled"
 		}
 		return m.assistDispatch(ctx, "MODIFY COMMAND "+strings.TrimSpace(name))
+	case "createreport", "createlabel", "createquery", "createscreen", "createview",
+		"modreport", "modlabel", "modquery", "modscreen", "modview":
+		verb := map[string]string{
+			"createreport": "CREATE REPORT",
+			"createlabel":  "CREATE LABEL",
+			"createquery":  "CREATE QUERY",
+			"createscreen": "CREATE SCREEN",
+			"createview":   "CREATE VIEW",
+			"modreport":    "MODIFY REPORT",
+			"modlabel":     "MODIFY LABEL",
+			"modquery":     "MODIFY QUERY",
+			"modscreen":    "MODIFY SCREEN",
+			"modview":      "MODIFY VIEW",
+		}[action]
+		name, ok, err := assistPrompt(ctx, keys, verb+" name:")
+		if err != nil {
+			return false, err, ""
+		}
+		if !ok || strings.TrimSpace(name) == "" {
+			return false, nil, "cancelled"
+		}
+		return m.assistDispatch(ctx, verb+" "+strings.TrimSpace(name))
 	case "dir":
 		return m.assistDispatch(ctx, "DIR")
 	case "status":
@@ -696,7 +751,7 @@ func assistStatusLine(ctx *context.Context, cols int) string {
 	return line
 }
 
-// assistCreateHasReport reports whether Create offers Report (must be false).
+// assistCreateHasReport reports whether Create offers Report (040 designers).
 func assistCreateHasReport() bool {
 	for _, it := range assistMenu[1].Items {
 		if strings.EqualFold(it.Label, "Report") || strings.Contains(strings.ToLower(it.Label), "report") {

@@ -67,8 +67,8 @@ func TestASSISTNavigationSubmenu(t *testing.T) {
 	if err := mux.Dispatch(ctx, command.Split("ASSIST")); err != nil {
 		t.Fatal(err)
 	}
-	if assistCreateHasReport() {
-		t.Fatal("Create submenu must not offer Report")
+	if !assistCreateHasReport() {
+		t.Fatal("Create submenu must offer Report once designers (040) exist")
 	}
 }
 
