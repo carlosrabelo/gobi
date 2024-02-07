@@ -475,20 +475,38 @@ func padRight(s string, n int) string {
 	return s + strings.Repeat(" ", n-len(s))
 }
 
-// applyInputByte appends or overwrites according to InsertMode (III Plus Ins).
+// applyInputByte appends or overwrites at the end (legacy helper).
 func applyInputByte(buf string, ch byte, max int, insert bool) string {
+	pos := len(buf)
+	if !insert && pos >= max && max > 0 {
+		pos = max - 1
+	}
+	s, _ := applyInputAt(buf, pos, ch, max, insert)
+	return s
+}
+
+// applyInputAt inserts or overwrites at pos; returns new buffer and caret.
+func applyInputAt(buf string, pos int, ch byte, max int, insert bool) (string, int) {
 	if max < 1 {
-		return buf
+		return buf, pos
+	}
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > len(buf) {
+		pos = len(buf)
 	}
 	if insert {
-		if len(buf) < max {
-			return buf + string(ch)
+		if len(buf) >= max {
+			return buf, pos
 		}
-		return buf
+		return buf[:pos] + string(ch) + buf[pos:], pos + 1
 	}
-	// Overwrite: replace last byte when full, else append.
-	if len(buf) >= max {
-		return buf[:max-1] + string(ch)
+	if pos >= len(buf) {
+		if len(buf) >= max {
+			return buf, pos
+		}
+		return buf + string(ch), pos + 1
 	}
-	return buf + string(ch)
+	return buf[:pos] + string(ch) + buf[pos+1:], pos + 1
 }

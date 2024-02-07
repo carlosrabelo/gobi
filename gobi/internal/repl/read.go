@@ -23,8 +23,10 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 	drainTypeaheadIntoKeys(ctx)
 	keys := ctx.Keys
 	values := make([]string, len(m.gets))
+	carets := make([]int, len(m.gets))
 	for i, g := range m.gets {
 		values[i] = strings.TrimRight(getValueText(ctx, g), " ")
+		carets[i] = len(values[i])
 	}
 	cur := 0
 	scr := ensureScreen(ctx)
@@ -32,13 +34,19 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 	drawGET := func(i int, active bool) {
 		g := m.gets[i]
 		text := values[i]
-		if g.Scroll > 0 && len(text) > g.Width {
+		dispW := expr.PictureDisplayWidth(g.Picture, g.Width)
+		if g.PicR {
+			text = expr.FormatPictureDisplay(text, g.Picture)
+		} else if g.Scroll > 0 && len(text) > g.Width {
 			text = text[len(text)-g.Width:]
 		} else if len(text) > g.Width {
 			text = text[:g.Width]
 		}
-		for len(text) < g.Width {
+		for len(text) < dispW {
 			text += " "
+		}
+		if len(text) > dispW {
+			text = text[:dispW]
 		}
 		rev := active && ctx.Config.Intensity
 		writeDelimitedField(scr, g.Row, g.Col, text, rev, left, right)
@@ -99,6 +107,7 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 					_, _ = ctx.Out().Write([]byte{7})
 				}
 				values[cur] = strings.TrimRight(getValueText(ctx, g), " ")
+				carets[cur] = len(values[cur])
 				drawGET(cur, true)
 				_ = flushScreen(ctx)
 				continue
@@ -119,11 +128,26 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 			if cur >= len(m.gets) {
 				cur = 0
 			}
+			carets[cur] = len(values[cur])
 			drawGET(cur, true)
 			_ = flushScreen(ctx)
+		case term.KeyLeft:
+			if carets[cur] > 0 {
+				carets[cur]--
+			}
+		case term.KeyRight:
+			if carets[cur] < len(values[cur]) {
+				carets[cur]++
+			}
 		case term.KeyBackspace:
-			if len(values[cur]) > 0 {
-				values[cur] = values[cur][:len(values[cur])-1]
+			if carets[cur] > len(values[cur]) {
+				carets[cur] = len(values[cur])
+			}
+			if carets[cur] > 0 {
+				v := values[cur]
+				p := carets[cur]
+				values[cur] = v[:p-1] + v[p:]
+				carets[cur]--
 				drawGET(cur, true)
 				_ = flushScreen(ctx)
 			}
@@ -146,7 +170,7 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 					}
 					continue
 				}
-				if g.Picture != "" && !pictureAllows(g.Picture, len(values[cur]), ch) {
+				if g.Picture != "" && !pictureAllows(g.Picture, carets[cur], ch) {
 					if ctx.Config.Bell {
 						_, _ = ctx.Out().Write([]byte{7})
 					}
@@ -157,7 +181,7 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 					maxLen = 254
 				}
 				before := values[cur]
-				values[cur] = applyInputByte(values[cur], ch, maxLen, ctx.InsertMode)
+				values[cur], carets[cur] = applyInputAt(values[cur], carets[cur], ch, maxLen, ctx.InsertMode)
 				if values[cur] != before || len(before) < maxLen {
 					drawGET(cur, true)
 					_ = flushScreen(ctx)
@@ -169,6 +193,7 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 								_, _ = ctx.Out().Write([]byte{7})
 							}
 							values[cur] = strings.TrimRight(getValueText(ctx, g), " ")
+							carets[cur] = len(values[cur])
 							drawGET(cur, true)
 							_ = flushScreen(ctx)
 							continue
@@ -186,6 +211,7 @@ func (m *Mux) cmdREAD(ctx *context.Context, cmd command.Command) error {
 						}
 						drawGET(cur, false)
 						cur++
+						carets[cur] = len(values[cur])
 						drawGET(cur, true)
 						_ = flushScreen(ctx)
 					}

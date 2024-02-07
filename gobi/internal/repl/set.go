@@ -111,10 +111,12 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 	case "COLOR":
 		if len(args) >= 2 && strings.EqualFold(args[1], "ON") {
 			ctx.Config.ColorOn = true
+			applySessionColors(ctx)
 			return nil
 		}
 		if len(args) >= 2 && strings.EqualFold(args[1], "OFF") {
 			ctx.Config.ColorOn = false
+			applySessionColors(ctx)
 			return nil
 		}
 		text := to
@@ -122,6 +124,7 @@ func cmdSET(ctx *context.Context, cmd command.Command) error {
 			text = strings.Join(args[2:], " ")
 		}
 		ctx.Config.Color = text
+		applySessionColors(ctx)
 		return nil
 
 	case "DATE":

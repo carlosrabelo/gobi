@@ -333,6 +333,10 @@ func TestPictureFunctionCharsOnGET(t *testing.T) {
 	if !mux.gets[0].PicR {
 		t.Fatal("expected @R")
 	}
+	// Initial GET paint must show template literals.
+	if cell := ctx.Screen.CellAt(0, 2); cell.Ch != '-' {
+		t.Fatalf("@R GET display missing literal '-', got %q", cell.Ch)
+	}
 	if err := mux.Dispatch(ctx, command.Split("READ")); err != nil {
 		t.Fatal(err)
 	}

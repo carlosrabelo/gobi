@@ -100,6 +100,11 @@ func (c *Context) CloseArea(n int) error {
 	a.RelAlias = ""
 	a.FieldList = nil
 	a.FieldsOn = false
+	if a.LockFile != nil {
+		_ = a.LockFile.Close() // also drops flock(2) on Unix
+		a.LockFile = nil
+	}
+	a.Locked = false
 	if a.Table != nil {
 		_ = a.Table.Close()
 		a.Table = nil

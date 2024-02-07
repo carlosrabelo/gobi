@@ -62,6 +62,14 @@ func cmdCHANGE(ctx *context.Context, cmd command.Command) error {
 		return fail(ctx, "no database in use")
 	}
 	scope := parseScope(cmd)
+	forExpr, err := parseOptionalLogic(cmd.Clauses["FOR"])
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
+	whileExpr, err := parseOptionalLogic(cmd.Clauses["WHILE"])
+	if err != nil {
+		return fail(ctx, "%s", err.Error())
+	}
 	args := strings.TrimSpace(scope.Rest)
 	up := strings.ToUpper(args)
 	if !strings.HasPrefix(up, "FIELD ") {
@@ -75,14 +83,19 @@ func cmdCHANGE(ctx *context.Context, cmd command.Command) error {
 	count := a.RecCount()
 	start, end := scopeRange(count, a.Cursor, scope)
 	if scope.Kind == "" {
-		if !a.Landed {
-			return fail(ctx, "no current record")
+		if forExpr != nil || whileExpr != nil {
+			start, end = 1, count
+		} else {
+			if !a.Landed {
+				return fail(ctx, "no current record")
+			}
+			start, end = a.Cursor, a.Cursor
 		}
-		start, end = a.Cursor, a.Cursor
 	}
 	if end < start {
 		return nil
 	}
+	env := newEnv(ctx)
 	for n := start; n <= end; n++ {
 		a.Cursor = n
 		a.BOF = false
@@ -91,6 +104,24 @@ func cmdCHANGE(ctx *context.Context, cmd command.Command) error {
 		}
 		if ctx.Config.Deleted && a.Record.Deleted {
 			continue
+		}
+		if whileExpr != nil {
+			ok, e := evalLogic(whileExpr, env)
+			if e != nil {
+				return fail(ctx, "%s", e.Error())
+			}
+			if !ok {
+				break
+			}
+		}
+		if forExpr != nil {
+			ok, e := evalLogic(forExpr, env)
+			if e != nil {
+				return fail(ctx, "%s", e.Error())
+			}
+			if !ok {
+				continue
+			}
 		}
 		for _, name := range names {
 			fi := fieldIndex(a, strings.TrimSpace(name))

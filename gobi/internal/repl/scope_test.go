@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,4 +67,36 @@ func TestScopeNEXTAndAppendBlankInsertClearErase(t *testing.T) {
 		t.Fatal("ERASE")
 	}
 	_ = strings.TrimSpace
+}
+
+func TestCHANGEFor(t *testing.T) {
+	dir := t.TempDir()
+	mustCreateDBF(t, filepath.Join(dir, "t.dbf"), []dbf.Field{
+		{Name: "N", Type: 'C', Length: 4},
+	}, []dbf.Record{
+		{Values: []dbf.Value{{Str: "AA  "}}},
+		{Values: []dbf.Value{{Str: "BB  "}}},
+		{Values: []dbf.Value{{Str: "AA  "}}},
+	})
+	ctx := testCtx(t, dir)
+	ctx.Stdout = &bytes.Buffer{}
+	// For each matching row: show value, CHANGE? AA, TO? ZZ
+	ctx.Stdin = strings.NewReader("AA\nZZ\nAA\nZZ\n")
+	mux := NewMux()
+	_ = mux.Dispatch(ctx, command.Split("USE t"))
+	if err := mux.Dispatch(ctx, command.Split("CHANGE FIELD N FOR N = [AA]")); err != nil {
+		t.Fatal(err)
+	}
+	r1, _ := ctx.Active().Table.Read(1)
+	r2, _ := ctx.Active().Table.Read(2)
+	r3, _ := ctx.Active().Table.Read(3)
+	if strings.TrimSpace(r1.Values[0].Str) != "ZZ" {
+		t.Fatalf("r1 %q", r1.Values[0].Str)
+	}
+	if strings.TrimSpace(r2.Values[0].Str) != "BB" {
+		t.Fatalf("r2 should be untouched: %q", r2.Values[0].Str)
+	}
+	if strings.TrimSpace(r3.Values[0].Str) != "ZZ" {
+		t.Fatalf("r3 %q", r3.Values[0].Str)
+	}
 }

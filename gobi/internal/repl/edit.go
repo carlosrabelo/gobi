@@ -288,6 +288,10 @@ func editForm(ctx *context.Context, appendMode bool, targets []int, targetIdx in
 			loadValues(rec)
 		}
 		cur := 0
+		caret := 0
+		if len(values) > 0 {
+			caret = len(values[0])
+		}
 		fieldScroll := 0
 		frameReady := false
 
@@ -528,6 +532,7 @@ func editForm(ctx *context.Context, appendMode bool, targets []int, targetIdx in
 			case term.KeyDown, term.KeyTab:
 				if len(fields) > 0 {
 					cur = (cur + 1) % len(fields)
+					caret = len(values[cur])
 					paintForm()
 				}
 			case term.KeyEnter:
@@ -539,19 +544,31 @@ func editForm(ctx *context.Context, appendMode bool, targets []int, targetIdx in
 				}
 				if len(fields) > 0 {
 					cur = (cur + 1) % len(fields)
+					caret = len(values[cur])
 					paintForm()
 				}
 			case term.KeyUp:
 				if len(fields) > 0 {
 					cur = (cur - 1 + len(fields)) % len(fields)
+					caret = len(values[cur])
 					paintForm()
+				}
+			case term.KeyLeft:
+				if fields[cur].Type != 'M' && caret > 0 {
+					caret--
+				}
+			case term.KeyRight:
+				if fields[cur].Type != 'M' && caret < len(values[cur]) {
+					caret++
 				}
 			case term.KeyBackspace:
 				if fields[cur].Type == 'M' {
 					continue
 				}
-				if len(values[cur]) > 0 {
-					values[cur] = values[cur][:len(values[cur])-1]
+				if caret > 0 {
+					v := values[cur]
+					values[cur] = v[:caret-1] + v[caret:]
+					caret--
 					paintForm()
 				}
 			default:
@@ -564,10 +581,11 @@ func editForm(ctx *context.Context, appendMode bool, targets []int, targetIdx in
 					}
 					w := int(fields[cur].Length)
 					before := values[cur]
-					values[cur] = applyInputByte(values[cur], byte(k), w, ctx.InsertMode)
+					values[cur], caret = applyInputAt(values[cur], caret, byte(k), w, ctx.InsertMode)
 					paintForm()
 					if !ctx.Config.Confirm && len(values[cur]) >= w && (ctx.InsertMode || len(before) < w) {
 						cur = (cur + 1) % len(fields)
+						caret = len(values[cur])
 						paintForm()
 					}
 				}

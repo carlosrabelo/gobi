@@ -94,6 +94,46 @@ func splitPictureParts(pic string) (funcs, template string) {
 	return strings.ToUpper(rest), ""
 }
 
+// FormatPictureDisplay inserts @R template literals into a raw editable value
+// for on-screen GET/SAY (user never types the literals).
+func FormatPictureDisplay(raw, picture string) string {
+	flags := PictureFuncFlags(picture)
+	if !strings.Contains(flags, "R") {
+		return raw
+	}
+	tmpl := PictureTemplate(picture)
+	if tmpl == "" {
+		return raw
+	}
+	var out strings.Builder
+	si := 0
+	for i := 0; i < len(tmpl); i++ {
+		c := tmpl[i]
+		switch c {
+		case '9', '#', 'A', 'L', 'N', 'X', 'Y', '!', '$', '*':
+			if si < len(raw) {
+				out.WriteByte(raw[si])
+				si++
+			} else {
+				out.WriteByte(' ')
+			}
+		default:
+			out.WriteByte(c)
+		}
+	}
+	return out.String()
+}
+
+// PictureDisplayWidth is the on-screen width for a GET (template length when @R).
+func PictureDisplayWidth(picture string, editWidth int) int {
+	if strings.Contains(PictureFuncFlags(picture), "R") {
+		if tmpl := PictureTemplate(picture); tmpl != "" {
+			return len(tmpl)
+		}
+	}
+	return editWidth
+}
+
 // StripPictureLiterals removes display-only literal characters when @R is set.
 func StripPictureLiterals(text, picture string) string {
 	flags := PictureFuncFlags(picture)
@@ -216,9 +256,8 @@ func applyNumericTemplate(num, template string) string {
 				ii--
 			} else if c == '*' {
 				out = append([]byte{'*'}, out...)
-			} else if c == '$' {
-				out = append([]byte{'$'}, out...)
 			} else {
+				// Unused 9/#/$ → space; applyFloatingDollar paints one `$`.
 				out = append([]byte{' '}, out...)
 			}
 		case ',':
@@ -233,7 +272,42 @@ func applyNumericTemplate(num, template string) string {
 		out = append([]byte{intPart[ii]}, out...)
 		ii--
 	}
-	return string(out)
+	return applyFloatingDollar(string(out), template)
+}
+
+// applyFloatingDollar places `$` in the leftmost unused slot before the digits
+// (spec 036). If the number filled every `$`/`9` slot, prepend `$` when the
+// template asked for a currency mark.
+func applyFloatingDollar(s, intTemplate string) string {
+	if !strings.Contains(intTemplate, "$") {
+		return s
+	}
+	di := -1
+	for i := 0; i < len(s); i++ {
+		if s[i] >= '0' && s[i] <= '9' {
+			di = i
+			break
+		}
+	}
+	if di < 0 {
+		return s
+	}
+	left := -1
+	for i := 0; i < di; i++ {
+		if s[i] == ' ' {
+			left = i
+			break
+		}
+	}
+	if left >= 0 {
+		b := []byte(s)
+		b[left] = '$'
+		return string(b)
+	}
+	if di == 0 || s[0] != '$' {
+		return "$" + s
+	}
+	return s
 }
 
 func transformString(s, funcs, template string) string {
