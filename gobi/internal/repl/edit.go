@@ -10,6 +10,23 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
 )
 
+const (
+	editKeyCtrlG = 7
+	editKeyCtrlH = 8
+	editKeyCtrlK = 11
+	editKeyCtrlN = 14
+	editKeyCtrlQ = 17
+	editKeyCtrlR = 18
+	editKeyCtrlT = 20
+	editKeyCtrlU = 21
+	editKeyCtrlW = 23
+	editKeyCtrlY = 25
+	editKeyTab   = 9
+	editKeyEnter = 13
+	editKeyEsc   = 27
+	editKeyDel   = 127
+)
+
 func handleEdit(ctx *context.Context, cmd Command) error {
 	arg := strings.TrimSpace(cmd.Args)
 	if arg == "" {

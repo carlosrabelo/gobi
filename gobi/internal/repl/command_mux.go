@@ -114,6 +114,7 @@ func (m *CommandMux) registerAll() {
 	m.register("CLEAR", handleClear)
 	m.register("SET", handleSet)
 	m.register("@", handleAt)
+	m.register("READ", handleRead)
 }
 
 func stubHandler(verb string) HandlerFunc {

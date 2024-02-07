@@ -153,3 +153,17 @@ func handleSet(ctx *context.Context, cmd Command) error {
 		return fmt.Errorf("*** Unrecognized SET option")
 	}
 }
+
+func parseOnOff(parts []string) bool {
+	if len(parts) < 2 {
+		return true
+	}
+	return parts[1] != "OFF"
+}
+
+func onOffStr(v bool) string {
+	if v {
+		return "ON"
+	}
+	return "OFF"
+}
