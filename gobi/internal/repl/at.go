@@ -38,6 +38,7 @@ func ensureScreen(ctx *context.Context) *term.Screen {
 	cols, rows := screenGeometry(ctx)
 	if ctx.Screen == nil {
 		ctx.Screen = term.NewSize(cols, rows)
+		applySessionColors(ctx)
 	} else if ctx.Config.Screen == config.ScreenAuto &&
 		(ctx.Screen.Cols != cols || ctx.Screen.Rows != rows) {
 		// Re-probe each time: interactive Run wraps Stdout in CRLFWriter, and
@@ -333,10 +334,14 @@ func (m *Mux) atGET(ctx *context.Context, row, col int, rest string) error {
 	}
 	m.gets = append(m.gets, g)
 	text := getValueText(ctx, g)
-	if len(text) > g.Width {
-		text = text[:g.Width]
+	dispW := expr.PictureDisplayWidth(g.Picture, g.Width)
+	if g.PicR {
+		text = expr.FormatPictureDisplay(strings.TrimRight(text, " "), g.Picture)
 	}
-	for len(text) < g.Width {
+	if len(text) > dispW {
+		text = text[:dispW]
+	}
+	for len(text) < dispW {
 		text += " "
 	}
 	scr := ensureScreen(ctx)

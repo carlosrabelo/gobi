@@ -103,6 +103,14 @@ func TestFlockUnlockAndLocalNoops(t *testing.T) {
 	if !ctx.Config.Exclusive {
 		t.Fatal("Exclusive")
 	}
+	// Re-USE under EXCLUSIVE must take the advisory lock.
+	_ = mux.Dispatch(ctx, command.Split("USE"))
+	if err := mux.Dispatch(ctx, command.Split("USE t")); err != nil {
+		t.Fatal(err)
+	}
+	if !ctx.Active().Locked {
+		t.Fatal("USE under EXCLUSIVE should lock the table")
+	}
 	if err := mux.Dispatch(ctx, command.Split("SET ENCRYPTION ON")); err != nil {
 		t.Fatal(err)
 	}

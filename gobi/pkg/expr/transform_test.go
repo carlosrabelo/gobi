@@ -71,6 +71,40 @@ func TestTransformFunctionChars(t *testing.T) {
 	}
 }
 
+func TestTransformFloatingDollar(t *testing.T) {
+	got, err := Transform(NumberVal(12.3), "$9.99")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "$12.30" {
+		t.Fatalf("$9.99: %q", got)
+	}
+	got, err = Transform(NumberVal(12.3), "$$9.99")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "$12.30" {
+		t.Fatalf("$$9.99: %q", got)
+	}
+	got, err = Transform(NumberVal(1.2), "$$$9.99")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "$") || !strings.Contains(got, "1.20") {
+		t.Fatalf("$$$9.99: %q", got)
+	}
+}
+
+func TestFormatPictureDisplayAtR(t *testing.T) {
+	got := FormatPictureDisplay("1234", "@R 99-99")
+	if got != "12-34" {
+		t.Fatalf("got %q", got)
+	}
+	if PictureDisplayWidth("@R 99-99", 4) != 5 {
+		t.Fatalf("display width %d", PictureDisplayWidth("@R 99-99", 4))
+	}
+}
+
 func TestTransformAcceptance(t *testing.T) {
 	got, err := Transform(NumberVal(1234.5), "9,999.99")
 	if err != nil {

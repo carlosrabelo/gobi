@@ -15,6 +15,12 @@ func cmdUSE(ctx *context.Context, cmd command.Command) error {
 	if err := ctx.Use(name, alias); err != nil {
 		return fail(ctx, "%s", err.Error())
 	}
+	if name != "" && ctx.Config != nil && ctx.Config.Exclusive {
+		if !tryFileLock(ctx) {
+			_ = ctx.CloseArea(ctx.ActiveArea)
+			return fail(ctx, "file is in use")
+		}
+	}
 	if len(indexes) > 0 {
 		if err := cmdSETINDEX(ctx, strings.Join(indexes, ",")); err != nil {
 			_ = ctx.CloseArea(ctx.ActiveArea)
