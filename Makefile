@@ -2,7 +2,11 @@ MAKEFLAGS += --no-print-directory
 
 .DEFAULT_GOAL := help
 
-.PHONY: build build-linux build-windows build-all clean fmt help lint quality test test-cover run install install-system uninstall uninstall-system
+.PHONY: build build-all build-linux build-windows clean fmt help install install-system lint quality run test test-cover uninstall uninstall-system
+
+BINARY_NAME := gobi
+
+export BINARY_NAME
 
 help: ## Show available targets
 	@echo "gobi - Available targets"
@@ -20,36 +24,33 @@ build-linux: ## Cross-compile bin/gobi-linux-amd64 (GOARCH=arm64 optional via AR
 build-windows: ## Cross-compile bin/gobi-windows-amd64.exe (GOARCH via ARCH=)
 	@./.make/build-cross.sh windows $(or $(ARCH),amd64)
 
-build-all: ## build-linux and build-windows (amd64)
-	@$(MAKE) build-linux
-	@$(MAKE) build-windows
+build-all: build-linux build-windows ## build-linux and build-windows (amd64)
 
 run: ## Build if needed and run bin/gobi (args after --)
 	@./.make/run.sh $(filter-out $@,$(MAKECMDGOALS))
 
-install: ## Copy bin/gobi to ~/.local/bin (no compile)
+install: ## Install to ~/.local/bin (requires prior make build)
 	@./.make/install.sh
 
-install-system: ## Copy bin/gobi to /usr/local/bin (no compile)
-	@./.make/install-system.sh
+install-system: ## Install to /usr/local/bin (requires prior make build; sudo only for copy)
+	@SYSTEM=1 ./.make/install.sh
 
-uninstall: ## Remove ~/.local/bin/gobi
+uninstall: ## Remove from ~/.local/bin (sudo only if needed)
 	@./.make/uninstall.sh
 
-uninstall-system: ## Remove /usr/local/bin/gobi
-	@./.make/uninstall-system.sh
+uninstall-system: ## Remove from /usr/local/bin (sudo only if needed)
+	@SYSTEM=1 ./.make/uninstall.sh
 
 clean: ## Remove bin/* (keep .gitkeep), coverage.out, and coverage.html
 	@./.make/clean.sh
 
-fmt: ## Format Go sources under gobi/
-	@./.make/fmt.sh
+fmt: ## Format code
+	@go fmt ./...
 
-lint: ## Run go vet
-	@./.make/lint.sh
+lint: ## Run linter
+	@go vet ./...
 
-quality: ## Format check, lint, and test
-	@./.make/quality.sh
+quality: fmt lint ## Run all quality checks
 
 test: ## Run tests
 	@./.make/test.sh

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/carlosrabelo/gobi/gobi/internal/version"
+	"github.com/carlosrabelo/gobi/gobi/pkg/version"
 )
 
 // ErrUnknownFunction means the name is not a built-in in this package.

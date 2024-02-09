@@ -13,7 +13,7 @@ Sample `.dbf` tables and `.prg` command files for the interactive interpreter.
 Regenerate the tables (overwrites the `.dbf` files):
 
 ```bash
-go run ./demos/gendata
+go run ./gobi/cmd/gendata
 ```
 
 ## Run from the repo root
