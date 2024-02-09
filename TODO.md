@@ -144,7 +144,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] `@ SAY` printing expression string at coordinates
 - [x] `@ GET` registering interactive input fields
 - [x] `READ` loop handling user editing, Tab, and field validation
-- [ ] Interactive `APPEND` screen generation
+- [x] Interactive `APPEND` screen generation
 - [ ] Interactive `EDIT` record screen generation
 - [ ] `BROWSE` table view spreadsheet matrix
 - [ ] `BROWSE` cell cursor movement using arrow keys

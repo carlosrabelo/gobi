@@ -573,6 +573,14 @@ func handleAppend(ctx *context.Context, cmd Command) error {
 		return fmt.Errorf("*** No database file is in use")
 	}
 
+	if appendScreenAvailable(ctx) {
+		err := runAppendScreen(ctx)
+		if consoleErr := returnToConsole(ctx); consoleErr != nil && err == nil {
+			err = consoleErr
+		}
+		return err
+	}
+
 	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
 	if !ok {
 		return fmt.Errorf("*** Database file is not writable")
