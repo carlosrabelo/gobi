@@ -1,6 +1,6 @@
 // Command gendata writes the sample .dbf tables under demos/.
 //
-//	go run ./demos/gendata
+//	go run ./gobi/cmd/gendata
 package main
 
 import (
@@ -13,14 +13,9 @@ import (
 )
 
 func main() {
-	root, err := os.Getwd()
+	out, err := demosDir()
 	if err != nil {
 		fatal(err)
-	}
-	// Prefer demos/ next to this package when run as go run ./demos/gendata.
-	out := filepath.Join(root, "demos")
-	if _, err := os.Stat(filepath.Join(out, "gendata")); err != nil {
-		out = root
 	}
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		fatal(err)
@@ -69,6 +64,24 @@ func main() {
 	}, y, m, d)
 
 	fmt.Println("wrote customers.dbf, orders.dbf, products.dbf in", out)
+}
+
+// demosDir is demos/ next to go.mod, so the command works from any working directory.
+func demosDir() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, statErr := os.Stat(filepath.Join(dir, "go.mod")); statErr == nil {
+			return filepath.Join(dir, "demos"), nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("go.mod not found from %s", dir)
+		}
+		dir = parent
+	}
 }
 
 func mustWrite(path string, fields []dbf.Field, recs []dbf.Record, y, m, d byte) {

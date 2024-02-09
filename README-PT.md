@@ -53,9 +53,9 @@ make uninstall
 make uninstall-system
 make test             # go test ./...
 make test-cover       # coverage.out e coverage.html na raiz do git
-make fmt              # gofmt -w nos fontes em gobi/
+make fmt              # go fmt ./...
 make lint             # go vet ./...
-make quality          # checagem gofmt -l, lint e test
+make quality          # fmt e lint
 make clean            # remove bin/* (mantém .gitkeep), coverage.out e coverage.html
 ```
 
