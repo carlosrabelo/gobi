@@ -50,7 +50,8 @@ fmt: ## Format code
 lint: ## Run linter
 	@go vet ./...
 
-quality: fmt lint ## Run all quality checks
+quality: ## Format check, go vet, and tests
+	@./.make/quality.sh
 
 test: ## Run tests
 	@./.make/test.sh
