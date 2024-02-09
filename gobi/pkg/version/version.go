@@ -1,13 +1,16 @@
 // Package version holds the Gobi product identity shown in the UI and VERSION().
 package version
 
-// Version is the semver-like product version (no leading "v").
-const Version = "0.1.0"
+// Version is the product version returned by VERSION() (no leading "v").
+const Version = "1.0"
 
-// Product is the display name (never "dBASE" on screen).
-const Product = "Gobi"
+// Product is the VERSION() product token (uppercase, dBase-style).
+const Product = "GOBI"
 
-// String returns "Gobi 0.1.0" for VERSION() (not status-bar chrome).
+// DisplayName is the on-screen brand (never "dBASE").
+const DisplayName = "Gobi"
+
+// String returns "GOBI 1.0" for VERSION().
 func String() string {
 	return Product + " " + Version
 }

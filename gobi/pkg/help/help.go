@@ -31,7 +31,7 @@ func init() {
 		Category: "Help",
 		Synopsis: "INTRODUCTION",
 		Summary:  "What Gobi is and how to leave the session.",
-		Body:     "Gobi is an interactive database session compatible with the dBase III Plus language. At the dot prompt type commands and press Enter. QUIT leaves. HELP lists topics by category; HELP <topic> shows usage and details. VERSION() returns the Gobi version.",
+		Body:     "Gobi is an interactive database session compatible with the dBase III Plus language. At the dot prompt type commands and press Enter. QUIT leaves. HELP lists topics by category; HELP <topic> shows usage and details. VERSION() returns GOBI 1.0.",
 		SeeAlso:  []string{"HELP", "QUIT"},
 	})
 	RegisterTopic(Topic{
