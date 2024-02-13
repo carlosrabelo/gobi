@@ -1793,7 +1793,7 @@ func TestDispatchCreateNoFields(t *testing.T) {
 
 func TestDispatchEditNoDatabase(t *testing.T) {
 	ctx := testCtx()
-	ctx.Stdin = strings.NewReader("\n")
+	ctx.Stdin = strings.NewReader("\x17")
 
 	err := commandMux.Dispatch(ctx, Command{Verb: "EDIT", Args: "1"})
 	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
@@ -1836,13 +1836,13 @@ func TestDispatchEditOutOfRange(t *testing.T) {
 	}
 }
 
-func TestDispatchEditLineModeSave(t *testing.T) {
+func TestDispatchEditSaveAndExit(t *testing.T) {
 	tempDir := t.TempDir()
 	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
 	dbfPath := createTempDBFWithRecords(t, tempDir, "editdb.dbf", [][]byte{rec})
 
 	ctx := testCtx()
-	ctx.Stdin = strings.NewReader("Bob\n\n")
+	ctx.Stdin = strings.NewReader("\x19Bob\x17")
 	ctx.Stdout = &bytes.Buffer{}
 
 	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
@@ -1860,6 +1860,88 @@ func TestDispatchEditLineModeSave(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "Bob") {
 		t.Fatalf("expected edited name Bob, got: %q", stdout.String())
+	}
+}
+
+func TestDispatchEditQuitWithoutSave(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "editdb.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("\x19Bob\x11")
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "EDIT", Args: "1"}); err != nil {
+		t.Fatalf("unexpected error on EDIT: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Alice") {
+		t.Fatalf("expected original name Alice, got: %q", stdout.String())
+	}
+}
+
+func TestDispatchEditToggleDelete(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "editdb.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("\x15\x17")
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "EDIT", Args: "1"}); err != nil {
+		t.Fatalf("unexpected error on EDIT: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.ActiveRecord == nil || !area.ActiveRecord.Deleted {
+		t.Fatal("expected active record to be marked deleted after EDIT")
+	}
+}
+
+func TestDispatchEditNextRecord(t *testing.T) {
+	tempDir := t.TempDir()
+	rec1 := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x20}, append([]byte("Bob       "), []byte(" 35")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "editdb.dbf", [][]byte{rec1, rec2})
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader("\x19Ann\x07\x17")
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("open table: %v", err)
+	}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "EDIT", Args: "1"}); err != nil {
+		t.Fatalf("unexpected error on EDIT: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	ctx.Stdout = &stdout
+	if err := commandMux.Dispatch(ctx, Command{Verb: "LIST", Args: "NAME"}); err != nil {
+		t.Fatalf("unexpected error on LIST: %v", err)
+	}
+	output := stdout.String()
+	if !strings.Contains(output, "Ann") {
+		t.Fatalf("expected edited record 1 Ann, got: %q", output)
+	}
+	if !strings.Contains(output, "Bob") {
+		t.Fatalf("expected record 2 Bob unchanged, got: %q", output)
 	}
 }
 
