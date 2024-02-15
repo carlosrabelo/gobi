@@ -146,7 +146,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] `READ` loop handling user editing, Tab, and field validation
 - [x] Interactive `APPEND` screen generation
 - [x] Interactive `EDIT` record screen generation
-- [ ] `BROWSE` table view spreadsheet matrix
+- [x] `BROWSE` table view spreadsheet matrix
 - [ ] `BROWSE` cell cursor movement using arrow keys
 - [ ] `BROWSE` inline cell edit and record deletion
 
