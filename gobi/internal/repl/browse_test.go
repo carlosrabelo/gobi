@@ -88,3 +88,64 @@ func TestDispatchBrowseRequiresDatabase(t *testing.T) {
 		t.Fatalf("expected no database error, got %v", err)
 	}
 }
+
+func TestBrowseCursorMovement(t *testing.T) {
+	tempDir := t.TempDir()
+	rec1 := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x20}, append([]byte("Bob       "), []byte(" 30")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "browsemove.dbf", [][]byte{rec1, rec2})
+
+	ctx := testCtx()
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("USE: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	s := newBrowseSession(ctx, area, area.Table.Underlying().(io.ReadSeeker))
+	s.curRec = 0
+	s.curCol = 0
+
+	s.moveDown()
+	if s.curRec != 1 {
+		t.Fatalf("expected record 1 after down, got %d", s.curRec)
+	}
+
+	s.moveRight()
+	if s.curCol != 1 {
+		t.Fatalf("expected column 1 after right, got %d", s.curCol)
+	}
+
+	s.moveUp()
+	if s.curRec != 0 {
+		t.Fatalf("expected record 0 after up, got %d", s.curRec)
+	}
+
+	s.moveLeft()
+	if s.curCol != 0 {
+		t.Fatalf("expected column 0 after left, got %d", s.curCol)
+	}
+}
+
+func TestRunBrowseMatrixArrowKeysMoveCursor(t *testing.T) {
+	tempDir := t.TempDir()
+	rec1 := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	rec2 := append([]byte{0x20}, append([]byte("Bob       "), []byte(" 30")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "browsekeys.dbf", [][]byte{rec1, rec2})
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader(string([]byte{replKeyDown, replKeyRight, editKeyEsc}))
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("USE: %v", err)
+	}
+
+	if err := runBrowseMatrix(ctx, ctx.GetActiveArea().Table.Underlying().(io.ReadSeeker)); err != nil {
+		t.Fatalf("runBrowseMatrix: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.RecordNo != 1 {
+		t.Fatalf("expected record pointer 1, got %d", area.RecordNo)
+	}
+}

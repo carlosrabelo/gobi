@@ -343,6 +343,14 @@ func (s *browseSession) handleKey(key byte) bool {
 	switch key {
 	case editKeyCtrlQ, editKeyEsc:
 		return true
+	case replKeyUp:
+		s.moveUp()
+	case replKeyDown:
+		s.moveDown()
+	case replKeyLeft:
+		s.moveLeft()
+	case replKeyRight:
+		s.moveRight()
 	}
 	return false
 }
