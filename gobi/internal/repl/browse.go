@@ -340,9 +340,21 @@ func (s *browseSession) cursorPosition() (int, int) {
 }
 
 func (s *browseSession) handleKey(key byte) bool {
+	if s.editing {
+		return s.handleEditKey(key)
+	}
+
 	switch key {
 	case editKeyCtrlQ, editKeyEsc:
 		return true
+	case editKeyEnter:
+		if err := s.beginEdit(); err != nil {
+			fmt.Fprintln(s.ctx.Stderr, err.Error())
+		}
+	case editKeyCtrlU:
+		if err := s.toggleRecordDelete(); err != nil {
+			fmt.Fprintln(s.ctx.Stderr, err.Error())
+		}
 	case replKeyUp:
 		s.moveUp()
 	case replKeyDown:
@@ -351,6 +363,14 @@ func (s *browseSession) handleKey(key byte) bool {
 		s.moveLeft()
 	case replKeyRight:
 		s.moveRight()
+	default:
+		if key >= 32 && key < 127 {
+			if err := s.beginEdit(); err != nil {
+				fmt.Fprintln(s.ctx.Stderr, err.Error())
+			} else if err := s.insertEditChar(byte(key)); err != nil {
+				fmt.Fprintln(s.ctx.Stderr, err.Error())
+			}
+		}
 	}
 	return false
 }

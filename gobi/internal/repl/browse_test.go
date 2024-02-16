@@ -63,32 +63,6 @@ func TestBrowseMatrixRendering(t *testing.T) {
 	}
 }
 
-func TestRunBrowseMatrixExitsOnEsc(t *testing.T) {
-	tempDir := t.TempDir()
-	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
-	dbfPath := createTempDBFWithRecords(t, tempDir, "browseexit.dbf", [][]byte{rec})
-
-	ctx := testCtx()
-	ctx.Stdin = strings.NewReader(string([]byte{editKeyEsc}))
-	ctx.Stdout = &bytes.Buffer{}
-
-	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
-		t.Fatalf("USE: %v", err)
-	}
-
-	if err := runBrowseMatrix(ctx, ctx.GetActiveArea().Table.Underlying().(io.ReadSeeker)); err != nil {
-		t.Fatalf("runBrowseMatrix: %v", err)
-	}
-}
-
-func TestDispatchBrowseRequiresDatabase(t *testing.T) {
-	ctx := testCtx()
-	err := commandMux.Dispatch(ctx, Command{Verb: "BROWSE"})
-	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
-		t.Fatalf("expected no database error, got %v", err)
-	}
-}
-
 func TestBrowseCursorMovement(t *testing.T) {
 	tempDir := t.TempDir()
 	rec1 := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
@@ -147,5 +121,148 @@ func TestRunBrowseMatrixArrowKeysMoveCursor(t *testing.T) {
 	area := ctx.GetActiveArea()
 	if area.RecordNo != 1 {
 		t.Fatalf("expected record pointer 1, got %d", area.RecordNo)
+	}
+}
+
+func TestBrowseInlineCellEdit(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "browseedit.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	input := string([]byte{editKeyEnter, editKeyCtrlY, 'B', 'o', 'b', editKeyEnter, editKeyEsc})
+	ctx.Stdin = strings.NewReader(input)
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("USE: %v", err)
+	}
+
+	if err := runBrowseMatrix(ctx, ctx.GetActiveArea().Table.Underlying().(io.ReadSeeker)); err != nil {
+		t.Fatalf("runBrowseMatrix: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	updated, err := area.Table.ReadRecordAt(area.Table.Underlying().(io.ReadSeeker), 0)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	name, err := updated.DecodeField(area.Table, 0)
+	if err != nil {
+		t.Fatalf("decode NAME: %v", err)
+	}
+	if name.(string) != "Bob" {
+		t.Fatalf("NAME = %q, want Bob", name)
+	}
+}
+
+func TestBrowseToggleRecordDelete(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "browsedel.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader(string([]byte{editKeyCtrlU, editKeyEsc}))
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("USE: %v", err)
+	}
+
+	if err := runBrowseMatrix(ctx, ctx.GetActiveArea().Table.Underlying().(io.ReadSeeker)); err != nil {
+		t.Fatalf("runBrowseMatrix: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	if area.ActiveRecord == nil || !area.ActiveRecord.Deleted {
+		t.Fatal("expected active record to be marked deleted after BROWSE")
+	}
+}
+
+func TestBrowseEditCancelRestoresValue(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "browsecancel.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader(string([]byte{editKeyEnter, 'X', editKeyEsc, editKeyEsc}))
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("USE: %v", err)
+	}
+
+	if err := runBrowseMatrix(ctx, ctx.GetActiveArea().Table.Underlying().(io.ReadSeeker)); err != nil {
+		t.Fatalf("runBrowseMatrix: %v", err)
+	}
+
+	area := ctx.GetActiveArea()
+	unchanged, err := area.Table.ReadRecordAt(area.Table.Underlying().(io.ReadSeeker), 0)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	name, err := unchanged.DecodeField(area.Table, 0)
+	if err != nil {
+		t.Fatalf("decode NAME: %v", err)
+	}
+	if name.(string) != "Alice" {
+		t.Fatalf("NAME = %q, want Alice", name)
+	}
+}
+
+func TestBrowseInsertEditCharRespectsWidth(t *testing.T) {
+	s := &browseSession{
+		tbl: &dbf.Table{
+			Header: &dbf.Header{RecordCount: 1},
+			Fields: []dbf.FieldDescriptor{
+				{Name: "CODE", Type: dbf.FieldTypeChar, Length: 3},
+			},
+			Offset: []int{0, 3},
+		},
+		curRec:     0,
+		curCol:     0,
+		editing:    true,
+		editValue:  "AB",
+		editCursor: 2,
+	}
+
+	if err := s.insertEditChar('C'); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.editValue != "ABC" {
+		t.Fatalf("value = %q, want ABC", s.editValue)
+	}
+
+	if err := s.insertEditChar('D'); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.editValue != "ABC" {
+		t.Fatalf("value = %q, want ABC after overflow", s.editValue)
+	}
+}
+
+func TestRunBrowseMatrixExitsOnEsc(t *testing.T) {
+	tempDir := t.TempDir()
+	rec := append([]byte{0x20}, append([]byte("Alice     "), []byte(" 25")...)...)
+	dbfPath := createTempDBFWithRecords(t, tempDir, "browseexit.dbf", [][]byte{rec})
+
+	ctx := testCtx()
+	ctx.Stdin = strings.NewReader(string([]byte{editKeyEsc}))
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: dbfPath}); err != nil {
+		t.Fatalf("USE: %v", err)
+	}
+
+	if err := runBrowseMatrix(ctx, ctx.GetActiveArea().Table.Underlying().(io.ReadSeeker)); err != nil {
+		t.Fatalf("runBrowseMatrix: %v", err)
+	}
+}
+
+func TestDispatchBrowseRequiresDatabase(t *testing.T) {
+	ctx := testCtx()
+	err := commandMux.Dispatch(ctx, Command{Verb: "BROWSE"})
+	if err == nil || !strings.Contains(err.Error(), "No database file is in use") {
+		t.Fatalf("expected no database error, got %v", err)
 	}
 }
