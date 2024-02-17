@@ -150,6 +150,9 @@ func handleSet(ctx *context.Context, cmd Command) error {
 	case "TALK":
 		applySetTalk(ctx, parts)
 		return nil
+	case "INTENSITY":
+		applySetIntensity(ctx, parts)
+		return nil
 	case "SCREEN":
 		return applySetScreen(ctx, parts)
 	default:
