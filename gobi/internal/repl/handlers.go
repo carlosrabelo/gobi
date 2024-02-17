@@ -874,13 +874,6 @@ func replaceRecordField(tbl *dbf.Table, rec *dbf.Record, fieldIdx int, val inter
 	return dbf.NewRecord(tbl, rec.Deleted, values)
 }
 
-func talkPrint(ctx *context.Context, format string, args ...interface{}) {
-	if ctx == nil || ctx.Stdout == nil || ctx.Config == nil || !ctx.Config.Talk {
-		return
-	}
-	fmt.Fprintf(ctx.Stdout, format, args...)
-}
-
 func handleDelete(ctx *context.Context, cmd Command) error {
 	scope, rest, err := parseScopeClause(cmd.Args)
 	if err != nil {

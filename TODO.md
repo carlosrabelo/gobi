@@ -152,7 +152,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 
 ## System Environment & CLI
 
-- [ ] `SET TALK` flag controller
+- [x] `SET TALK` flag controller
 - [ ] `SET INTENSITY` video invert controller
 - [ ] `SET BELL` sound alarm controller
 - [ ] `SET DEFAULT` data directory mapping

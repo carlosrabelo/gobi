@@ -147,10 +147,13 @@ func handleSet(ctx *context.Context, cmd Command) error {
 		return fmt.Errorf("*** SET requires an option")
 	}
 	switch parts[0] {
+	case "TALK":
+		applySetTalk(ctx, parts)
+		return nil
 	case "SCREEN":
 		return applySetScreen(ctx, parts)
 	default:
-		return fmt.Errorf("*** Unrecognized SET option")
+		return fmt.Errorf("*** Unrecognized SET option: %s", parts[0])
 	}
 }
 
