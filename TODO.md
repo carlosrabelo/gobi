@@ -154,7 +154,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 
 - [x] `SET TALK` flag controller
 - [x] `SET INTENSITY` video invert controller
-- [ ] `SET BELL` sound alarm controller
+- [x] `SET BELL` sound alarm controller
 - [ ] `SET DEFAULT` data directory mapping
 - [ ] `DIR` command listing DBFs with sizes and records count
 - [ ] `RENAME` and `ERASE` file hooks
