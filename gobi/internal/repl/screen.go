@@ -156,6 +156,12 @@ func handleSet(ctx *context.Context, cmd Command) error {
 	case "BELL":
 		applySetBell(ctx, parts)
 		return nil
+	case "DEFAULT":
+		args := cmd.Args
+		if cmd.ToClause != "" {
+			args += " TO " + cmd.ToClause
+		}
+		return applySetDefault(ctx, args)
 	case "SCREEN":
 		return applySetScreen(ctx, parts)
 	default:
