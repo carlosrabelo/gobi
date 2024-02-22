@@ -158,7 +158,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] `SET DEFAULT` data directory mapping
 - [x] `DIR` command listing DBFs with sizes and records count
 - [x] `RENAME` and `ERASE` file hooks
-- [ ] Entry point arguments (`-e` inline command, file run)
+- [x] Entry point arguments (`-e` inline command, file run)
 - [ ] `HELP` command documentation parser
 
 ## Second milestone
