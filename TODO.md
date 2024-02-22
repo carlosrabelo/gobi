@@ -157,7 +157,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] `SET BELL` sound alarm controller
 - [x] `SET DEFAULT` data directory mapping
 - [x] `DIR` command listing DBFs with sizes and records count
-- [ ] `RENAME` and `ERASE` file hooks
+- [x] `RENAME` and `ERASE` file hooks
 - [ ] Entry point arguments (`-e` inline command, file run)
 - [ ] `HELP` command documentation parser
 
