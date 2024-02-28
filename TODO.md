@@ -165,7 +165,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 
 ## Console & Program Input
 
-- [ ] `ACCEPT ['prompt'] TO <var>` string input into memory variable
+- [x] `ACCEPT ['prompt'] TO <var>` string input into memory variable
 - [ ] `INPUT ['prompt'] TO <var>` evaluated expression input
 - [ ] `WAIT [TO <var>]` single-key pause storing the pressed key
 - [ ] `TEXT ... ENDTEXT` literal text block output in scripts

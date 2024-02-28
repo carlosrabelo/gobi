@@ -120,6 +120,7 @@ func (m *CommandMux) registerAll() {
 	m.register("ERASE", handleErase)
 	m.register("RENAME", handleRename)
 	m.register("HELP", handleHelp)
+	m.register("ACCEPT", handleAccept)
 }
 
 func stubHandler(verb string) HandlerFunc {
