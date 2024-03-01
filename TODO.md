@@ -169,7 +169,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] `INPUT ['prompt'] TO <var>` evaluated expression input
 - [x] `WAIT [TO <var>]` single-key pause storing the pressed key
 - [x] `TEXT ... ENDTEXT` literal text block output in scripts
-- [ ] `REMARK` echoing its text to output (currently treated as silent comment)
+- [x] `REMARK` echoing its text to output (currently treated as silent comment)
 - [ ] `NOTE` silent comment lines in scripts (alias of `*`)
 
 ## Flow Control

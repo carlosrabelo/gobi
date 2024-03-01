@@ -125,6 +125,7 @@ func (m *CommandMux) registerAll() {
 	m.register("WAIT", handleWait)
 	m.register("TEXT", handleTextInteractive)
 	m.register("ENDTEXT", handleEndTextInteractive)
+	m.register("REMARK", handleRemark)
 }
 
 func stubHandler(verb string) HandlerFunc {
