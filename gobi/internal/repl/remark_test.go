@@ -58,3 +58,17 @@ func TestRunProgramEchoesRemark(t *testing.T) {
 		t.Fatalf("script output = %q, want %q", out.String(), want)
 	}
 }
+
+func TestDispatchNoteIsSilent(t *testing.T) {
+	ctx := testCtx()
+	out := &bytes.Buffer{}
+	ctx.Stdout = out
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "NOTE", Args: "interactive comment"})
+	if err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+	if out.String() != "" {
+		t.Fatalf("NOTE must be silent, got %q", out.String())
+	}
+}

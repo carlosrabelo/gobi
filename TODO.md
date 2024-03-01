@@ -170,7 +170,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] `WAIT [TO <var>]` single-key pause storing the pressed key
 - [x] `TEXT ... ENDTEXT` literal text block output in scripts
 - [x] `REMARK` echoing its text to output (currently treated as silent comment)
-- [ ] `NOTE` silent comment lines in scripts (alias of `*`)
+- [x] `NOTE` silent comment lines in scripts (alias of `*`)
 
 ## Flow Control
 
