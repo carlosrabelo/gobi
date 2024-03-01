@@ -1,8 +1,10 @@
 package repl
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
@@ -30,6 +32,52 @@ func TestRunProgramExecutesCommands(t *testing.T) {
 	}
 	if ctx.Script != nil {
 		t.Fatal("expected script controller to be cleared")
+	}
+}
+
+func TestRunProgramOutputsTextBlock(t *testing.T) {
+	source := "TEXT\n" +
+		"=== Relatorio ===\n" +
+		"\n" +
+		"* linha literal\n" +
+		"ENDTEXT\n" +
+		"STORE 1 TO after\n"
+
+	prog, err := script.ParseSource("text.prg", source)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+
+	ctx := testCtx()
+	ctx.Config.Talk = false
+	out := &bytes.Buffer{}
+	ctx.Stdout = out
+
+	if err := RunProgram(ctx, prog); err != nil {
+		t.Fatalf("RunProgram: %v", err)
+	}
+
+	want := "=== Relatorio ===\r\n\r\n* linha literal\r\n"
+	if out.String() != want {
+		t.Fatalf("TEXT output = %q, want %q", out.String(), want)
+	}
+	if _, ok := ctx.Variables.Get("AFTER"); !ok {
+		t.Fatal("expected execution to continue after ENDTEXT")
+	}
+}
+
+func TestDispatchTextInteractiveFails(t *testing.T) {
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "TEXT"})
+	if err == nil || !strings.Contains(err.Error(), "only valid in command files") {
+		t.Fatalf("expected interactive TEXT error, got %v", err)
+	}
+
+	err = commandMux.Dispatch(ctx, Command{Verb: "ENDTEXT"})
+	if err == nil || !strings.Contains(err.Error(), "ENDTEXT without TEXT") {
+		t.Fatalf("expected stray ENDTEXT error, got %v", err)
 	}
 }
 

@@ -169,6 +169,14 @@ func executeScriptLine(ctx *context.Context, ctrl *script.Controller, line scrip
 			return true, nil
 		}
 		return false, nil
+	case "TEXT":
+		for _, text := range line.Text {
+			fmt.Fprintf(ctx.Stdout, "%s\r\n", text)
+		}
+		if finishAdvance(ctrl) {
+			return true, nil
+		}
+		return false, nil
 	}
 
 	if err := scriptDispatch(ctx, line.Command); err != nil {
