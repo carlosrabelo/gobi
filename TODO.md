@@ -174,7 +174,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 
 ## Flow Control
 
-- [ ] `DO CASE / CASE <expr> / OTHERWISE / ENDCASE` branch structure
+- [x] `DO CASE / CASE <expr> / OTHERWISE / ENDCASE` branch structure
 
 ## Record Operations & Scopes
 

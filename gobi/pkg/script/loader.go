@@ -20,6 +20,8 @@ type Program struct {
 	elseSkip    map[int]int
 	whileBlocks map[int]WhileBlock
 	endDoBlocks map[int]WhileBlock
+	caseBlocks  map[int]CaseBlock
+	caseSkip    map[int]int
 }
 
 // ResolvePath returns the filesystem path for a command file name.
