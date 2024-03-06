@@ -153,7 +153,24 @@ func outputRecords(ctx *context.Context, cmd Command, opts outputRecordsOpts) er
 		return fmt.Errorf("*** No database file is in use")
 	}
 
-	var err error
+	// A leading ALL or NEXT <n> scope overrides the command's default range.
+	scope, rest, err := parseScopeClause(cmd.Args)
+	if err != nil {
+		return err
+	}
+	cmd.Args = rest
+	if scope.all {
+		opts.startFromCurrent = false
+		opts.maxRecords = 0
+		opts.maxScanned = 0
+		opts.moveToEOFAfter = true
+	} else if scope.next > 0 {
+		opts.startFromCurrent = true
+		opts.maxRecords = 0
+		opts.maxScanned = scope.next
+		opts.moveToEOFAfter = false
+	}
+
 	var out io.Writer = ctx.Stdout
 	if cmd.ToClause != "" {
 		filePath := resolveOutputPath(ctx, cmd.ToClause)
