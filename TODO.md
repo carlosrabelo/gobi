@@ -179,7 +179,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 ## Record Operations & Scopes
 
 - [x] Scope clauses `ALL` and `NEXT <n>` on record commands (LIST, DISPLAY, DELETE, RECALL, REPLACE, COUNT, SUM, LOCATE)
-- [ ] `APPEND BLANK` adding an empty record without prompting
+- [x] `APPEND BLANK` adding an empty record without prompting
 - [ ] `INSERT [BEFORE] [BLANK]` inserting a record at the cursor position
 - [ ] `CHANGE [<scope>] FIELD <list> [FOR <expr>]` line-mode field editor
 

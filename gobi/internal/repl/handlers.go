@@ -581,6 +581,9 @@ func handleAppend(ctx *context.Context, cmd Command) error {
 		return handleAppendFrom(ctx, cmd)
 	}
 	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
+	if arg == "BLANK" {
+		return appendBlankRecord(ctx)
+	}
 	if arg != "" {
 		return fmt.Errorf("*** APPEND requires FROM <filename>")
 	}
@@ -656,6 +659,41 @@ func handleAppend(ctx *context.Context, cmd Command) error {
 	}
 
 	return nil
+}
+
+// appendBlankRecord implements APPEND BLANK: it adds a record with every
+// field blank without prompting and makes it the current record.
+func appendBlankRecord(ctx *context.Context) error {
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
+	if !ok {
+		return fmt.Errorf("*** Database file is not writable")
+	}
+
+	tbl := area.Table
+	values := make([]interface{}, len(tbl.Fields))
+	for i := range tbl.Fields {
+		values[i] = ""
+	}
+
+	rec, err := dbf.NewRecord(tbl, false, values)
+	if err != nil {
+		return fmt.Errorf("*** Error building record: %w", err)
+	}
+
+	recNo, err := tbl.AppendRecord(wseeker, rec)
+	if err != nil {
+		return fmt.Errorf("*** Error appending record: %w", err)
+	}
+
+	area.RecordNo = recNo
+	area.ActiveRecord = rec
+
+	return syncOpenIndexesAfterAppend(ctx, area, recNo)
 }
 
 func readAppendLine(ctx *context.Context, reader *bufio.Reader, promptText string) (string, error) {
