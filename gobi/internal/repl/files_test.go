@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,21 +63,32 @@ func TestDispatchRenameRequiresToClause(t *testing.T) {
 	}
 }
 
-func TestDispatchEraseRemovesFile(t *testing.T) {
-	tempDir := t.TempDir()
-	path := filepath.Join(tempDir, "temp.dbf")
-	if err := os.WriteFile(path, []byte("x"), 0644); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
+func TestDispatchEraseRejectsArguments(t *testing.T) {
 	ctx := testCtx()
-	ctx.Config.DefaultDir = tempDir
-	ctx.Config.Talk = false
+	err := commandMux.Dispatch(ctx, Command{Verb: "ERASE", Args: "temp"})
+	if err == nil || !strings.Contains(err.Error(), "DELETE FILE") {
+		t.Fatalf("expected DELETE FILE hint, got %v", err)
+	}
+}
 
-	if err := commandMux.Dispatch(ctx, Command{Verb: "ERASE", Args: "temp"}); err != nil {
+func TestDispatchEraseWithoutArgsClearsScreen(t *testing.T) {
+	var stdout bytes.Buffer
+	ctx := testCtx()
+	ctx.Stdout = &stdout
+
+	ctx.Screen.WriteAt(2, 4, "KEEP?")
+	if err := commandMux.Dispatch(ctx, Command{Verb: "ERASE"}); err != nil {
 		t.Fatalf("ERASE: %v", err)
 	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("expected file removed, stat err=%v", err)
+
+	if !strings.Contains(stdout.String(), "\033[2J") {
+		t.Fatal("expected ERASE to emit a terminal clear sequence")
+	}
+	for row := 0; row < ctx.Screen.Rows(); row++ {
+		for col := 0; col < ctx.Screen.Cols(); col++ {
+			if ch := ctx.Screen.At(row, col); ch != ' ' {
+				t.Fatalf("expected blank screen at (%d,%d), got %q", row, col, ch)
+			}
+		}
 	}
 }

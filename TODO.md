@@ -185,7 +185,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 
 ## Command Semantics Alignment
 
-- [ ] `ERASE` clearing the screen (dBase II semantics)
+- [x] `ERASE` clearing the screen (dBase II semantics)
 - [ ] `DELETE FILE <filename>` removing files (replaces current ERASE behavior)
 - [ ] `CLEAR` closing databases and releasing memory variables (dBase II semantics)
 - [ ] `CLEAR GETS` releasing pending @ GET registrations

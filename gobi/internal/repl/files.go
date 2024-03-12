@@ -10,12 +10,13 @@ import (
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
 )
 
+// handleErase implements the dBase II ERASE command, which clears the
+// screen and homes the cursor. File removal is done by DELETE FILE.
 func handleErase(ctx *context.Context, cmd Command) error {
-	filename := strings.TrimSpace(cmd.Args)
-	if filename == "" {
-		return fmt.Errorf("*** ERASE requires a filename")
+	if args := strings.TrimSpace(cmd.Args); args != "" {
+		return fmt.Errorf("*** ERASE takes no arguments; use DELETE FILE %s", args)
 	}
-	return deleteFile(ctx, filename)
+	return presentClearScreen(ctx)
 }
 
 func handleRename(ctx *context.Context, cmd Command) error {
