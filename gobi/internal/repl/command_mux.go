@@ -131,6 +131,7 @@ func (m *CommandMux) registerAll() {
 	m.register("OTHERWISE", handleOtherwiseInteractive)
 	m.register("ENDCASE", handleEndCaseInteractive)
 	m.register("INSERT", handleInsert)
+	m.register("CHANGE", handleChange)
 }
 
 func stubHandler(verb string) HandlerFunc {
