@@ -92,3 +92,46 @@ func TestDispatchEraseWithoutArgsClearsScreen(t *testing.T) {
 		}
 	}
 }
+
+func TestDispatchDeleteFileRemovesFile(t *testing.T) {
+	tempDir := t.TempDir()
+	path := createTempDBFWithRecords(t, tempDir, "temp.dbf", nil)
+
+	ctx := testCtx()
+	ctx.Config.DefaultDir = tempDir
+	ctx.Config.Talk = true
+	ctx.Stdout = &bytes.Buffer{}
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "DELETE", Args: "FILE temp"}); err != nil {
+		t.Fatalf("DELETE FILE: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("expected file to be deleted")
+	}
+	if !strings.Contains(ctx.Stdout.(*bytes.Buffer).String(), "FILE HAS BEEN DELETED") {
+		t.Fatal("expected deletion confirmation")
+	}
+}
+
+func TestDispatchDeleteFileRejectsOpenFile(t *testing.T) {
+	tempDir := t.TempDir()
+	path := createTempDBFWithRecords(t, tempDir, "open.dbf", nil)
+
+	ctx := testCtx()
+	if err := commandMux.Dispatch(ctx, Command{Verb: "USE", Args: path}); err != nil {
+		t.Fatalf("USE: %v", err)
+	}
+
+	err := commandMux.Dispatch(ctx, Command{Verb: "DELETE", Args: "FILE " + path})
+	if err == nil || !strings.Contains(err.Error(), "in use") {
+		t.Fatalf("expected in use error, got %v", err)
+	}
+}
+
+func TestDispatchDeleteFileRequiresFilename(t *testing.T) {
+	ctx := testCtx()
+	err := commandMux.Dispatch(ctx, Command{Verb: "DELETE", Args: "FILE"})
+	if err == nil || !strings.Contains(err.Error(), "filename") {
+		t.Fatalf("expected filename error, got %v", err)
+	}
+}

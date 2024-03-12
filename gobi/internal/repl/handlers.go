@@ -930,6 +930,16 @@ func replaceRecordField(tbl *dbf.Table, rec *dbf.Record, fieldIdx int, val inter
 }
 
 func handleDelete(ctx *context.Context, cmd Command) error {
+	// DELETE FILE <filename> removes a file from disk (dBase II); every
+	// other form marks records for logical deletion.
+	if word, fileArg := splitLeadingWord(cmd.Args); strings.EqualFold(word, "FILE") {
+		filename := strings.TrimSpace(fileArg)
+		if filename == "" {
+			return fmt.Errorf("*** DELETE FILE requires a filename")
+		}
+		return deleteFile(ctx, filename)
+	}
+
 	scope, rest, err := parseScopeClause(cmd.Args)
 	if err != nil {
 		return err
