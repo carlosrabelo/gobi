@@ -88,6 +88,10 @@ func handleClose(ctx *context.Context, cmd Command) error {
 }
 
 func handleDisplay(ctx *context.Context, cmd Command) error {
+	if word, rest := splitLeadingWord(cmd.Args); strings.EqualFold(word, "FILES") {
+		return outputFiles(ctx, rest)
+	}
+
 	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
 	switch arg {
 	case "MEMORY":
@@ -131,6 +135,10 @@ type outputRecordsOpts struct {
 }
 
 func handleList(ctx *context.Context, cmd Command) error {
+	if word, rest := splitLeadingWord(cmd.Args); strings.EqualFold(word, "FILES") {
+		return outputFiles(ctx, rest)
+	}
+
 	argUpper := strings.ToUpper(strings.TrimSpace(cmd.Args))
 	if argUpper == "MEMORY" {
 		return outputMemory(ctx)
