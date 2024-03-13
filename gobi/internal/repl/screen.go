@@ -134,11 +134,25 @@ func presentClearScreen(ctx *context.Context) error {
 	return term.ClearScreen(ctx.Stdout)
 }
 
+// handleClear implements the dBase II CLEAR command: it closes every open
+// database (with indexes) and releases all memory variables. CLEAR GETS
+// lands in a later commit. Screen clearing belongs to ERASE in dBase II.
 func handleClear(ctx *context.Context, cmd Command) error {
-	if strings.TrimSpace(cmd.Args) != "" {
-		return fmt.Errorf("*** Unrecognized CLEAR option: %s", strings.TrimSpace(cmd.Args))
+	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
+	switch arg {
+	case "":
+		for name, area := range ctx.WorkAreas {
+			if err := closeWorkAreaDatabase(area, string(name)); err != nil {
+				return err
+			}
+			closeOpenIndexes(area)
+		}
+		ctx.Variables.Clear()
+		ctx.Screen.ClearGets()
+		return nil
+	default:
+		return fmt.Errorf("*** Unrecognized CLEAR option: %s", arg)
 	}
-	return presentClearScreen(ctx)
 }
 
 func handleSet(ctx *context.Context, cmd Command) error {
