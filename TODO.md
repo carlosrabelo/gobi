@@ -188,7 +188,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] `ERASE` clearing the screen (dBase II semantics)
 - [x] `DELETE FILE <filename>` removing files (replaces current ERASE behavior)
 - [x] `CLEAR` closing databases and releasing memory variables (dBase II semantics)
-- [ ] `CLEAR GETS` releasing pending @ GET registrations
+- [x] `CLEAR GETS` releasing pending @ GET registrations
 - [ ] `DISPLAY FILES` / `LIST FILES [LIKE <pattern>]` directory listing (DIR as alias)
 - [ ] `DISPLAY STATUS` / `LIST STATUS` showing open files, indexes, and SET values
 

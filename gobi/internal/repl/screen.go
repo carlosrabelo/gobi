@@ -150,6 +150,9 @@ func handleClear(ctx *context.Context, cmd Command) error {
 		ctx.Variables.Clear()
 		ctx.Screen.ClearGets()
 		return nil
+	case "GETS":
+		ctx.Screen.ClearGets()
+		return nil
 	default:
 		return fmt.Errorf("*** Unrecognized CLEAR option: %s", arg)
 	}

@@ -45,3 +45,22 @@ func TestDispatchClearRejectsUnknownOption(t *testing.T) {
 		t.Fatalf("expected unrecognized option error, got %v", err)
 	}
 }
+
+func TestDispatchClearGetsReleasesPendingGets(t *testing.T) {
+	ctx := testCtx()
+	ctx.Stdout = &bytes.Buffer{}
+
+	ctx.Screen.WriteAt(2, 4, "KEEP!")
+	ctx.Screen.RegisterGet(1, 1, "NAME", "")
+
+	if err := commandMux.Dispatch(ctx, Command{Verb: "CLEAR", Args: "GETS"}); err != nil {
+		t.Fatalf("CLEAR GETS: %v", err)
+	}
+
+	if len(ctx.Screen.GetFields()) != 0 {
+		t.Fatal("expected CLEAR GETS to release GET fields")
+	}
+	if ctx.Screen.At(2, 4) != 'K' {
+		t.Fatal("expected CLEAR GETS to keep screen contents")
+	}
+}
