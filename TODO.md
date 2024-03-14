@@ -190,7 +190,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 - [x] `CLEAR` closing databases and releasing memory variables (dBase II semantics)
 - [x] `CLEAR GETS` releasing pending @ GET registrations
 - [x] `DISPLAY FILES` / `LIST FILES [LIKE <pattern>]` directory listing (DIR as alias)
-- [ ] `DISPLAY STATUS` / `LIST STATUS` showing open files, indexes, and SET values
+- [x] `DISPLAY STATUS` / `LIST STATUS` showing open files, indexes, and SET values
 
 ## Index Integration
 

@@ -98,6 +98,8 @@ func handleDisplay(ctx *context.Context, cmd Command) error {
 		return outputMemory(ctx)
 	case "STRUCTURE":
 		return displayStructure(ctx)
+	case "STATUS":
+		return outputStatus(ctx)
 	default:
 		if cmd.ToClause != "" {
 			return fmt.Errorf("*** DISPLAY does not support TO clause")
@@ -146,6 +148,10 @@ func handleList(ctx *context.Context, cmd Command) error {
 
 	if argUpper == "STRUCTURE" {
 		return displayStructure(ctx)
+	}
+
+	if argUpper == "STATUS" {
+		return outputStatus(ctx)
 	}
 
 	return outputRecords(ctx, cmd, outputRecordsOpts{
