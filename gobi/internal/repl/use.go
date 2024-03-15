@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
+	"github.com/carlosrabelo/gobi/gobi/pkg/ndx"
 )
 
 func handleUse(ctx *context.Context, cmd Command) error {
@@ -25,12 +27,12 @@ func handleUse(ctx *context.Context, cmd Command) error {
 	}
 	closeOpenIndexes(area)
 
-	filename := strings.TrimSpace(cmd.Args)
+	filename, indexNames, err := parseUseArgs(cmd.Args)
+	if err != nil {
+		return err
+	}
 	if filename == "" {
 		return nil
-	}
-	if fields := strings.Fields(filename); len(fields) > 1 {
-		return fmt.Errorf("*** Unexpected argument: %s", fields[1])
 	}
 
 	filePath := resolveDBFFilePath(ctx, filename)
@@ -64,7 +66,65 @@ func handleUse(ctx *context.Context, cmd Command) error {
 		}
 	}
 
+	if err := bindUseIndexes(ctx, area, indexNames); err != nil {
+		closeOpenIndexes(area)
+		_ = tbl.Close()
+		area.Table = nil
+		area.RecordNo = 0
+		area.ActiveRecord = nil
+		clearLocateState(area)
+		return err
+	}
+
 	return nil
+}
+
+func parseUseArgs(args string) (filename string, indexNames []string, err error) {
+	fields := strings.Fields(args)
+	if len(fields) == 0 {
+		return "", nil, nil
+	}
+
+	filename = fields[0]
+	if len(fields) == 1 {
+		return filename, nil, nil
+	}
+
+	if !strings.EqualFold(fields[1], "INDEX") {
+		return "", nil, fmt.Errorf("*** Unexpected argument: %s", fields[1])
+	}
+
+	indexNames = splitIndexNames(strings.Join(fields[2:], " "))
+	if len(indexNames) == 0 {
+		return "", nil, fmt.Errorf("*** INDEX requires at least one index file name")
+	}
+	return filename, indexNames, nil
+}
+
+func bindUseIndexes(ctx *context.Context, area *context.WorkArea, indexNames []string) error {
+	for _, name := range indexNames {
+		filePath := resolveNDXFilePath(ctx, name)
+		idx, err := ndx.OpenIndex(filePath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("*** Index file not found: %s", name)
+			}
+			return fmt.Errorf("*** Error opening index %s: %w", name, err)
+		}
+		area.Indexes = append(area.Indexes, idx)
+	}
+	return nil
+}
+
+func splitIndexNames(list string) []string {
+	var names []string
+	for _, part := range strings.Split(list, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			names = append(names, part)
+		}
+	}
+	return names
 }
 
 func closeOpenIndexes(area *context.WorkArea) {
