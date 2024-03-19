@@ -403,27 +403,6 @@ func parseForWhileClauses(cmd Command) (expr.Expression, expr.Expression, error)
 	return forExp, whileExp, nil
 }
 
-func recordSequence(area *context.WorkArea) ([]int, error) {
-	recCount := int(area.Table.Header.RecordCount)
-	seq := make([]int, recCount)
-	for i := range seq {
-		seq[i] = i
-	}
-	return seq, nil
-}
-
-func positionInSequence(seq []int, recNo, recCount int) int {
-	if recNo >= recCount {
-		return len(seq)
-	}
-	for pos, recIdx := range seq {
-		if recIdx == recNo {
-			return pos
-		}
-	}
-	return len(seq)
-}
-
 func splitCommaOutsideParens(s string) []string {
 	var parts []string
 	var cur strings.Builder
@@ -554,6 +533,13 @@ func goTop(ctx *context.Context) error {
 	if area == nil || area.Table == nil {
 		return fmt.Errorf("*** No database file is in use")
 	}
+	order, err := controllingIndexOrder(area)
+	if err != nil {
+		return err
+	}
+	if len(order) > 0 {
+		return goToRecord(ctx, order[0]+1)
+	}
 	return goToRecord(ctx, 1)
 }
 
@@ -561,6 +547,13 @@ func goBottom(ctx *context.Context) error {
 	area := ctx.GetActiveArea()
 	if area == nil || area.Table == nil {
 		return fmt.Errorf("*** No database file is in use")
+	}
+	order, err := controllingIndexOrder(area)
+	if err != nil {
+		return err
+	}
+	if len(order) > 0 {
+		return goToRecord(ctx, order[len(order)-1]+1)
 	}
 	recCount := int(area.Table.Header.RecordCount)
 	if recCount == 0 {
@@ -587,7 +580,24 @@ func skipRecords(ctx *context.Context, delta int) error {
 	if area == nil || area.Table == nil {
 		return fmt.Errorf("*** No database file is in use")
 	}
-	return goToRecord(ctx, area.RecordNo+1+delta)
+
+	order, err := controllingIndexOrder(area)
+	if err != nil {
+		return err
+	}
+	if order == nil {
+		return goToRecord(ctx, area.RecordNo+1+delta)
+	}
+
+	recCount := int(area.Table.Header.RecordCount)
+	pos := positionInSequence(order, area.RecordNo, recCount) + delta
+	if pos < 0 {
+		return fmt.Errorf("*** Record number out of range")
+	}
+	if pos >= len(order) {
+		return goToRecord(ctx, recCount+1)
+	}
+	return goToRecord(ctx, order[pos]+1)
 }
 
 func handleAppend(ctx *context.Context, cmd Command) error {

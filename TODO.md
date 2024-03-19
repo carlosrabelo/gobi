@@ -196,7 +196,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 
 - [x] `USE <file> INDEX <ndx1>, ...` binding existing index files
 - [x] `SET INDEX TO [<ndx list>]` rebinding indexes on the active table
-- [ ] Index-ordered navigation: GO TOP/BOTTOM, SKIP, LIST following the active index order
+- [x] Index-ordered navigation: GO TOP/BOTTOM, SKIP, LIST following the active index order
 
 ## SET Options
 
