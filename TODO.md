@@ -200,7 +200,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 
 ## SET Options
 
-- [ ] `SET EXACT ON/OFF` exact string comparison mode
+- [x] `SET EXACT ON/OFF` exact string comparison mode
 - [ ] `SET DELETED ON/OFF` hiding records marked for deletion
 - [ ] `SET ECHO ON/OFF` echoing script commands during execution
 - [ ] `SET CARRY ON/OFF` carrying previous record values into APPEND

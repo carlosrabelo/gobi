@@ -18,6 +18,11 @@ func newReplEnvironment(ctx *context.Context) expr.Environment {
 	return &replEnvironment{ctx: ctx}
 }
 
+// ExactComparison reports the SET EXACT mode for string comparisons.
+func (env *replEnvironment) ExactComparison() bool {
+	return env.ctx.Config.Exact
+}
+
 func (env *replEnvironment) GetVariable(name string) (expr.Object, bool) {
 	val, ok := env.ctx.Variables.Get(name)
 	if !ok {

@@ -179,6 +179,9 @@ func handleSet(ctx *context.Context, cmd Command) error {
 			args += " TO " + cmd.ToClause
 		}
 		return applySetDefault(ctx, args)
+	case "EXACT":
+		applySetExact(ctx, parts)
+		return nil
 	case "INDEX":
 		return applySetIndex(ctx, cmd)
 	case "SCREEN":

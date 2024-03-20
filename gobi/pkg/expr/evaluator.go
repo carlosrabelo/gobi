@@ -166,8 +166,20 @@ func evalBinaryExpression(exp *BinaryExpression, env Environment) (Object, error
 	}
 }
 
-// exactMode is a stub until SET EXACT lands; comparisons are exact.
+// ExactComparer is an optional Environment extension reporting whether
+// string comparisons must consider the whole operands (SET EXACT ON)
+// instead of the dBase II default of stopping at the end of the right
+// operand (prefix matching).
+type ExactComparer interface {
+	ExactComparison() bool
+}
+
+// exactMode resolves the string comparison mode for an environment.
+// Environments that do not expose the setting keep exact comparisons.
 func exactMode(env Environment) bool {
+	if ec, ok := env.(ExactComparer); ok {
+		return ec.ExactComparison()
+	}
 	return true
 }
 
