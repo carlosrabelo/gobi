@@ -295,6 +295,10 @@ func outputRecords(ctx *context.Context, cmd Command, opts outputRecordsOpts) er
 		area.RecordNo = i
 		area.ActiveRecord = rec
 
+		if deletedHidden(ctx, rec) {
+			continue
+		}
+
 		if whileExp != nil {
 			res, err := expr.Eval(whileExp, env)
 			if err != nil {
@@ -533,6 +537,9 @@ func goTop(ctx *context.Context) error {
 	if area == nil || area.Table == nil {
 		return fmt.Errorf("*** No database file is in use")
 	}
+	if ctx.Config.Deleted {
+		return goEdgeVisible(ctx, area, true)
+	}
 	order, err := controllingIndexOrder(area)
 	if err != nil {
 		return err
@@ -547,6 +554,9 @@ func goBottom(ctx *context.Context) error {
 	area := ctx.GetActiveArea()
 	if area == nil || area.Table == nil {
 		return fmt.Errorf("*** No database file is in use")
+	}
+	if ctx.Config.Deleted {
+		return goEdgeVisible(ctx, area, false)
 	}
 	order, err := controllingIndexOrder(area)
 	if err != nil {
@@ -579,6 +589,10 @@ func skipRecords(ctx *context.Context, delta int) error {
 	area := ctx.GetActiveArea()
 	if area == nil || area.Table == nil {
 		return fmt.Errorf("*** No database file is in use")
+	}
+
+	if ctx.Config.Deleted {
+		return skipVisible(ctx, area, delta)
 	}
 
 	order, err := controllingIndexOrder(area)

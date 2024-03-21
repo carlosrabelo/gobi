@@ -182,6 +182,9 @@ func handleSet(ctx *context.Context, cmd Command) error {
 	case "EXACT":
 		applySetExact(ctx, parts)
 		return nil
+	case "DELETED":
+		applySetDeleted(ctx, parts)
+		return nil
 	case "INDEX":
 		return applySetIndex(ctx, cmd)
 	case "SCREEN":
