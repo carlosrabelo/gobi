@@ -217,7 +217,7 @@ References: [docs/ndx_spec.md](file:///home/carlos/Sources/gobi/docs/ndx_spec.md
 ## Expression Engine Compatibility
 
 - [ ] Macro substitution `&<memvar>` in command lines and expressions
-- [ ] `CHR(<n>)` ASCII character function
+- [x] `CHR(<n>)` ASCII character function
 - [ ] `RANK(<str>)` ASCII code function
 - [ ] `DATE()` system date function
 - [ ] `FILE(<name>)` file existence function

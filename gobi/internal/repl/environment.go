@@ -115,6 +115,21 @@ func (env *replEnvironment) CallFunction(name string, args []expr.Object) (expr.
 		}
 		return &expr.BooleanObject{Value: area.Found}, nil
 
+	case "CHR":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("CHR expects 1 argument")
+		}
+		numObj, ok := args[0].(*expr.NumberObject)
+		if !ok {
+			return nil, fmt.Errorf("CHR expects numeric argument")
+		}
+		n := int(numObj.Value)
+		if n < 0 || n > 255 {
+			return nil, fmt.Errorf("CHR argument out of range (0-255)")
+		}
+		// Single-byte semantics, as in dBase II's ASCII character set.
+		return &expr.StringObject{Value: string([]byte{byte(n)})}, nil
+
 	case "TRIM":
 		if len(args) != 1 {
 			return nil, fmt.Errorf("TRIM expects 1 argument")
