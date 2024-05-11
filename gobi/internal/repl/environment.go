@@ -14,6 +14,7 @@ type replEnvironment struct {
 	ctx *context.Context
 }
 
+// newReplEnvironment creates a new Environment tied to the active REPL context.
 func newReplEnvironment(ctx *context.Context) expr.Environment {
 	return &replEnvironment{ctx: ctx}
 }
@@ -93,6 +94,7 @@ func (env *replEnvironment) CallFunction(name string, args []expr.Object) (expr.
 		if area == nil || area.Table == nil {
 			return &expr.NumberObject{Value: 0}, nil
 		}
+		// dBase II is 1-based for users
 		return &expr.NumberObject{Value: float64(area.RecordNo + 1)}, nil
 
 	case "DELETED":
@@ -209,7 +211,7 @@ func (env *replEnvironment) CallFunction(name string, args []expr.Object) (expr.
 		if !ok {
 			return nil, fmt.Errorf("SUBSTR expects numeric third argument")
 		}
-		start := int(startObj.Value) - 1
+		start := int(startObj.Value) - 1 // 1-based in dBase
 		length := int(lenObj.Value)
 		if start < 0 {
 			start = 0

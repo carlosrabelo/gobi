@@ -385,6 +385,15 @@ func inferKeyLengthFromExpression(tbl *dbf.Table, expression string) uint16 {
 	return 10
 }
 
+func closeOpenIndexes(area *context.WorkArea) {
+	for _, idx := range area.Indexes {
+		if idx != nil {
+			_ = idx.Close()
+		}
+	}
+	area.Indexes = nil
+}
+
 func closeIndexAtPath(area *context.WorkArea, filePath string) {
 	if area == nil {
 		return

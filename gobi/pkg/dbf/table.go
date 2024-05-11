@@ -46,10 +46,13 @@ func Open(r io.Reader) (*Table, error) {
 	}, nil
 }
 
+// Underlying returns the underlying reader/writer of the table.
 func (tbl *Table) Underlying() io.Reader {
 	return tbl.underlying
 }
 
+// Close performs a safe flush and sync on the underlying reader/writer if they
+// support flushing (e.g. bufio.Writer) and syncing (e.g. *os.File), then closes it.
 func (tbl *Table) Close() error {
 	if tbl.underlying == nil {
 		return nil
@@ -130,6 +133,8 @@ func (tbl *Table) AppendRecord(w io.WriteSeeker, rec *Record) (int, error) {
 	return recNo, nil
 }
 
+// Pack rewrites the DBF in place, physically removing logically deleted records.
+// It returns the number of records removed and updates the in-memory record count.
 func (tbl *Table) Pack(w io.ReadWriteSeeker) (int, error) {
 	trunc, ok := w.(interface{ Truncate(int64) error })
 	if !ok {
@@ -191,6 +196,8 @@ func (tbl *Table) Pack(w io.ReadWriteSeeker) (int, error) {
 	return removed, nil
 }
 
+// Zap removes all records from the DBF, truncating the data area.
+// It returns the number of records removed and updates the in-memory record count.
 func (tbl *Table) Zap(w io.ReadWriteSeeker) (int, error) {
 	trunc, ok := w.(interface{ Truncate(int64) error })
 	if !ok {

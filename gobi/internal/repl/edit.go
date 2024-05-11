@@ -347,31 +347,3 @@ func (s *editSession) saveCurrent() error {
 	s.dirty = false
 	return nil
 }
-
-func handleEdit(ctx *context.Context, cmd Command) error {
-	arg := strings.TrimSpace(cmd.Args)
-	if arg == "" {
-		return fmt.Errorf("*** EDIT requires a record number")
-	}
-
-	userRecNo, err := strconv.Atoi(arg)
-	if err != nil {
-		return fmt.Errorf("*** Invalid record number: %s", arg)
-	}
-
-	area := ctx.GetActiveArea()
-	if area == nil || area.Table == nil {
-		return fmt.Errorf("*** No database file is in use")
-	}
-
-	recCount := int(area.Table.Header.RecordCount)
-	if userRecNo < 1 || userRecNo > recCount {
-		return fmt.Errorf("*** Record number out of range")
-	}
-
-	err = runEditForm(ctx, userRecNo-1)
-	if consoleErr := returnToConsole(ctx); consoleErr != nil && err == nil {
-		err = consoleErr
-	}
-	return err
-}

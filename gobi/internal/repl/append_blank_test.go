@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"strings"
 	"testing"
-
-	"github.com/carlosrabelo/gobi/gobi/pkg/ndx"
 )
 
 func TestDispatchAppendBlankAddsEmptyRecord(t *testing.T) {
@@ -69,20 +67,16 @@ func TestDispatchAppendBlankUpdatesIndexes(t *testing.T) {
 	}
 
 	area := ctx.GetActiveArea()
-	pm := area.Indexes[0].Manager()
-	alice, found, err := pm.SearchExact(ndx.Key("Alice"))
+	records, err := area.Indexes[0].Manager().OrderedRecordNumbers()
 	if err != nil {
-		t.Fatalf("SearchExact Alice: %v", err)
+		t.Fatalf("OrderedRecordNumbers: %v", err)
 	}
-	if !found || alice.RecordNumber != 1 {
-		t.Fatalf("Alice mapping = %#v found=%v, want record 1", alice, found)
+	if len(records) != 2 {
+		t.Fatalf("index entries = %d, want 2", len(records))
 	}
-	blank, found, err := pm.SearchExact(ndx.Key(""))
-	if err != nil {
-		t.Fatalf("SearchExact blank: %v", err)
-	}
-	if !found || blank.RecordNumber != 2 {
-		t.Fatalf("blank mapping = %#v found=%v, want record 2", blank, found)
+	// The blank key sorts before "Alice", so record 2 comes first.
+	if records[0] != 2 {
+		t.Fatalf("index order = %v, want blank record (2) first", records)
 	}
 }
 

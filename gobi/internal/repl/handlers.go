@@ -2,46 +2,76 @@ package repl
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/dbf"
 	"github.com/carlosrabelo/gobi/gobi/pkg/expr"
+	"github.com/carlosrabelo/gobi/gobi/pkg/ndx"
 	"github.com/carlosrabelo/gobi/gobi/pkg/term"
 )
 
-func handleQuit(ctx *context.Context, cmd Command) error {
-	return errQuit
+// displayPageSize derives the DISPLAY pagination height from the current
+// screen geometry, keeping the classic 20 rows on an 80x24 screen.
+func displayPageSize(ctx *context.Context) int {
+	rows := term.DefaultRows
+	if ctx != nil && ctx.Screen != nil {
+		rows = ctx.Screen.Rows()
+	}
+	size := rows - 4
+	if size < 1 {
+		size = 1
+	}
+	return size
 }
 
-func handleSelect(ctx *context.Context, cmd Command) error {
+type outputRecordsOpts struct {
+	maxRecords       int // maximum records to display (0 = unlimited)
+	maxScanned       int // maximum records to traverse, for NEXT <n> (0 = unlimited)
+	startFromCurrent bool
+	moveToEOFAfter   bool
+}
+
+// handleClear implements the dBase II CLEAR command: it closes every open
+// database (with indexes) and releases all memory variables. CLEAR GETS
+// releases only the pending @ GET registrations. Screen clearing belongs
+// to ERASE in dBase II.
+func handleClear(ctx *context.Context, cmd Command) error {
 	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
-	if arg == "" {
-		return fmt.Errorf("*** SELECT requires PRIMARY or SECONDARY")
-	}
-
-	var msg string
 	switch arg {
-	case "PRIMARY":
-		if err := ctx.SelectArea(context.Primary); err != nil {
-			return err
+	case "":
+		for name, area := range ctx.WorkAreas {
+			if err := closeWorkAreaDatabase(area, string(name)); err != nil {
+				return err
+			}
+			closeOpenIndexes(area)
 		}
-		msg = "Primary work area selected"
-	case "SECONDARY":
-		if err := ctx.SelectArea(context.Secondary); err != nil {
-			return err
-		}
-		msg = "Secondary work area selected"
+		ctx.Variables.Clear()
+		ctx.Screen.ClearGets()
+		return nil
+	case "GETS":
+		ctx.Screen.ClearGets()
+		return nil
 	default:
-		return fmt.Errorf("*** Unrecognized SELECT option: %s", arg)
+		return fmt.Errorf("*** Unrecognized CLEAR option: %s", arg)
 	}
+}
 
-	fmt.Fprintln(ctx.Stdout, msg)
-	return nil
+// presentClearScreen clears the logical screen buffer and the real
+// terminal, leaving the cursor at the home position so the dot prompt
+// continues from the top, as dBase II does after CLEAR.
+func presentClearScreen(ctx *context.Context) error {
+	if ctx.Screen == nil {
+		return nil
+	}
+	ctx.Screen.Clear()
+	return term.ClearScreen(ctx.Stdout)
 }
 
 func closeWorkAreaDatabase(area *context.WorkArea, defaultAlias string) error {
@@ -112,28 +142,9 @@ func handleDisplay(ctx *context.Context, cmd Command) error {
 	}
 }
 
-func displayPageSize(ctx *context.Context) int {
-	rows := term.DefaultRows
-	if ctx != nil && ctx.Screen != nil {
-		rows = ctx.Screen.Rows()
-	}
-	size := rows - 4
-	if size < 1 {
-		size = 1
-	}
-	return size
-}
-
 type column struct {
 	expr expr.Expression
 	fd   *dbf.FieldDescriptor
-}
-
-type outputRecordsOpts struct {
-	maxRecords       int
-	maxScanned       int
-	startFromCurrent bool
-	moveToEOFAfter   bool
 }
 
 func handleList(ctx *context.Context, cmd Command) error {
@@ -259,6 +270,7 @@ func outputRecords(ctx *context.Context, cmd Command, opts outputRecordsOpts) er
 
 	recCount := int(area.Table.Header.RecordCount)
 
+	// Scan in controlling-index order when an index is bound.
 	seq, err := recordSequence(area)
 	if err != nil {
 		return err
@@ -383,97 +395,13 @@ func formatColumnValue(col column, valObj expr.Object, width int) string {
 	}
 }
 
-func parseForWhileClauses(cmd Command) (expr.Expression, expr.Expression, error) {
-	var forExp expr.Expression
-	if cmd.ForClause != "" {
-		lexer := expr.NewLexer(cmd.ForClause)
-		parser := expr.NewParser(lexer)
-		forExp = parser.ParseExpression()
-		if len(parser.Errors()) > 0 {
-			return nil, nil, fmt.Errorf("*** Syntax error in FOR clause: %s", strings.Join(parser.Errors(), "; "))
-		}
-	}
-
-	var whileExp expr.Expression
-	if cmd.WhileClause != "" {
-		lexer := expr.NewLexer(cmd.WhileClause)
-		parser := expr.NewParser(lexer)
-		whileExp = parser.ParseExpression()
-		if len(parser.Errors()) > 0 {
-			return nil, nil, fmt.Errorf("*** Syntax error in WHILE clause: %s", strings.Join(parser.Errors(), "; "))
-		}
-	}
-
-	return forExp, whileExp, nil
-}
-
-func splitCommaOutsideParens(s string) []string {
-	var parts []string
-	var cur strings.Builder
-	parens := 0
-	inSingle := false
-	inDouble := false
-
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		switch {
-		case ch == '\'' && !inDouble:
-			inSingle = !inSingle
-			cur.WriteByte(ch)
-		case ch == '"' && !inSingle:
-			inDouble = !inDouble
-			cur.WriteByte(ch)
-		case ch == '(' && !inSingle && !inDouble:
-			parens++
-			cur.WriteByte(ch)
-		case ch == ')' && !inSingle && !inDouble:
-			parens--
-			cur.WriteByte(ch)
-		case ch == ',' && !inSingle && !inDouble && parens == 0:
-			parts = append(parts, strings.TrimSpace(cur.String()))
-			cur.Reset()
-		default:
-			cur.WriteByte(ch)
-		}
-	}
-	if cur.Len() > 0 {
-		parts = append(parts, strings.TrimSpace(cur.String()))
-	}
-	return parts
-}
-
-func displayStructure(ctx *context.Context) error {
-	area := ctx.GetActiveArea()
-	if area == nil || area.Table == nil {
-		return fmt.Errorf("*** No database file is in use")
-	}
-
-	tbl := area.Table
-	fmt.Fprintf(ctx.Stdout, "STRUCTURE FOR FILE:  %s.DBF\r\n", area.Alias)
-	fmt.Fprintf(ctx.Stdout, "NUMBER OF RECORDS:   %05d\r\n", tbl.Header.RecordCount)
-	fmt.Fprintf(ctx.Stdout, "DATE OF LAST UPDATE: 00/00/00\r\n")
-	fmt.Fprintf(ctx.Stdout, "FLD       NAME       TYPE WIDTH DEC\r\n")
-
-	totalWidth := 1
-	for i, fd := range tbl.Fields {
-		decStr := ""
-		if fd.Type == dbf.FieldTypeNumeric {
-			decStr = fmt.Sprintf("%03d", fd.DecimalCount)
-		}
-		fmt.Fprintf(ctx.Stdout, "%03d       %-10s  %c   %03d   %3s\r\n",
-			i+1, fd.Name, fd.Type, fd.Length, decStr)
-		totalWidth += int(fd.Length)
-	}
-	fmt.Fprintf(ctx.Stdout, "** TOTAL **                %05d\r\n", totalWidth)
-	return nil
-}
-
 func handleGo(ctx *context.Context, cmd Command) error {
 	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
 	parts := strings.Fields(arg)
 	if len(parts) == 2 && parts[0] == "TO" {
 		return gotoRecordFromArgs(ctx, parts[1])
 	}
+
 	switch arg {
 	case "TOP":
 		return goTop(ctx)
@@ -609,9 +537,696 @@ func skipRecords(ctx *context.Context, delta int) error {
 		return fmt.Errorf("*** Record number out of range")
 	}
 	if pos >= len(order) {
+		// Past the last indexed record: park at EOF.
 		return goToRecord(ctx, recCount+1)
 	}
 	return goToRecord(ctx, order[pos]+1)
+}
+
+func handleQuit(ctx *context.Context, cmd Command) error {
+	return errQuit
+}
+
+func handleSelect(ctx *context.Context, cmd Command) error {
+	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
+	if arg == "" {
+		return fmt.Errorf("*** SELECT requires PRIMARY or SECONDARY")
+	}
+
+	var msg string
+	switch arg {
+	case "PRIMARY":
+		if err := ctx.SelectArea(context.Primary); err != nil {
+			return err
+		}
+		msg = "Primary work area selected"
+	case "SECONDARY":
+		if err := ctx.SelectArea(context.Secondary); err != nil {
+			return err
+		}
+		msg = "Secondary work area selected"
+	default:
+		return fmt.Errorf("*** Unrecognized SELECT option: %s", arg)
+	}
+
+	fmt.Fprintln(ctx.Stdout, msg)
+	return nil
+}
+
+func handleSet(ctx *context.Context, cmd Command) error {
+	upperArgs := strings.ToUpper(strings.TrimSpace(cmd.Args))
+	parts := strings.Fields(upperArgs)
+	if len(parts) == 0 {
+		return fmt.Errorf("*** SET requires an argument")
+	}
+
+	switch parts[0] {
+	case "TALK":
+		applySetTalk(ctx, parts)
+	case "INTENSITY":
+		applySetIntensity(ctx, parts)
+	case "BELL":
+		applySetBell(ctx, parts)
+	case "EXACT":
+		applySetExact(ctx, parts)
+	case "DELETED":
+		applySetDeleted(ctx, parts)
+	case "DEFAULT":
+		// The command parser extracts TO into its own clause, so rebuild the
+		// original argument text before delegating.
+		args := cmd.Args
+		if cmd.ToClause != "" {
+			args += " TO " + cmd.ToClause
+		}
+		return applySetDefault(ctx, args)
+	case "INDEX":
+		return applySetIndex(ctx, cmd)
+	case "SCREEN":
+		return applySetScreen(ctx, parts)
+	default:
+		return fmt.Errorf("*** Unrecognized SET option: %s", parts[0])
+	}
+	return nil
+}
+
+func displayStructure(ctx *context.Context) error {
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	tbl := area.Table
+	fmt.Fprintf(ctx.Stdout, "STRUCTURE FOR FILE:  %s.DBF\r\n", area.Alias)
+	fmt.Fprintf(ctx.Stdout, "NUMBER OF RECORDS:   %05d\r\n", tbl.Header.RecordCount)
+	fmt.Fprintf(ctx.Stdout, "DATE OF LAST UPDATE: 00/00/00\r\n")
+	fmt.Fprintf(ctx.Stdout, "FLD       NAME       TYPE WIDTH DEC\r\n")
+
+	totalWidth := 1
+	for i, fd := range tbl.Fields {
+		decStr := ""
+		if fd.Type == dbf.FieldTypeNumeric {
+			decStr = fmt.Sprintf("%03d", fd.DecimalCount)
+		}
+		fmt.Fprintf(ctx.Stdout, "%03d       %-10s  %c   %03d   %3s\r\n",
+			i+1, fd.Name, fd.Type, fd.Length, decStr)
+		totalWidth += int(fd.Length)
+	}
+	fmt.Fprintf(ctx.Stdout, "** TOTAL **                %05d\r\n", totalWidth)
+	return nil
+}
+
+func parseOnOff(parts []string) bool {
+	if len(parts) >= 2 && strings.ToUpper(parts[1]) == "OFF" {
+		return false
+	}
+	return true
+}
+
+func onOffStr(v bool) string {
+	if v {
+		return "ON"
+	}
+	return "OFF"
+}
+
+func handleQuestion(ctx *context.Context, cmd Command) error {
+	arg := strings.TrimSpace(cmd.Args)
+	if arg == "" {
+		if cmd.Verb == "?" {
+			fmt.Fprintln(ctx.Stdout)
+		}
+		return nil
+	}
+
+	lexer := expr.NewLexer(arg)
+	parser := expr.NewParser(lexer)
+	exp := parser.ParseExpression()
+	if len(parser.Errors()) > 0 {
+		return fmt.Errorf("*** Syntax error: %s", strings.Join(parser.Errors(), "; "))
+	}
+
+	env := newReplEnvironment(ctx)
+	obj, err := expr.Eval(exp, env)
+	if err != nil {
+		return fmt.Errorf("*** Evaluation error: %w", err)
+	}
+
+	if cmd.Verb == "?" {
+		fmt.Fprintln(ctx.Stdout, obj.String())
+	} else {
+		fmt.Fprint(ctx.Stdout, obj.String())
+	}
+
+	return nil
+}
+
+func parseForWhileClauses(cmd Command) (expr.Expression, expr.Expression, error) {
+	var forExp expr.Expression
+	if cmd.ForClause != "" {
+		lexer := expr.NewLexer(cmd.ForClause)
+		parser := expr.NewParser(lexer)
+		forExp = parser.ParseExpression()
+		if len(parser.Errors()) > 0 {
+			return nil, nil, fmt.Errorf("*** Syntax error in FOR clause: %s", strings.Join(parser.Errors(), "; "))
+		}
+	}
+
+	var whileExp expr.Expression
+	if cmd.WhileClause != "" {
+		lexer := expr.NewLexer(cmd.WhileClause)
+		parser := expr.NewParser(lexer)
+		whileExp = parser.ParseExpression()
+		if len(parser.Errors()) > 0 {
+			return nil, nil, fmt.Errorf("*** Syntax error in WHILE clause: %s", strings.Join(parser.Errors(), "; "))
+		}
+	}
+
+	return forExp, whileExp, nil
+}
+
+func handleReplace(ctx *context.Context, cmd Command) error {
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	scope, rest, err := parseScopeClause(cmd.Args)
+	if err != nil {
+		return err
+	}
+
+	fieldName, valueExprStr, err := parseReplaceArgs(rest)
+	if err != nil {
+		return err
+	}
+
+	fd, fieldIdx := area.Table.FieldByName(fieldName)
+	if fd == nil {
+		return fmt.Errorf("*** Unknown field: %s", fieldName)
+	}
+
+	lexer := expr.NewLexer(valueExprStr)
+	parser := expr.NewParser(lexer)
+	valueExp := parser.ParseExpression()
+	if len(parser.Errors()) > 0 {
+		return fmt.Errorf("*** Syntax error in REPLACE expression: %s", strings.Join(parser.Errors(), "; "))
+	}
+
+	forExp, whileExp, err := parseForWhileClauses(cmd)
+	if err != nil {
+		return err
+	}
+
+	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
+	if !ok {
+		return fmt.Errorf("*** Database file is not writable")
+	}
+
+	tbl := area.Table
+	recCount := int(tbl.Header.RecordCount)
+	startRec, limit := scanRange(area, scope, forExp != nil, whileExp != nil, true)
+	if !scope.explicit && forExp == nil && whileExp == nil && startRec >= recCount {
+		return fmt.Errorf("*** Record number out of range")
+	}
+
+	env := newReplEnvironment(ctx)
+	replaced := 0
+	scanned := 0
+	lastReplaced := -1
+	var lastRecord *dbf.Record
+
+	for i := startRec; i < recCount; i++ {
+		if limit > 0 && scanned >= limit {
+			break
+		}
+		scanned++
+
+		rec, err := tbl.ReadRecordAt(wseeker, i)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("*** Error reading record %d: %w", i, err)
+		}
+
+		area.RecordNo = i
+		area.ActiveRecord = rec
+
+		if whileExp != nil {
+			res, err := expr.Eval(whileExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in WHILE clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** WHILE clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				break
+			}
+		}
+
+		if forExp != nil {
+			res, err := expr.Eval(forExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in FOR clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** FOR clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				continue
+			}
+		}
+
+		valObj, err := expr.Eval(valueExp, env)
+		if err != nil {
+			return fmt.Errorf("*** Evaluation error in REPLACE expression: %w", err)
+		}
+
+		val, err := exprObjectToValue(valObj)
+		if err != nil {
+			return err
+		}
+
+		updated, err := replaceRecordField(tbl, rec, fieldIdx, val)
+		if err != nil {
+			return fmt.Errorf("*** Error updating record %d: %w", i+1, err)
+		}
+
+		if err := tbl.WriteRecordAt(wseeker, i, updated); err != nil {
+			return fmt.Errorf("*** Error writing record %d: %w", i+1, err)
+		}
+
+		if err := syncOpenIndexesAfterReplace(ctx, area, i, rec); err != nil {
+			return err
+		}
+
+		area.ActiveRecord = updated
+		replaced++
+		lastReplaced = i
+		lastRecord = updated
+	}
+
+	if lastReplaced >= 0 {
+		area.RecordNo = lastReplaced
+		area.ActiveRecord = lastRecord
+	}
+
+	if replaced > 0 {
+		talkPrint(ctx, "%d record(s) replaced\r\n", replaced)
+	}
+
+	return nil
+}
+
+func handleDelete(ctx *context.Context, cmd Command) error {
+	// DELETE FILE <filename> removes a file from disk (dBase II); every
+	// other form marks records for logical deletion.
+	if word, fileArg := splitLeadingWord(cmd.Args); strings.EqualFold(word, "FILE") {
+		filename := strings.TrimSpace(fileArg)
+		if filename == "" {
+			return fmt.Errorf("*** DELETE FILE requires a filename")
+		}
+		return deleteFile(ctx, filename)
+	}
+
+	scope, rest, err := parseScopeClause(cmd.Args)
+	if err != nil {
+		return err
+	}
+	if rest != "" {
+		return fmt.Errorf("*** Unexpected argument: %s", rest)
+	}
+
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	forExp, whileExp, err := parseForWhileClauses(cmd)
+	if err != nil {
+		return err
+	}
+
+	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
+	if !ok {
+		return fmt.Errorf("*** Database file is not writable")
+	}
+
+	tbl := area.Table
+	recCount := int(tbl.Header.RecordCount)
+	startRec, limit := scanRange(area, scope, forExp != nil, whileExp != nil, true)
+	if !scope.explicit && forExp == nil && whileExp == nil && startRec >= recCount {
+		return fmt.Errorf("*** Record number out of range")
+	}
+
+	env := newReplEnvironment(ctx)
+	deleted := 0
+	scanned := 0
+	lastDeleted := -1
+	var lastRecord *dbf.Record
+
+	for i := startRec; i < recCount; i++ {
+		if limit > 0 && scanned >= limit {
+			break
+		}
+		scanned++
+
+		rec, err := tbl.ReadRecordAt(wseeker, i)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("*** Error reading record %d: %w", i, err)
+		}
+
+		area.RecordNo = i
+		area.ActiveRecord = rec
+
+		if whileExp != nil {
+			res, err := expr.Eval(whileExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in WHILE clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** WHILE clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				break
+			}
+		}
+
+		if forExp != nil {
+			res, err := expr.Eval(forExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in FOR clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** FOR clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				continue
+			}
+		}
+
+		if rec.Deleted {
+			lastDeleted = i
+			lastRecord = rec
+			continue
+		}
+
+		marked, err := markRecordDeleted(tbl, rec)
+		if err != nil {
+			return fmt.Errorf("*** Error deleting record %d: %w", i+1, err)
+		}
+
+		if err := tbl.WriteRecordAt(wseeker, i, marked); err != nil {
+			return fmt.Errorf("*** Error writing record %d: %w", i+1, err)
+		}
+
+		area.ActiveRecord = marked
+		deleted++
+		lastDeleted = i
+		lastRecord = marked
+	}
+
+	if lastDeleted >= 0 {
+		area.RecordNo = lastDeleted
+		area.ActiveRecord = lastRecord
+	}
+
+	if deleted > 0 {
+		talkPrint(ctx, "%d record(s) deleted\r\n", deleted)
+	}
+
+	return nil
+}
+
+func handleRecall(ctx *context.Context, cmd Command) error {
+	scope, rest, err := parseScopeClause(cmd.Args)
+	if err != nil {
+		return err
+	}
+	if rest != "" {
+		return fmt.Errorf("*** Unexpected argument: %s", rest)
+	}
+
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	forExp, whileExp, err := parseForWhileClauses(cmd)
+	if err != nil {
+		return err
+	}
+
+	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
+	if !ok {
+		return fmt.Errorf("*** Database file is not writable")
+	}
+
+	tbl := area.Table
+	recCount := int(tbl.Header.RecordCount)
+	startRec, limit := scanRange(area, scope, forExp != nil, whileExp != nil, true)
+	if !scope.explicit && forExp == nil && whileExp == nil && startRec >= recCount {
+		return fmt.Errorf("*** Record number out of range")
+	}
+
+	env := newReplEnvironment(ctx)
+	recalled := 0
+	scanned := 0
+	lastRecalled := -1
+	var lastRecord *dbf.Record
+
+	for i := startRec; i < recCount; i++ {
+		if limit > 0 && scanned >= limit {
+			break
+		}
+		scanned++
+
+		rec, err := tbl.ReadRecordAt(wseeker, i)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("*** Error reading record %d: %w", i, err)
+		}
+
+		area.RecordNo = i
+		area.ActiveRecord = rec
+
+		if whileExp != nil {
+			res, err := expr.Eval(whileExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in WHILE clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** WHILE clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				break
+			}
+		}
+
+		if forExp != nil {
+			res, err := expr.Eval(forExp, env)
+			if err != nil {
+				return fmt.Errorf("*** Evaluation error in FOR clause: %w", err)
+			}
+			boolRes, ok := res.(*expr.BooleanObject)
+			if !ok {
+				return fmt.Errorf("*** FOR clause must evaluate to a logical value")
+			}
+			if !boolRes.Value {
+				continue
+			}
+		}
+
+		if !rec.Deleted {
+			lastRecalled = i
+			lastRecord = rec
+			continue
+		}
+
+		restored, err := markRecordRecalled(tbl, rec)
+		if err != nil {
+			return fmt.Errorf("*** Error recalling record %d: %w", i+1, err)
+		}
+
+		if err := tbl.WriteRecordAt(wseeker, i, restored); err != nil {
+			return fmt.Errorf("*** Error writing record %d: %w", i+1, err)
+		}
+
+		area.ActiveRecord = restored
+		recalled++
+		lastRecalled = i
+		lastRecord = restored
+	}
+
+	if lastRecalled >= 0 {
+		area.RecordNo = lastRecalled
+		area.ActiveRecord = lastRecord
+	}
+
+	if recalled > 0 {
+		talkPrint(ctx, "%d record(s) recalled\r\n", recalled)
+	}
+
+	return nil
+}
+
+func handlePack(ctx *context.Context, cmd Command) error {
+	if strings.TrimSpace(cmd.Args) != "" {
+		return fmt.Errorf("*** Unexpected argument: %s", strings.TrimSpace(cmd.Args))
+	}
+
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
+	if !ok {
+		return fmt.Errorf("*** Database file is not writable")
+	}
+
+	removed, err := area.Table.Pack(wseeker)
+	if err != nil {
+		return fmt.Errorf("*** Error packing database: %w", err)
+	}
+
+	area.RecordNo = 0
+	if area.Table.Header.RecordCount > 0 {
+		rec, err := area.Table.ReadRecordAt(wseeker, 0)
+		if err != nil {
+			return fmt.Errorf("*** Error reading first record after pack: %w", err)
+		}
+		area.ActiveRecord = rec
+	} else {
+		area.ActiveRecord = nil
+	}
+
+	if removed > 0 {
+		talkPrint(ctx, "%d record(s) packed\r\n", removed)
+	}
+
+	return nil
+}
+
+func handleZap(ctx *context.Context, cmd Command) error {
+	if strings.TrimSpace(cmd.Args) != "" {
+		return fmt.Errorf("*** Unexpected argument: %s", strings.TrimSpace(cmd.Args))
+	}
+
+	area := ctx.GetActiveArea()
+	if area == nil || area.Table == nil {
+		return fmt.Errorf("*** No database file is in use")
+	}
+
+	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
+	if !ok {
+		return fmt.Errorf("*** Database file is not writable")
+	}
+
+	removed, err := area.Table.Zap(wseeker)
+	if err != nil {
+		return fmt.Errorf("*** Error zapping database: %w", err)
+	}
+
+	area.RecordNo = 0
+	area.ActiveRecord = nil
+
+	if removed > 0 {
+		talkPrint(ctx, "%d record(s) zapped\r\n", removed)
+	}
+
+	return nil
+}
+
+func parseReplaceArgs(args string) (string, string, error) {
+	args = strings.TrimSpace(args)
+	if args == "" {
+		return "", "", fmt.Errorf("*** REPLACE requires <field> WITH <expr>")
+	}
+
+	tokens := tokenize(args)
+	withIdx := -1
+	for i, tok := range tokens {
+		if strings.ToUpper(tok) == "WITH" {
+			withIdx = i
+			break
+		}
+	}
+	if withIdx < 1 {
+		return "", "", fmt.Errorf("*** REPLACE requires <field> WITH <expr>")
+	}
+
+	fieldName := strings.ToUpper(tokens[0])
+	valueExpr := joinTokens(tokens[withIdx+1:])
+	if valueExpr == "" {
+		return "", "", fmt.Errorf("*** REPLACE requires <field> WITH <expr>")
+	}
+
+	return fieldName, valueExpr, nil
+}
+
+func exprObjectToValue(obj expr.Object) (interface{}, error) {
+	switch v := obj.(type) {
+	case *expr.StringObject:
+		return v.Value, nil
+	case *expr.NumberObject:
+		return v.Value, nil
+	case *expr.BooleanObject:
+		return v.Value, nil
+	default:
+		return nil, fmt.Errorf("*** REPLACE expression must evaluate to a string, number, or logical value")
+	}
+}
+
+func replaceRecordField(tbl *dbf.Table, rec *dbf.Record, fieldIdx int, val interface{}) (*dbf.Record, error) {
+	values := make([]interface{}, len(tbl.Fields))
+	for i := range tbl.Fields {
+		if i == fieldIdx {
+			values[i] = val
+			continue
+		}
+		decoded, err := rec.DecodeField(tbl, i)
+		if err != nil {
+			return nil, err
+		}
+		values[i] = decoded
+	}
+	return dbf.NewRecord(tbl, rec.Deleted, values)
+}
+
+func markRecordDeleted(tbl *dbf.Table, rec *dbf.Record) (*dbf.Record, error) {
+	values := make([]interface{}, len(tbl.Fields))
+	for i := range tbl.Fields {
+		decoded, err := rec.DecodeField(tbl, i)
+		if err != nil {
+			return nil, err
+		}
+		values[i] = decoded
+	}
+	return dbf.NewRecord(tbl, true, values)
+}
+
+func markRecordRecalled(tbl *dbf.Table, rec *dbf.Record) (*dbf.Record, error) {
+	values := make([]interface{}, len(tbl.Fields))
+	for i := range tbl.Fields {
+		decoded, err := rec.DecodeField(tbl, i)
+		if err != nil {
+			return nil, err
+		}
+		values[i] = decoded
+	}
+	return dbf.NewRecord(tbl, false, values)
 }
 
 func handleAppend(ctx *context.Context, cmd Command) error {
@@ -774,216 +1389,37 @@ func parseFieldInput(fd dbf.FieldDescriptor, line string) (interface{}, error) {
 	}
 }
 
-func handleReplace(ctx *context.Context, cmd Command) error {
+func handleEdit(ctx *context.Context, cmd Command) error {
+	arg := strings.TrimSpace(cmd.Args)
+	if arg == "" {
+		return fmt.Errorf("*** EDIT requires a record number")
+	}
+
+	userRecNo, err := strconv.Atoi(arg)
+	if err != nil {
+		return fmt.Errorf("*** Invalid record number: %s", arg)
+	}
+
 	area := ctx.GetActiveArea()
 	if area == nil || area.Table == nil {
 		return fmt.Errorf("*** No database file is in use")
 	}
 
-	scope, rest, err := parseScopeClause(cmd.Args)
-	if err != nil {
-		return err
-	}
-
-	fieldName, valueExprStr, err := parseReplaceArgs(rest)
-	if err != nil {
-		return err
-	}
-
-	fd, fieldIdx := area.Table.FieldByName(fieldName)
-	if fd == nil {
-		return fmt.Errorf("*** Unknown field: %s", fieldName)
-	}
-
-	lexer := expr.NewLexer(valueExprStr)
-	parser := expr.NewParser(lexer)
-	valueExp := parser.ParseExpression()
-	if len(parser.Errors()) > 0 {
-		return fmt.Errorf("*** Syntax error in REPLACE expression: %s", strings.Join(parser.Errors(), "; "))
-	}
-
-	forExp, whileExp, err := parseForWhileClauses(cmd)
-	if err != nil {
-		return err
-	}
-
-	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
-	if !ok {
-		return fmt.Errorf("*** Database file is not writable")
-	}
-
-	tbl := area.Table
-	recCount := int(tbl.Header.RecordCount)
-	startRec, limit := scanRange(area, scope, forExp != nil, whileExp != nil, true)
-	if !scope.explicit && forExp == nil && whileExp == nil && startRec >= recCount {
+	recCount := int(area.Table.Header.RecordCount)
+	if userRecNo < 1 || userRecNo > recCount {
 		return fmt.Errorf("*** Record number out of range")
 	}
 
-	env := newReplEnvironment(ctx)
-	replaced := 0
-	scanned := 0
-	lastReplaced := -1
-	var lastRecord *dbf.Record
-
-	for i := startRec; i < recCount; i++ {
-		if limit > 0 && scanned >= limit {
-			break
-		}
-		scanned++
-
-		rec, err := tbl.ReadRecordAt(wseeker, i)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("*** Error reading record %d: %w", i, err)
-		}
-
-		area.RecordNo = i
-		area.ActiveRecord = rec
-
-		if whileExp != nil {
-			res, err := expr.Eval(whileExp, env)
-			if err != nil {
-				return fmt.Errorf("*** Evaluation error in WHILE clause: %w", err)
-			}
-			boolRes, ok := res.(*expr.BooleanObject)
-			if !ok {
-				return fmt.Errorf("*** WHILE clause must evaluate to a logical value")
-			}
-			if !boolRes.Value {
-				break
-			}
-		}
-
-		if forExp != nil {
-			res, err := expr.Eval(forExp, env)
-			if err != nil {
-				return fmt.Errorf("*** Evaluation error in FOR clause: %w", err)
-			}
-			boolRes, ok := res.(*expr.BooleanObject)
-			if !ok {
-				return fmt.Errorf("*** FOR clause must evaluate to a logical value")
-			}
-			if !boolRes.Value {
-				continue
-			}
-		}
-
-		valObj, err := expr.Eval(valueExp, env)
-		if err != nil {
-			return fmt.Errorf("*** Evaluation error in REPLACE expression: %w", err)
-		}
-
-		val, err := exprObjectToValue(valObj)
-		if err != nil {
-			return err
-		}
-
-		updated, err := replaceRecordField(tbl, rec, fieldIdx, val)
-		if err != nil {
-			return fmt.Errorf("*** Error updating record %d: %w", i+1, err)
-		}
-
-		if err := tbl.WriteRecordAt(wseeker, i, updated); err != nil {
-			return fmt.Errorf("*** Error writing record %d: %w", i+1, err)
-		}
-
-		if err := syncOpenIndexesAfterReplace(ctx, area, i, rec); err != nil {
-			return err
-		}
-
-		area.ActiveRecord = updated
-		replaced++
-		lastReplaced = i
-		lastRecord = updated
+	err = runEditForm(ctx, userRecNo-1)
+	if consoleErr := returnToConsole(ctx); consoleErr != nil && err == nil {
+		err = consoleErr
 	}
-
-	if lastReplaced >= 0 {
-		area.RecordNo = lastReplaced
-		area.ActiveRecord = lastRecord
-	}
-
-	if replaced > 0 {
-		talkPrint(ctx, "%d record(s) replaced\r\n", replaced)
-	}
-
-	return nil
+	return err
 }
 
-func parseReplaceArgs(args string) (string, string, error) {
-	args = strings.TrimSpace(args)
-	if args == "" {
-		return "", "", fmt.Errorf("*** REPLACE requires <field> WITH <expr>")
-	}
-
-	tokens := tokenize(args)
-	withIdx := -1
-	for i, tok := range tokens {
-		if strings.ToUpper(tok) == "WITH" {
-			withIdx = i
-			break
-		}
-	}
-	if withIdx < 1 {
-		return "", "", fmt.Errorf("*** REPLACE requires <field> WITH <expr>")
-	}
-
-	fieldName := strings.ToUpper(tokens[0])
-	valueExpr := joinTokens(tokens[withIdx+1:])
-	if valueExpr == "" {
-		return "", "", fmt.Errorf("*** REPLACE requires <field> WITH <expr>")
-	}
-
-	return fieldName, valueExpr, nil
-}
-
-func exprObjectToValue(obj expr.Object) (interface{}, error) {
-	switch v := obj.(type) {
-	case *expr.StringObject:
-		return v.Value, nil
-	case *expr.NumberObject:
-		return v.Value, nil
-	case *expr.BooleanObject:
-		return v.Value, nil
-	default:
-		return nil, fmt.Errorf("*** REPLACE expression must evaluate to a string, number, or logical value")
-	}
-}
-
-func replaceRecordField(tbl *dbf.Table, rec *dbf.Record, fieldIdx int, val interface{}) (*dbf.Record, error) {
-	values := make([]interface{}, len(tbl.Fields))
-	for i := range tbl.Fields {
-		if i == fieldIdx {
-			values[i] = val
-			continue
-		}
-		decoded, err := rec.DecodeField(tbl, i)
-		if err != nil {
-			return nil, err
-		}
-		values[i] = decoded
-	}
-	return dbf.NewRecord(tbl, rec.Deleted, values)
-}
-
-func handleDelete(ctx *context.Context, cmd Command) error {
-	// DELETE FILE <filename> removes a file from disk (dBase II); every
-	// other form marks records for logical deletion.
-	if word, fileArg := splitLeadingWord(cmd.Args); strings.EqualFold(word, "FILE") {
-		filename := strings.TrimSpace(fileArg)
-		if filename == "" {
-			return fmt.Errorf("*** DELETE FILE requires a filename")
-		}
-		return deleteFile(ctx, filename)
-	}
-
-	scope, rest, err := parseScopeClause(cmd.Args)
-	if err != nil {
-		return err
-	}
-	if rest != "" {
-		return fmt.Errorf("*** Unexpected argument: %s", rest)
+func handleModify(ctx *context.Context, cmd Command) error {
+	if strings.ToUpper(strings.TrimSpace(cmd.Args)) != "STRUCTURE" {
+		return fmt.Errorf("*** MODIFY: feature not yet implemented")
 	}
 
 	area := ctx.GetActiveArea()
@@ -991,313 +1427,27 @@ func handleDelete(ctx *context.Context, cmd Command) error {
 		return fmt.Errorf("*** No database file is in use")
 	}
 
-	forExp, whileExp, err := parseForWhileClauses(cmd)
-	if err != nil {
-		return err
-	}
-
-	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
-	if !ok {
+	if _, ok := area.Table.Underlying().(io.ReadWriteSeeker); !ok {
 		return fmt.Errorf("*** Database file is not writable")
 	}
 
-	tbl := area.Table
-	recCount := int(tbl.Header.RecordCount)
-	startRec, limit := scanRange(area, scope, forExp != nil, whileExp != nil, true)
-	if !scope.explicit && forExp == nil && whileExp == nil && startRec >= recCount {
-		return fmt.Errorf("*** Record number out of range")
-	}
-
-	env := newReplEnvironment(ctx)
-	deleted := 0
-	scanned := 0
-	lastDeleted := -1
-	var lastRecord *dbf.Record
-
-	for i := startRec; i < recCount; i++ {
-		if limit > 0 && scanned >= limit {
-			break
-		}
-		scanned++
-
-		rec, err := tbl.ReadRecordAt(wseeker, i)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("*** Error reading record %d: %w", i, err)
-		}
-
-		area.RecordNo = i
-		area.ActiveRecord = rec
-
-		if whileExp != nil {
-			res, err := expr.Eval(whileExp, env)
-			if err != nil {
-				return fmt.Errorf("*** Evaluation error in WHILE clause: %w", err)
-			}
-			boolRes, ok := res.(*expr.BooleanObject)
-			if !ok {
-				return fmt.Errorf("*** WHILE clause must evaluate to a logical value")
-			}
-			if !boolRes.Value {
-				break
-			}
-		}
-
-		if forExp != nil {
-			res, err := expr.Eval(forExp, env)
-			if err != nil {
-				return fmt.Errorf("*** Evaluation error in FOR clause: %w", err)
-			}
-			boolRes, ok := res.(*expr.BooleanObject)
-			if !ok {
-				return fmt.Errorf("*** FOR clause must evaluate to a logical value")
-			}
-			if !boolRes.Value {
-				continue
-			}
-		}
-
-		if rec.Deleted {
-			lastDeleted = i
-			lastRecord = rec
-			continue
-		}
-
-		marked, err := markRecordDeleted(tbl, rec)
-		if err != nil {
-			return fmt.Errorf("*** Error deleting record %d: %w", i+1, err)
-		}
-
-		if err := tbl.WriteRecordAt(wseeker, i, marked); err != nil {
-			return fmt.Errorf("*** Error writing record %d: %w", i+1, err)
-		}
-
-		area.ActiveRecord = marked
-		deleted++
-		lastDeleted = i
-		lastRecord = marked
-	}
-
-	if lastDeleted >= 0 {
-		area.RecordNo = lastDeleted
-		area.ActiveRecord = lastRecord
-	}
-
-	if deleted > 0 {
-		talkPrint(ctx, "%d record(s) deleted\r\n", deleted)
-	}
-
-	return nil
-}
-
-func markRecordDeleted(tbl *dbf.Table, rec *dbf.Record) (*dbf.Record, error) {
-	values := make([]interface{}, len(tbl.Fields))
-	for i := range tbl.Fields {
-		decoded, err := rec.DecodeField(tbl, i)
-		if err != nil {
-			return nil, err
-		}
-		values[i] = decoded
-	}
-	return dbf.NewRecord(tbl, true, values)
-}
-
-func handleRecall(ctx *context.Context, cmd Command) error {
-	scope, rest, err := parseScopeClause(cmd.Args)
-	if err != nil {
-		return err
-	}
-	if rest != "" {
-		return fmt.Errorf("*** Unexpected argument: %s", rest)
-	}
-
-	area := ctx.GetActiveArea()
-	if area == nil || area.Table == nil {
-		return fmt.Errorf("*** No database file is in use")
-	}
-
-	forExp, whileExp, err := parseForWhileClauses(cmd)
-	if err != nil {
-		return err
-	}
-
-	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
-	if !ok {
-		return fmt.Errorf("*** Database file is not writable")
-	}
-
-	tbl := area.Table
-	recCount := int(tbl.Header.RecordCount)
-	startRec, limit := scanRange(area, scope, forExp != nil, whileExp != nil, true)
-	if !scope.explicit && forExp == nil && whileExp == nil && startRec >= recCount {
-		return fmt.Errorf("*** Record number out of range")
-	}
-
-	env := newReplEnvironment(ctx)
-	recalled := 0
-	scanned := 0
-	lastRecalled := -1
-	var lastRecord *dbf.Record
-
-	for i := startRec; i < recCount; i++ {
-		if limit > 0 && scanned >= limit {
-			break
-		}
-		scanned++
-
-		rec, err := tbl.ReadRecordAt(wseeker, i)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("*** Error reading record %d: %w", i, err)
-		}
-
-		area.RecordNo = i
-		area.ActiveRecord = rec
-
-		if whileExp != nil {
-			res, err := expr.Eval(whileExp, env)
-			if err != nil {
-				return fmt.Errorf("*** Evaluation error in WHILE clause: %w", err)
-			}
-			boolRes, ok := res.(*expr.BooleanObject)
-			if !ok {
-				return fmt.Errorf("*** WHILE clause must evaluate to a logical value")
-			}
-			if !boolRes.Value {
-				break
-			}
-		}
-
-		if forExp != nil {
-			res, err := expr.Eval(forExp, env)
-			if err != nil {
-				return fmt.Errorf("*** Evaluation error in FOR clause: %w", err)
-			}
-			boolRes, ok := res.(*expr.BooleanObject)
-			if !ok {
-				return fmt.Errorf("*** FOR clause must evaluate to a logical value")
-			}
-			if !boolRes.Value {
-				continue
-			}
-		}
-
-		if !rec.Deleted {
-			lastRecalled = i
-			lastRecord = rec
-			continue
-		}
-
-		restored, err := markRecordRecalled(tbl, rec)
-		if err != nil {
-			return fmt.Errorf("*** Error recalling record %d: %w", i+1, err)
-		}
-
-		if err := tbl.WriteRecordAt(wseeker, i, restored); err != nil {
-			return fmt.Errorf("*** Error writing record %d: %w", i+1, err)
-		}
-
-		area.ActiveRecord = restored
-		recalled++
-		lastRecalled = i
-		lastRecord = restored
-	}
-
-	if lastRecalled >= 0 {
-		area.RecordNo = lastRecalled
-		area.ActiveRecord = lastRecord
-	}
-
-	if recalled > 0 {
-		talkPrint(ctx, "%d record(s) recalled\r\n", recalled)
-	}
-
-	return nil
-}
-
-func markRecordRecalled(tbl *dbf.Table, rec *dbf.Record) (*dbf.Record, error) {
-	values := make([]interface{}, len(tbl.Fields))
-	for i := range tbl.Fields {
-		decoded, err := rec.DecodeField(tbl, i)
-		if err != nil {
-			return nil, err
-		}
-		values[i] = decoded
-	}
-	return dbf.NewRecord(tbl, false, values)
-}
-
-func handlePack(ctx *context.Context, cmd Command) error {
-	if strings.TrimSpace(cmd.Args) != "" {
-		return fmt.Errorf("*** Unexpected argument: %s", strings.TrimSpace(cmd.Args))
-	}
-
-	area := ctx.GetActiveArea()
-	if area == nil || area.Table == nil {
-		return fmt.Errorf("*** No database file is in use")
-	}
-
-	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
-	if !ok {
-		return fmt.Errorf("*** Database file is not writable")
-	}
-
-	removed, err := area.Table.Pack(wseeker)
-	if err != nil {
-		return fmt.Errorf("*** Error packing database: %w", err)
-	}
-
-	area.RecordNo = 0
 	if area.Table.Header.RecordCount > 0 {
-		rec, err := area.Table.ReadRecordAt(wseeker, 0)
+		ok, err := confirmDataLoss(ctx, ctx.StdinReader())
 		if err != nil {
-			return fmt.Errorf("*** Error reading first record after pack: %w", err)
+			return err
 		}
-		area.ActiveRecord = rec
-	} else {
-		area.ActiveRecord = nil
+		if !ok {
+			return nil
+		}
 	}
 
-	if removed > 0 {
-		talkPrint(ctx, "%d record(s) packed\r\n", removed)
+	err := runModifyStructureForm(ctx)
+	if consoleErr := returnToConsole(ctx); consoleErr != nil && err == nil {
+		err = consoleErr
 	}
-
-	return nil
+	return err
 }
 
-func handleZap(ctx *context.Context, cmd Command) error {
-	if strings.TrimSpace(cmd.Args) != "" {
-		return fmt.Errorf("*** Unexpected argument: %s", strings.TrimSpace(cmd.Args))
-	}
-
-	area := ctx.GetActiveArea()
-	if area == nil || area.Table == nil {
-		return fmt.Errorf("*** No database file is in use")
-	}
-
-	wseeker, ok := area.Table.Underlying().(io.ReadWriteSeeker)
-	if !ok {
-		return fmt.Errorf("*** Database file is not writable")
-	}
-
-	removed, err := area.Table.Zap(wseeker)
-	if err != nil {
-		return fmt.Errorf("*** Error zapping database: %w", err)
-	}
-
-	area.RecordNo = 0
-	area.ActiveRecord = nil
-
-	if removed > 0 {
-		talkPrint(ctx, "%d record(s) zapped\r\n", removed)
-	}
-
-	return nil
-}
 func handleCreate(ctx *context.Context, cmd Command) error {
 	reader := ctx.StdinReader()
 	filename := strings.TrimSpace(cmd.Args)
@@ -1458,33 +1608,156 @@ func parseCreateFieldDefinition(line string) (dbf.FieldDescriptor, error) {
 	return fd, nil
 }
 
-func handleQuestion(ctx *context.Context, cmd Command) error {
-	arg := strings.TrimSpace(cmd.Args)
-	if arg == "" {
-		if cmd.Verb == "?" {
-			fmt.Fprintln(ctx.Stdout)
+func handleUse(ctx *context.Context, cmd Command) error {
+	area := ctx.GetActiveArea()
+
+	// 1. Close current table if any in active area
+	if area.Table != nil {
+		if err := area.Table.Close(); err != nil {
+			return fmt.Errorf("*** Error closing current table: %w", err)
 		}
+		area.Table = nil
+		area.RecordNo = 0
+		area.ActiveRecord = nil
+		clearLocateState(area)
+	}
+	closeOpenIndexes(area)
+
+	// 2. Parse filename and optional INDEX clause
+	// Syntax: USE <filename> [INDEX <index1>, ...]
+	filename, indexNames, err := parseUseArgs(cmd.Args)
+	if err != nil {
+		return err
+	}
+	if filename == "" {
+		// Just closing the database.
 		return nil
 	}
 
-	lexer := expr.NewLexer(arg)
-	parser := expr.NewParser(lexer)
-	exp := parser.ParseExpression()
-	if len(parser.Errors()) > 0 {
-		return fmt.Errorf("*** Syntax error: %s", strings.Join(parser.Errors(), "; "))
-	}
+	filePath := resolveDBFFilePath(ctx, filename)
 
-	env := newReplEnvironment(ctx)
-	obj, err := expr.Eval(exp, env)
+	// Open the file. Read and Write mode.
+	f, err := os.OpenFile(filePath, os.O_RDWR, 0)
 	if err != nil {
-		return fmt.Errorf("*** Evaluation error: %w", err)
+		// If fails to open read-write, try read-only as fallback.
+		f, err = os.Open(filePath)
+		if err != nil {
+			return fmt.Errorf("*** Could not open file: %w", err)
+		}
 	}
 
-	if cmd.Verb == "?" {
-		fmt.Fprintln(ctx.Stdout, obj.String())
-	} else {
-		fmt.Fprint(ctx.Stdout, obj.String())
+	// Parse DBF
+	tbl, err := dbf.Open(f)
+	if err != nil {
+		f.Close()
+		return fmt.Errorf("*** Error reading DBF header: %w", err)
+	}
+
+	// Store in active area
+	area.Table = tbl
+	// Set alias to the filename without directory and extension in uppercase
+	area.Alias = strings.ToUpper(strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename)))
+	area.RecordNo = 0
+	area.ActiveRecord = nil
+	clearLocateState(area)
+
+	// Load first record if any
+	if tbl.Header.RecordCount > 0 {
+		if rseeker, ok := tbl.Underlying().(io.ReadSeeker); ok {
+			// Seek to the beginning of the first record and read it
+			rec, err := tbl.ReadRecordAt(rseeker, 0)
+			if err == nil {
+				area.ActiveRecord = rec
+			}
+		}
+	}
+
+	// Bind existing index files; the first one is the controlling index.
+	if err := bindUseIndexes(ctx, area, indexNames); err != nil {
+		closeOpenIndexes(area)
+		_ = tbl.Close()
+		area.Table = nil
+		area.RecordNo = 0
+		area.ActiveRecord = nil
+		clearLocateState(area)
+		return err
 	}
 
 	return nil
+}
+
+// parseUseArgs splits a USE argument list into the database filename and the
+// optional INDEX file names. An empty filename means USE was issued alone to
+// close the active database.
+func parseUseArgs(args string) (filename string, indexNames []string, err error) {
+	fields := strings.Fields(args)
+	if len(fields) == 0 {
+		return "", nil, nil
+	}
+
+	filename = fields[0]
+	if len(fields) == 1 {
+		return filename, nil, nil
+	}
+
+	if !strings.EqualFold(fields[1], "INDEX") {
+		return "", nil, fmt.Errorf("*** Unexpected argument: %s", fields[1])
+	}
+
+	indexNames = splitIndexNames(strings.Join(fields[2:], " "))
+	if len(indexNames) == 0 {
+		return "", nil, fmt.Errorf("*** INDEX requires at least one index file name")
+	}
+	return filename, indexNames, nil
+}
+
+// bindUseIndexes opens each named NDX file and attaches it to the work area.
+func bindUseIndexes(ctx *context.Context, area *context.WorkArea, indexNames []string) error {
+	for _, name := range indexNames {
+		filePath := resolveNDXFilePath(ctx, name)
+		idx, err := ndx.OpenIndex(filePath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("*** Index file not found: %s", name)
+			}
+			return fmt.Errorf("*** Error opening index %s: %w", name, err)
+		}
+		area.Indexes = append(area.Indexes, idx)
+	}
+	return nil
+}
+
+func splitCommaOutsideParens(s string) []string {
+	var parts []string
+	var cur strings.Builder
+	parens := 0
+	inSingle := false
+	inDouble := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case ch == '\'' && !inDouble:
+			inSingle = !inSingle
+			cur.WriteByte(ch)
+		case ch == '"' && !inSingle:
+			inDouble = !inDouble
+			cur.WriteByte(ch)
+		case ch == '(' && !inSingle && !inDouble:
+			parens++
+			cur.WriteByte(ch)
+		case ch == ')' && !inSingle && !inDouble:
+			parens--
+			cur.WriteByte(ch)
+		case ch == ',' && !inSingle && !inDouble && parens == 0:
+			parts = append(parts, strings.TrimSpace(cur.String()))
+			cur.Reset()
+		default:
+			cur.WriteByte(ch)
+		}
+	}
+	if cur.Len() > 0 {
+		parts = append(parts, strings.TrimSpace(cur.String()))
+	}
+	return parts
 }

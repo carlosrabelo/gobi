@@ -99,38 +99,39 @@ func executeScriptLine(ctx *context.Context, ctrl *script.Controller, line scrip
 		if script.IsDoCase(line.Command) {
 			return executeDoCase(ctx, ctrl, prog, line)
 		}
-		if line.Command.WhileClause == "" {
-			filename := strings.TrimSpace(line.Command.Args)
-			if filename == "" {
-				return false, fmt.Errorf("*** Error in %s, line %d: DO requires a command file name", prog.Path, line.Number)
+		if line.Command.WhileClause != "" {
+			block, ok := prog.WhileBlockAt(ctrl.Index())
+			if !ok {
+				return false, fmt.Errorf("*** Error in %s, line %d: unmatched DO WHILE block", prog.Path, line.Number)
 			}
-			child, err := loadScript(ctx, filename)
+
+			truthy, err := evalLogicalExpression(ctx, line.Command.WhileClause, "DO WHILE")
 			if err != nil {
 				return false, fmt.Errorf("*** Error in %s, line %d: %w", prog.Path, line.Number, err)
 			}
-			if err := ctrl.PushFrame(child); err != nil {
-				return false, fmt.Errorf("*** Error in %s, line %d: %w", prog.Path, line.Number, err)
+
+			if truthy {
+				if finishAdvance(ctrl) {
+					return true, nil
+				}
+			} else if err := ctrl.SetIndex(block.EndIndex + 1); err != nil {
+				return false, err
 			}
-			pushScriptFrame(ctx, child.Path)
 			return false, nil
 		}
-		block, ok := prog.WhileBlockAt(ctrl.Index())
-		if !ok {
-			return false, fmt.Errorf("*** Error in %s, line %d: unmatched DO WHILE block", prog.Path, line.Number)
-		}
 
-		truthy, err := evalLogicalExpression(ctx, line.Command.WhileClause, "DO WHILE")
+		filename := strings.TrimSpace(line.Command.Args)
+		if filename == "" {
+			return false, fmt.Errorf("*** Error in %s, line %d: DO requires a command file name", prog.Path, line.Number)
+		}
+		child, err := loadScript(ctx, filename)
 		if err != nil {
 			return false, fmt.Errorf("*** Error in %s, line %d: %w", prog.Path, line.Number, err)
 		}
-
-		if truthy {
-			if finishAdvance(ctrl) {
-				return true, nil
-			}
-		} else if err := ctrl.SetIndex(block.EndIndex + 1); err != nil {
-			return false, err
+		if err := ctrl.PushFrame(child); err != nil {
+			return false, fmt.Errorf("*** Error in %s, line %d: %w", prog.Path, line.Number, err)
 		}
+		pushScriptFrame(ctx, child.Path)
 		return false, nil
 	case "ENDDO":
 		block, ok := prog.WhileBlockForEnd(ctrl.Index())

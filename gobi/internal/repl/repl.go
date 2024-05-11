@@ -13,6 +13,8 @@ import (
 
 var errQuit = errors.New("quit")
 
+var commandMux *CommandMux
+
 const prompt = ". "
 
 // Run starts the interactive REPL loop, reading commands from stdin.
@@ -21,6 +23,12 @@ func Run(ctx *context.Context) error {
 	hist.Load()
 	defer hist.Save()
 
+	syncScreenSize(ctx)
+	if err := presentClearScreen(ctx); err != nil {
+		return err
+	}
+
+	// Try using raw terminal input for history navigation.
 	stdFile, isFile := ctx.Stdin.(*os.File)
 	if isFile && term.IsTerminal(stdFile) {
 		err := runTerminal(ctx, stdFile, hist)
@@ -41,6 +49,7 @@ func runTerminal(ctx *context.Context, in *os.File, hist *History) error {
 	tr := newTerminalReader(in, ctx.Stdout, prompt)
 
 	for {
+		syncScreenSize(ctx)
 		line, err := tr.readLine(hist)
 		if err != nil {
 			if err == io.EOF {
@@ -61,6 +70,7 @@ func runBuffered(ctx *context.Context, hist *History) error {
 	reader := ctx.StdinReader()
 
 	for {
+		syncScreenSize(ctx)
 		fmt.Fprint(ctx.Stdout, prompt)
 
 		line, err := reader.ReadString('\n')
@@ -79,8 +89,10 @@ func runBuffered(ctx *context.Context, hist *History) error {
 	}
 }
 
+// processLine parses and processes a single command line.
+// Returns errQuit when the QUIT command is entered.
 func processLine(ctx *context.Context, line string, hist *History) error {
-	if strings.TrimSpace(line) == "" {
+	if line == "" {
 		return nil
 	}
 

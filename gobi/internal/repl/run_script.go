@@ -76,6 +76,8 @@ func popScriptFrame(ctx *context.Context) {
 	}
 }
 
+// popCallerFrame ends the active nested script and resumes the caller after DO.
+// It reports whether a caller frame was restored.
 func popCallerFrame(ctx *context.Context, ctrl *script.Controller) bool {
 	if ctrl.Depth() <= 1 {
 		return false

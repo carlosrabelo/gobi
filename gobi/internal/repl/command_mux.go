@@ -17,7 +17,7 @@ type CommandMux struct {
 	handlers map[string]HandlerFunc
 }
 
-// NewCommandMux creates a mux with known commands registered.
+// NewCommandMux creates a mux with all known dBase II commands registered.
 func NewCommandMux() *CommandMux {
 	m := &CommandMux{handlers: make(map[string]HandlerFunc)}
 	m.registerAll()
@@ -25,6 +25,7 @@ func NewCommandMux() *CommandMux {
 }
 
 // Dispatch routes a parsed command to its handler.
+// Returns an error if the verb is unknown or ambiguous.
 func (m *CommandMux) Dispatch(ctx *context.Context, cmd Command) error {
 	if h, ok := m.handlers[cmd.Verb]; ok {
 		return h(ctx, cmd)
@@ -47,6 +48,7 @@ func (m *CommandMux) Commands() []string {
 	return verbs
 }
 
+// resolveVerb finds the unique full verb that has input as a prefix.
 func resolveVerb(input string, handlers map[string]HandlerFunc) (string, bool) {
 	input = strings.ToUpper(input)
 	var match string
@@ -69,75 +71,75 @@ func (m *CommandMux) register(verb string, handler HandlerFunc) {
 }
 
 func (m *CommandMux) registerAll() {
-	m.register("QUIT", handleQuit)
-	m.register("USE", handleUse)
-	m.register("SELECT", handleSelect)
-	m.register("CLOSE", handleClose)
-	m.register("DISPLAY", handleDisplay)
-	m.register("LIST", handleList)
-	m.register("GOTO", handleGoto)
-	m.register("GO", handleGo)
-	m.register("SKIP", handleSkip)
-	m.register("APPEND", handleAppend)
-	m.register("REPLACE", handleReplace)
-	m.register("DELETE", handleDelete)
-	m.register("RECALL", handleRecall)
-	m.register("PACK", handlePack)
-	m.register("ZAP", handleZap)
-	m.register("CREATE", handleCreate)
-	m.register("EDIT", handleEdit)
-	m.register("MODIFY", handleModify)
-	m.register("COPY", handleCopy)
-	m.register("UPDATE", handleUpdate)
-	m.register("JOIN", handleJoin)
-	m.register("TOTAL", handleTotal)
-	m.register("LOCATE", handleLocate)
-	m.register("CONTINUE", handleContinue)
-	m.register("COUNT", handleCount)
-	m.register("SUM", handleSum)
-	m.register("AVERAGE", handleAverage)
 	m.register("?", handleQuestion)
-	m.register("??", handleQuestion)
-	m.register("STORE", handleStore)
-	m.register("SAVE", handleSave)
-	m.register("RESTORE", handleRestore)
-	m.register("RELEASE", handleRelease)
-	m.register("DO", handleDo)
-	m.register("LOOP", stubHandler("LOOP"))
-	m.register("RETURN", stubHandler("RETURN"))
-	m.register("CANCEL", handleCancel)
-	m.register("INDEX", handleIndex)
-	m.register("REINDEX", handleReindex)
-	m.register("FIND", handleFind)
-	m.register("SEEK", handleSeek)
-	m.register("SORT", handleSort)
-	m.register("CLEAR", handleClear)
-	m.register("SET", handleSet)
 	m.register("@", handleAt)
-	m.register("READ", handleRead)
+	m.register("ACCEPT", handleAccept)
+	m.register("APPEND", handleAppend)
+	m.register("AVERAGE", handleAverage)
+	m.register("??", handleQuestion)
 	m.register("BROWSE", handleBrowse)
+	m.register("CANCEL", handleCancel)
+	m.register("CASE", handleCaseInteractive)
+	m.register("CHANGE", handleChange)
+	m.register("CLEAR", handleClear)
+	m.register("CLOSE", handleClose)
+	m.register("CONTINUE", handleContinue)
+	m.register("COPY", handleCopy)
+	m.register("COUNT", handleCount)
+	m.register("CREATE", handleCreate)
+	m.register("DELETE", handleDelete)
+	m.register("DIR", handleDir)
+	m.register("DISPLAY", handleDisplay)
+	m.register("DO", handleDo)
+	m.register("EDIT", handleEdit)
+	m.register("ENDCASE", handleEndCaseInteractive)
 	m.register("DIR", handleDir)
 	m.register("ERASE", handleErase)
-	m.register("RENAME", handleRename)
+	m.register("FIND", handleFind)
+	m.register("GO", handleGo)
+	m.register("GOTO", handleGoto)
 	m.register("HELP", handleHelp)
-	m.register("ACCEPT", handleAccept)
+	m.register("INDEX", handleIndex)
 	m.register("INPUT", handleInput)
-	m.register("WAIT", handleWait)
+	m.register("INSERT", handleInsert)
+	m.register("JOIN", handleJoin)
+	m.register("LIST", handleList)
+	m.register("MODIFY", handleModify)
+	m.register("LOCATE", handleLocate)
+	m.register("LOOP", stubHandler("LOOP"))
+	m.register("NOTE", handleNote)
+	m.register("OTHERWISE", handleOtherwiseInteractive)
+	m.register("PACK", handlePack)
+	m.register("QUIT", handleQuit)
+	m.register("READ", handleRead)
+	m.register("RECALL", handleRecall)
+	m.register("REINDEX", handleReindex)
+	m.register("RELEASE", handleRelease)
+	m.register("REMARK", handleRemark)
+	m.register("RENAME", handleRename)
+	m.register("REPLACE", handleReplace)
+	m.register("RESTORE", handleRestore)
+	m.register("RETURN", stubHandler("RETURN"))
+	m.register("SAVE", handleSave)
+	m.register("SEEK", handleSeek)
+	m.register("SELECT", handleSelect)
+	m.register("SET", handleSet)
+	m.register("SKIP", handleSkip)
+	m.register("SORT", handleSort)
+	m.register("STORE", handleStore)
+	m.register("SUM", handleSum)
 	m.register("TEXT", handleTextInteractive)
 	m.register("ENDTEXT", handleEndTextInteractive)
-	m.register("REMARK", handleRemark)
-	m.register("NOTE", handleNote)
-	m.register("CASE", handleCaseInteractive)
-	m.register("OTHERWISE", handleOtherwiseInteractive)
-	m.register("ENDCASE", handleEndCaseInteractive)
-	m.register("INSERT", handleInsert)
-	m.register("CHANGE", handleChange)
+	m.register("TOTAL", handleTotal)
+	m.register("UPDATE", handleUpdate)
+	m.register("USE", handleUse)
+	m.register("WAIT", handleWait)
+	m.register("ZAP", handleZap)
 }
 
+// stubHandler returns a handler that prints "not implemented" for the given verb.
 func stubHandler(verb string) HandlerFunc {
 	return func(ctx *context.Context, cmd Command) error {
 		return fmt.Errorf("*** %s: feature not yet implemented", verb)
 	}
 }
-
-var commandMux *CommandMux

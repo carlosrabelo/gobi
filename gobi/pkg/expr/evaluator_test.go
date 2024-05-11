@@ -158,6 +158,7 @@ func (e *testEnvironment) CallFunction(name string, args []Object) (Object, erro
 		return nil, fmt.Errorf("environment: unknown function %q", name)
 	}
 }
+
 func TestEvalNumberLiteral(t *testing.T) {
 	result := testEval(t, "42")
 	numberObj, ok := result.(*NumberObject)
@@ -294,27 +295,6 @@ func TestEvalObjectTypes(t *testing.T) {
 	}
 }
 
-func testEval(t *testing.T, input string) Object {
-	t.Helper()
-	return testEvalWithEnv(t, input, &testEnvironment{fields: map[string]Object{}})
-}
-
-func testEvalWithEnv(t *testing.T, input string, env Environment) Object {
-	t.Helper()
-	l := NewLexer(input)
-	p := NewParser(l)
-	exp := p.ParseExpression()
-
-	if len(p.Errors()) != 0 {
-		t.Fatalf("input %q: parser errors: %v", input, p.Errors())
-	}
-
-	result, err := Eval(exp, env)
-	if err != nil {
-		t.Fatalf("input %q: eval error: %v", input, err)
-	}
-	return result
-}
 func TestEvalFieldLookupString(t *testing.T) {
 	env := &testEnvironment{fields: map[string]Object{
 		"NOME": &StringObject{Value: "Joao"},
@@ -1307,3 +1287,26 @@ func parseNumericPrefix(s string) string {
 	return s[:i]
 }
 
+// testEval is a helper that parses input and evaluates it with an empty environment.
+func testEval(t *testing.T, input string) Object {
+	t.Helper()
+	return testEvalWithEnv(t, input, &testEnvironment{fields: map[string]Object{}})
+}
+
+// testEvalWithEnv parses input and evaluates it with the given environment.
+func testEvalWithEnv(t *testing.T, input string, env Environment) Object {
+	t.Helper()
+	l := NewLexer(input)
+	p := NewParser(l)
+	exp := p.ParseExpression()
+
+	if len(p.Errors()) != 0 {
+		t.Fatalf("input %q: parser errors: %v", input, p.Errors())
+	}
+
+	result, err := Eval(exp, env)
+	if err != nil {
+		t.Fatalf("input %q: eval error: %v", input, err)
+	}
+	return result
+}

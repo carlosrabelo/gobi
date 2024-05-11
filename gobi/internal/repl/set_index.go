@@ -2,6 +2,7 @@ package repl
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 )
@@ -27,4 +28,16 @@ func applySetIndex(ctx *context.Context, cmd Command) error {
 		return err
 	}
 	return nil
+}
+
+// splitIndexNames splits a comma-separated NDX file list, dropping blanks.
+func splitIndexNames(list string) []string {
+	var names []string
+	for _, part := range strings.Split(list, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			names = append(names, part)
+		}
+	}
+	return names
 }

@@ -60,6 +60,17 @@ func handleContinue(ctx *context.Context, cmd Command) error {
 	return runLocateSearch(ctx, area, startRec)
 }
 
+func clearLocateState(area *context.WorkArea) {
+	if area == nil {
+		return
+	}
+	area.Found = false
+	area.LocateActive = false
+	area.LocateFor = ""
+	area.LocateWhile = ""
+	area.LocateEnd = 0
+}
+
 func runLocateSearch(ctx *context.Context, area *context.WorkArea, startRec int) error {
 	forExp, whileExp, err := parseLocateClauses(area.LocateFor, area.LocateWhile)
 	if err != nil {

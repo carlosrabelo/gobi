@@ -5,8 +5,6 @@ import (
 	"io"
 	"strings"
 	"testing"
-
-	"github.com/carlosrabelo/gobi/gobi/pkg/ndx"
 )
 
 func insertTestRecords() [][]byte {
@@ -192,19 +190,16 @@ func TestDispatchInsertRebuildsIndexes(t *testing.T) {
 	}
 
 	area := ctx.GetActiveArea()
-	pm := area.Indexes[0].Manager()
-	blank, found, err := pm.SearchExact(ndx.Key(""))
+	records, err := area.Indexes[0].Manager().OrderedRecordNumbers()
 	if err != nil {
-		t.Fatalf("SearchExact blank: %v", err)
+		t.Fatalf("OrderedRecordNumbers: %v", err)
 	}
-	if !found || blank.RecordNumber != 1 {
-		t.Fatalf("blank mapping = %#v found=%v, want record 1", blank, found)
+	if len(records) != 3 {
+		t.Fatalf("index entries = %d, want 3", len(records))
 	}
-	if _, found, err = pm.SearchExact(ndx.Key("Alice")); err != nil || !found {
-		t.Fatalf("expected Alice in rebuilt index, found=%v err=%v", found, err)
-	}
-	if _, found, err = pm.SearchExact(ndx.Key("Bob")); err != nil || !found {
-		t.Fatalf("expected Bob in rebuilt index, found=%v err=%v", found, err)
+	// Blank key sorts first; it is now physical record 1.
+	if records[0] != 1 {
+		t.Fatalf("index order = %v, want blank record (1) first", records)
 	}
 }
 

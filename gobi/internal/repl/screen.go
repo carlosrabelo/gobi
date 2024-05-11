@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/carlosrabelo/gobi/gobi/internal/context"
 	"github.com/carlosrabelo/gobi/gobi/pkg/term"
@@ -124,86 +123,4 @@ func returnToConsole(ctx *context.Context) error {
 		return err
 	}
 	return term.EraseLine(ctx.Stdout)
-}
-
-func presentClearScreen(ctx *context.Context) error {
-	if ctx.Screen == nil {
-		return nil
-	}
-	ctx.Screen.Clear()
-	return term.ClearScreen(ctx.Stdout)
-}
-
-// handleClear implements the dBase II CLEAR command: it closes every open
-// database (with indexes) and releases all memory variables. CLEAR GETS
-// lands in a later commit. Screen clearing belongs to ERASE in dBase II.
-func handleClear(ctx *context.Context, cmd Command) error {
-	arg := strings.ToUpper(strings.TrimSpace(cmd.Args))
-	switch arg {
-	case "":
-		for name, area := range ctx.WorkAreas {
-			if err := closeWorkAreaDatabase(area, string(name)); err != nil {
-				return err
-			}
-			closeOpenIndexes(area)
-		}
-		ctx.Variables.Clear()
-		ctx.Screen.ClearGets()
-		return nil
-	case "GETS":
-		ctx.Screen.ClearGets()
-		return nil
-	default:
-		return fmt.Errorf("*** Unrecognized CLEAR option: %s", arg)
-	}
-}
-
-func handleSet(ctx *context.Context, cmd Command) error {
-	parts := strings.Fields(strings.ToUpper(strings.TrimSpace(cmd.Args)))
-	if len(parts) == 0 {
-		return fmt.Errorf("*** SET requires an option")
-	}
-	switch parts[0] {
-	case "TALK":
-		applySetTalk(ctx, parts)
-		return nil
-	case "INTENSITY":
-		applySetIntensity(ctx, parts)
-		return nil
-	case "BELL":
-		applySetBell(ctx, parts)
-		return nil
-	case "DEFAULT":
-		args := cmd.Args
-		if cmd.ToClause != "" {
-			args += " TO " + cmd.ToClause
-		}
-		return applySetDefault(ctx, args)
-	case "EXACT":
-		applySetExact(ctx, parts)
-		return nil
-	case "DELETED":
-		applySetDeleted(ctx, parts)
-		return nil
-	case "INDEX":
-		return applySetIndex(ctx, cmd)
-	case "SCREEN":
-		return applySetScreen(ctx, parts)
-	default:
-		return fmt.Errorf("*** Unrecognized SET option: %s", parts[0])
-	}
-}
-
-func parseOnOff(parts []string) bool {
-	if len(parts) < 2 {
-		return true
-	}
-	return parts[1] != "OFF"
-}
-
-func onOffStr(v bool) string {
-	if v {
-		return "ON"
-	}
-	return "OFF"
 }
